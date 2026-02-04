@@ -1,23 +1,175 @@
+import {
+  OpenStudentRequestsTable,
+  OpenTeacherRequestsTable,
+  UnpaidRoyaltiesTable,
+} from '../components/dashboard-tables';
+
 export default function DashboardPage() {
   return (
     <>
-      <h1 className="text-3xl font-semibold mb-6">Dashboard</h1>
-
-      <div className="grid grid-cols-3 gap-6">
-        <div className="bg-zinc-900 p-6 rounded-xl">
-          <p className="text-sm opacity-70">Active Students</p>
-          <p className="text-3xl font-bold mt-2">42</p>
+      <div className="flex items-center justify-between mb-10">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-[#c8102e]">
+            Overview
+          </p>
+          <h1 className="text-3xl font-semibold text-[#1f1f1d] mt-2">
+            Dashboard
+          </h1>
+          <p className="text-sm text-[#6f6c65] mt-2">
+            Choose a workspace to jump into a focused view.
+          </p>
         </div>
-
-        <div className="bg-zinc-900 p-6 rounded-xl">
-          <p className="text-sm opacity-70">Lessons Today</p>
-          <p className="text-3xl font-bold mt-2">8</p>
+        <div className="rounded-full border border-[#ecebe7] bg-white px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] shadow-sm">
+          Today
         </div>
+      </div>
 
-        <div className="bg-zinc-900 p-6 rounded-xl">
-          <p className="text-sm opacity-70">Payments Due</p>
-          <p className="text-3xl font-bold mt-2">$1,240</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <a
+          href="/teachers"
+          className="group overflow-hidden rounded-2xl border border-[#ecebe7] bg-white shadow-sm transition hover:border-[#c8102e]/30 hover:shadow-md"
+        >
+          <div
+            className="h-64 w-full bg-[#f1f1ef] bg-cover bg-center"
+            style={{
+              backgroundImage:
+                'url(https://simplymusic.com/wp-content/uploads/2024/02/Teach_Simply_Music.png)',
+            }}
+          />
+          <div className="p-6">
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Teachers
+            </p>
+            <h2 className="text-xl font-semibold mt-3 text-[#1f1f1d]">
+              Training + Teaching
+            </h2>
+            <p className="text-sm text-[#6f6c65] mt-2">
+              Curriculum, coaching, and studio resources for instructors.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[#6f6c65]">
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Curriculum
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Training &amp; Coaching
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Library
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Store
+              </span>
+            </div>
+          </div>
+        </a>
+
+        <a
+          href="/students"
+          className="group overflow-hidden rounded-2xl border border-[#ecebe7] bg-white shadow-sm transition hover:border-[#c8102e]/30 hover:shadow-md"
+        >
+          <div
+            className="h-64 w-full bg-[#f1f1ef] bg-cover bg-center"
+            style={{
+              backgroundImage:
+                'url(https://simplymusic.com/wp-content/uploads/2024/02/Learn-Piano-with-a-Simply-Music-Teacher.png)',
+              backgroundPosition: 'center 30%',
+            }}
+          />
+          <div className="p-6">
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Students
+            </p>
+            <h2 className="text-xl font-semibold mt-3 text-[#1f1f1d]">
+              Learning + Practicing
+            </h2>
+            <p className="text-sm text-[#6f6c65] mt-2">
+              Guided progression and practice flow across levels.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[#6f6c65]">
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Curriculum
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Practice Mode
+              </span>
+            </div>
+          </div>
+        </a>
+
+        <a
+          href="/company"
+          className="group overflow-hidden rounded-2xl border border-[#ecebe7] bg-white shadow-sm transition hover:border-[#c8102e]/30 hover:shadow-md"
+        >
+          <div
+            className="h-64 w-full bg-[#f1f1ef] bg-cover bg-center"
+            style={{
+              backgroundImage:
+                'url(https://simplymusic.com/wp-content/uploads/2024/02/Learn-with-Simply-Music-Self-Study-Program.png)',
+              backgroundPosition: 'center 40%',
+            }}
+          />
+          <div className="p-6">
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Company
+            </p>
+            <h2 className="text-xl font-semibold mt-3 text-[#1f1f1d]">
+              Internal Operations
+            </h2>
+            <p className="text-sm text-[#6f6c65] mt-2">
+              Teachers, students, commerce, royalties, and support tools.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[#6f6c65]">
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Orders
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Royalty Hub
+              </span>
+              <span className="rounded-full border border-[#ecebe7] px-3 py-1">
+                Lesson Packs
+              </span>
+            </div>
+          </div>
+        </a>
+      </div>
+
+      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+            Active Students
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[#1f1f1d]">
+            42
+          </p>
+          <p className="text-sm text-[#6f6c65] mt-2">Steady weekly growth</p>
         </div>
+        <div className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+            Lessons Today
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[#1f1f1d]">
+            8
+          </p>
+          <p className="text-sm text-[#6f6c65] mt-2">Evenly spaced sessions</p>
+        </div>
+        <div className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+            Payments Due
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[#1f1f1d]">
+            $6,480
+          </p>
+          <p className="text-sm text-[#6f6c65] mt-2">Follow-ups scheduled</p>
+        </div>
+      </div>
+
+      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <OpenTeacherRequestsTable />
+        <OpenStudentRequestsTable />
+      </div>
+
+      <div className="mt-6">
+        <UnpaidRoyaltiesTable />
       </div>
     </>
   );
