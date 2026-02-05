@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   AUTH_STORAGE_KEY,
   VIEW_ROLE_STORAGE_KEY,
@@ -19,6 +19,7 @@ type AdminShellProps = {
 export default function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
   const [role, setRole] = useState<UserRole | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -122,6 +123,11 @@ export default function AdminShell({ children }: AdminShellProps) {
     return '/company';
   }, [role]);
 
+  const teacherMode = useMemo(() => {
+    if (!pathname?.startsWith('/teachers')) return 'training';
+    return searchParams.get('mode') === 'teaching' ? 'teaching' : 'training';
+  }, [pathname, searchParams]);
+
   const handleLogout = () => {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
     window.localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
@@ -143,6 +149,12 @@ export default function AdminShell({ children }: AdminShellProps) {
   const handleNewTeacher = () => {
     if (effectiveRole !== 'company') return;
     router.push('/teachers?new=1');
+    setIsOpen(false);
+  };
+
+  const handleTeacherMode = (mode: 'training' | 'teaching') => {
+    if (effectiveRole !== 'teacher') return;
+    router.push(`/teachers?mode=${mode}`);
     setIsOpen(false);
   };
 
@@ -184,6 +196,35 @@ export default function AdminShell({ children }: AdminShellProps) {
               </a>
             ))}
           </nav>
+          {effectiveRole === 'teacher' ? (
+            <div className="mt-4 rounded-xl border border-[#dfe6d2] bg-white/70 p-3">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[#7a776f]">
+                Training &amp; Teaching
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleTeacherMode('training')}
+                  className={`rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                    teacherMode === 'training'
+                      ? 'bg-[#c8102e] text-white'
+                      : 'border border-[#e5e3dd] text-[#6f6c65] hover:text-[#c8102e]'
+                  }`}
+                >
+                  Training
+                </button>
+                <button
+                  onClick={() => handleTeacherMode('teaching')}
+                  className={`rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                    teacherMode === 'teaching'
+                      ? 'bg-[#c8102e] text-white'
+                      : 'border border-[#e5e3dd] text-[#6f6c65] hover:text-[#c8102e]'
+                  }`}
+                >
+                  Teaching
+                </button>
+              </div>
+            </div>
+          ) : null}
           {effectiveRole === 'teacher' ? (
             <button
               onClick={handleNewStudent}
@@ -349,6 +390,35 @@ export default function AdminShell({ children }: AdminShellProps) {
             </a>
           ))}
         </nav>
+        {effectiveRole === 'teacher' ? (
+          <div className="mt-4 rounded-xl border border-[#dfe6d2] bg-white/80 p-3">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[#7a776f]">
+              Training &amp; Teaching
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleTeacherMode('training')}
+                className={`rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                  teacherMode === 'training'
+                    ? 'bg-[#c8102e] text-white'
+                    : 'border border-[#e5e3dd] text-[#6f6c65] hover:text-[#c8102e]'
+                }`}
+              >
+                Training
+              </button>
+              <button
+                onClick={() => handleTeacherMode('teaching')}
+                className={`rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                  teacherMode === 'teaching'
+                    ? 'bg-[#c8102e] text-white'
+                    : 'border border-[#e5e3dd] text-[#6f6c65] hover:text-[#c8102e]'
+                }`}
+              >
+                Teaching
+              </button>
+            </div>
+          </div>
+        ) : null}
         {effectiveRole === 'teacher' ? (
           <button
             onClick={handleNewStudent}

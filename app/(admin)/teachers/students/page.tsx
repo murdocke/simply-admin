@@ -107,13 +107,16 @@ export default function TeacherStudentsPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!teacherName) return;
+    if (!teacherName) {
+      setError('Please log in as a teacher to add or edit students.');
+      return;
+    }
     setIsSaving(true);
     setError(null);
 
     try {
       const payload = {
-        teacher: teacherName ?? editing?.teacher ?? 'teacher',
+        teacher: teacherName,
         name: formState.name.trim(),
         email: formState.email.trim(),
         level: formState.level,

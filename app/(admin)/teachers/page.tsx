@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import CartPanel from '../components/cart-panel';
 import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
 
 type TeacherRecord = {
@@ -62,6 +61,10 @@ export default function TeachersPage() {
   }, []);
 
   const effectiveRole = role === 'company' && viewRole ? viewRole : role;
+  const hubMode = useMemo(
+    () => (searchParams.get('mode') === 'teaching' ? 'teaching' : 'training'),
+    [searchParams],
+  );
 
   useEffect(() => {
     if (!companyName || effectiveRole !== 'company') return;
@@ -97,6 +100,10 @@ export default function TeachersPage() {
   }, [searchParams, router, effectiveRole]);
 
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
+
+  const handleHubModeChange = (nextMode: 'training' | 'teaching') => {
+    router.push(`/teachers?mode=${nextMode}`, { scroll: false });
+  };
 
   const openCreateModal = () => {
     setEditing(null);
@@ -219,127 +226,104 @@ export default function TeachersPage() {
             </p>
           </div>
           <div className="flex rounded-full border border-[#ecebe7] bg-white p-1 text-xs uppercase tracking-[0.2em] text-[#6f6c65] shadow-sm">
-            <button className="rounded-full bg-[#c8102e] px-4 py-2 text-white">
+            <button
+              className={`rounded-full px-4 py-2 transition ${
+                hubMode === 'training'
+                  ? 'bg-[#c8102e] text-white'
+                  : 'text-[#6f6c65] hover:text-[#c8102e]'
+              }`}
+              onClick={() => handleHubModeChange('training')}
+            >
               Training
             </button>
-            <button className="rounded-full px-4 py-2">Teaching</button>
+            <button
+              className={`rounded-full px-4 py-2 transition ${
+                hubMode === 'teaching'
+                  ? 'bg-[#c8102e] text-white'
+                  : 'text-[#6f6c65] hover:text-[#c8102e]'
+              }`}
+              onClick={() => handleHubModeChange('teaching')}
+            >
+              Teaching
+            </button>
           </div>
         </header>
 
-        <section
-          id="students"
-          className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
-        >
-          <h2 className="text-lg font-semibold text-[#1f1f1d]">Students</h2>
+        <section className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-[#1f1f1d]">
+            Teacher Dashboard
+          </h2>
           <p className="text-sm text-[#6f6c65] mt-2">
-            Active student roster and progress highlights.
+            Studio cards now live on the dashboard view.
           </p>
-          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {[
-              'Active Students',
-              'New Requests',
-              'Lesson Notes',
-              'Progress Snapshots',
-            ].map(item => (
-              <div
-                key={item}
-                className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
-              >
-                {item}
-              </div>
-            ))}
-          </div>
+          <a
+            href="/teachers/dashboard"
+            className="mt-4 inline-flex rounded-full border border-[#ecebe7] bg-[#fcfcfb] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] transition hover:border-[#c8102e]/40 hover:text-[#c8102e]"
+          >
+            Go to Dashboard
+          </a>
         </section>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section
-            id="this-week"
-            className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
-          >
-            <h2 className="text-lg font-semibold text-[#1f1f1d]">This Week</h2>
-            <p className="text-sm text-[#6f6c65] mt-2">
-              Upcoming lessons, recitals, and studio moments.
-            </p>
-            <div className="mt-5 space-y-3">
-              {[
-                '12 lessons scheduled',
-                '2 new student intakes',
-                'Studio check-in on Friday',
-              ].map(item => (
-                <div
-                  key={item}
-                  className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section
-            id="schedule"
-            className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
-          >
-            <h2 className="text-lg font-semibold text-[#1f1f1d]">Schedule</h2>
-            <p className="text-sm text-[#6f6c65] mt-2">
-              Manage weekly blocks and upcoming sessions.
-            </p>
-            <div className="mt-5 space-y-3">
-              {[
-                'Mon–Wed: Evening sessions',
-                'Thu: Studio admin hours',
-                'Sat: Group lesson block',
-              ].map(item => (
-                <div
-                  key={item}
-                  className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <section
-          id="lesson-fees"
-          className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
-        >
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <section className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-[#1f1f1d]">
-                Lesson Fees
+              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                Curriculum
+              </p>
+              <h2 className="text-2xl font-semibold text-[#1f1f1d] mt-2">
+                Program Library
               </h2>
               <p className="text-sm text-[#6f6c65] mt-2">
-                Track billing, payments, and pricing tiers.
+                Jump into a specific pathway or program set.
               </p>
             </div>
             <span className="rounded-full border border-[#ecebe7] bg-[#fcfcfb] px-3 py-1 text-xs text-[#6f6c65]">
-              Next payout Feb 18
+              Updated weekly
             </span>
           </div>
-          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[
-              { label: 'Weekly Fees', value: '$2,140' },
-              { label: 'Overdue', value: '$320' },
-              { label: 'Avg. Lesson', value: '$48' },
-            ].map(item => (
-              <div
-                key={item.label}
-                className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-4"
-              >
-                <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
-                  {item.label}
-                </p>
-                <p className="text-2xl font-semibold text-[#1f1f1d] mt-2">
-                  {item.value}
-                </p>
-              </div>
-            ))}
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <a
+              href="/curriculum/foundation"
+              className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                Foundation Program
+              </p>
+              <p className="mt-2 text-sm text-[#6f6c65]">Levels 1-9</p>
+            </a>
+            <a
+              href="/curriculum/development"
+              className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                Development Program
+              </p>
+              <p className="mt-2 text-sm text-[#6f6c65]">Levels 10-18</p>
+            </a>
+            <a
+              href="/curriculum/special"
+              className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                Special Programs
+              </p>
+              <p className="mt-2 text-sm text-[#6f6c65]">
+                Masterclasses + Intensives
+              </p>
+            </a>
+            <a
+              href="/curriculum/supplemental"
+              className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                Supplemental Programs
+              </p>
+              <p className="mt-2 text-sm text-[#6f6c65]">
+                Teacher Created Programs
+              </p>
+            </a>
           </div>
         </section>
-
-        <CartPanel context="teacher" />
       </div>
     );
   }

@@ -6,8 +6,8 @@ import {
 
 export default function DashboardPage() {
   return (
-    <>
-      <div className="flex items-center justify-between mb-10">
+    <div className="space-y-10">
+      <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[#c8102e]">
             Overview
@@ -23,6 +23,71 @@ export default function DashboardPage() {
           Today
         </div>
       </div>
+
+      <section className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Curriculum
+            </p>
+            <h2 className="text-2xl font-semibold text-[#1f1f1d] mt-2">
+              Program Library
+            </h2>
+            <p className="text-sm text-[#6f6c65] mt-2">
+              Jump into a specific pathway or program set.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#ecebe7] bg-[#fcfcfb] px-3 py-1 text-xs text-[#6f6c65]">
+            Updated weekly
+          </span>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <a
+            href="/curriculum/foundation"
+            className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Foundation Program
+            </p>
+            <p className="mt-2 text-sm text-[#6f6c65]">
+              Levels 1-9
+            </p>
+          </a>
+          <a
+            href="/curriculum/development"
+            className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Development Program
+            </p>
+            <p className="mt-2 text-sm text-[#6f6c65]">
+              Levels 10-18
+            </p>
+          </a>
+          <a
+            href="/curriculum/special"
+            className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Special Programs
+            </p>
+            <p className="mt-2 text-sm text-[#6f6c65]">
+              Masterclasses + Intensives
+            </p>
+          </a>
+          <a
+            href="/curriculum/supplemental"
+            className="rounded-2xl border border-[#ecebe7] bg-[#fcfcfb] p-5 text-left transition hover:border-[#c8102e]/30 hover:bg-white"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              Supplemental Programs
+            </p>
+            <p className="mt-2 text-sm text-[#6f6c65]">
+              Teacher Created Programs
+            </p>
+          </a>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <a
@@ -133,7 +198,7 @@ export default function DashboardPage() {
         </a>
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
             Active Students
@@ -163,14 +228,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <OpenTeacherRequestsTable />
         <OpenStudentRequestsTable />
       </div>
 
-      <div className="mt-6">
+      <div>
         <UnpaidRoyaltiesTable />
       </div>
-    </>
+    </div>
   );
 }
