@@ -1,0 +1,24 @@
+{
+  "teachers": [
+    {
+      "id": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
+      "company": "neil",
+      "name": "Brian Gray",
+      "email": "riffsandchops@gmail.com",
+      "region": "South",
+      "status": "Active",
+      "createdAt": "2026-02-05T00:37:54.486Z",
+      "updatedAt": "2026-02-05T00:40:49.146Z"
+    },
+    {
+      "id": "dbadc128-28fb-4f3f-afd0-1391bbdccf48",
+      "company": "neil",
+      "name": "Nancy Weddle",
+      "email": "nweddle@gmail.com",
+      "region": "South",
+      "status": "Active",
+      "createdAt": "2026-02-05T00:37:31.606Z",
+      "updatedAt": "2026-02-05T00:40:52.650Z"
+    }
+  ]
+}

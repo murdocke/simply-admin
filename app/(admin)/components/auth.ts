@@ -23,12 +23,14 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
       { label: 'Company', href: '/company' },
     ],
     teacher: [
+      { label: 'Dashboard', href: '/teachers/dashboard' },
       { label: 'Students', href: '/teachers/students' },
       { label: 'This Week', href: '/teachers/this-week' },
       { label: 'Schedule', href: '/teachers/schedule' },
       { label: 'Lesson Fees', href: '/teachers/lesson-fees' },
     ],
     student: [
+      { label: 'Dashboard', href: '/students/dashboard' },
       { label: 'Current Lesson', href: '/students/current-lesson' },
       { label: 'What To Practice', href: '/students/what-to-practice' },
       { label: 'Past Lessons', href: '/students/past-lessons' },

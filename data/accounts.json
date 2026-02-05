@@ -1,0 +1,28 @@
+{
+  "accounts": [
+    {
+      "username": "neil",
+      "role": "company",
+      "name": "Neil (Company Admin)",
+      "email": "neil@simplymusic.com",
+      "status": "Active",
+      "lastLogin": "2026-02-05T01:36:19.911Z"
+    },
+    {
+      "username": "brian",
+      "role": "teacher",
+      "name": "Brian Gray",
+      "email": "riffsandchops@gmail.com",
+      "status": "Active",
+      "lastLogin": "2026-02-05T01:36:46.821Z"
+    },
+    {
+      "username": "quinn",
+      "role": "student",
+      "name": "Quinn Harper",
+      "email": "quinn@student.simplymusic.com",
+      "status": "Active",
+      "lastLogin": "2026-02-05T01:37:12.926Z"
+    }
+  ]
+}

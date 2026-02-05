@@ -62,6 +62,11 @@ export default function LoginPage() {
 
     const authUser = users[normalized];
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+    void fetch('/api/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: authUser.username, role: authUser.role }),
+    });
     router.replace(roleHome[authUser.role]);
   };
 

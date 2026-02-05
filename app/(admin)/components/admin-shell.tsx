@@ -24,6 +24,12 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [viewRole, setViewRole] = useState<UserRole | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [accountInfo, setAccountInfo] = useState<{
+    name: string;
+    email: string;
+    status: string;
+    lastLogin: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
@@ -41,6 +47,29 @@ export default function AdminShell({ children }: AdminShellProps) {
       setUser(parsed);
       setRole(parsed.role);
       setViewRole(parsed.role);
+      void fetch(
+        `/api/account?username=${encodeURIComponent(
+          parsed.username,
+        )}&role=${encodeURIComponent(parsed.role)}`,
+      )
+        .then(async response => {
+          if (!response.ok) return null;
+          const data = (await response.json()) as {
+            account?: {
+              name: string;
+              email: string;
+              status: string;
+              lastLogin: string | null;
+            };
+          };
+          return data.account ?? null;
+        })
+        .then(account => {
+          if (account) setAccountInfo(account);
+        })
+        .catch(() => {
+          setAccountInfo(null);
+        });
       const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
       if (storedView && parsed.role === 'company') {
         setViewRole(storedView as UserRole);
@@ -71,13 +100,13 @@ export default function AdminShell({ children }: AdminShellProps) {
   const sidebarStyles = useMemo(() => {
     if (effectiveRole === 'teacher') {
       return {
-        bg: 'bg-[#f3f6ec]',
+        bg: 'bg-[#e7eddc]',
         border: 'border-[#dfe6d2]',
       };
     }
     if (effectiveRole === 'student') {
       return {
-        bg: 'bg-[#fff4ea]',
+        bg: 'bg-[#ffe7d6]',
         border: 'border-[#f2dac5]',
       };
     }
@@ -86,6 +115,12 @@ export default function AdminShell({ children }: AdminShellProps) {
       border: 'border-[#ecebe7]',
     };
   }, [effectiveRole]);
+
+  const accountDetailsHref = useMemo(() => {
+    if (role === 'teacher') return '/teachers/students';
+    if (role === 'student') return '/students/my-account';
+    return '/company';
+  }, [role]);
 
   const handleLogout = () => {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -97,6 +132,18 @@ export default function AdminShell({ children }: AdminShellProps) {
     if (role !== 'company') return;
     setViewRole(nextRole);
     window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, nextRole);
+  };
+
+  const handleNewStudent = () => {
+    if (effectiveRole !== 'teacher') return;
+    router.push('/teachers/students?new=1');
+    setIsOpen(false);
+  };
+
+  const handleNewTeacher = () => {
+    if (effectiveRole !== 'company') return;
+    router.push('/teachers?new=1');
+    setIsOpen(false);
   };
 
   if (!isReady) {
@@ -137,6 +184,22 @@ export default function AdminShell({ children }: AdminShellProps) {
               </a>
             ))}
           </nav>
+          {effectiveRole === 'teacher' ? (
+            <button
+              onClick={handleNewStudent}
+              className="mt-4 w-full rounded-full bg-[#c8102e] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+            >
+              New Student
+            </button>
+          ) : null}
+          {effectiveRole === 'company' ? (
+            <button
+              onClick={handleNewTeacher}
+              className="mt-4 w-full rounded-full bg-[#c8102e] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+            >
+              New Teacher
+            </button>
+          ) : null}
           {role === 'company' ? (
             <div className="mt-10 rounded-xl border border-[#ecebe7] bg-[#fafafa] p-4 text-xs text-[#7a776f]">
               <p className="uppercase tracking-[0.2em]">View As</p>
@@ -160,11 +223,49 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           ) : null}
         <div className="mt-12 rounded-xl border border-[#ecebe7] bg-[#fafafa] p-4 text-xs text-[#7a776f]">
-          <p className="uppercase tracking-[0.2em]">Clean, modern</p>
+          <p className="uppercase tracking-[0.2em]">
+            {effectiveRole === 'company'
+              ? 'Company Pulse'
+              : effectiveRole === 'teacher'
+                ? 'Today’s Studio'
+                : 'Practice Focus'}
+          </p>
           <p className="mt-2 text-sm text-[#4a4740]">
-            Simple, readable, calm.
+            {effectiveRole === 'company'
+              ? 'Monitor network health, active studios, and open support threads.'
+              : effectiveRole === 'teacher'
+                ? 'Next lessons, student check-ins, and notes to capture.'
+                : 'Your next lesson, practice plan, and support in one place.'}
           </p>
         </div>
+        {user ? (
+          <div className="mt-6 rounded-xl border border-[#ecebe7] bg-white p-4 text-xs text-[#7a776f]">
+            <p className="uppercase tracking-[0.2em]">Account</p>
+            <p className="mt-2 text-sm font-semibold text-[#1f1f1d]">
+              {accountInfo?.name ?? user.username}
+            </p>
+            <p className="mt-1 text-xs text-[#9a9892]">
+              {accountInfo?.email ?? `${user.username}@simplymusic.com`}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[#6f6c65]">
+              <span className="rounded-full border border-[#e5e3dd] px-2 py-1">
+                {accountInfo?.status ?? 'Active'}
+              </span>
+              <span className="rounded-full border border-[#e5e3dd] px-2 py-1">
+                Last login:{' '}
+                {accountInfo?.lastLogin
+                  ? new Date(accountInfo.lastLogin).toLocaleDateString()
+                  : 'Today'}
+              </span>
+            </div>
+            <button
+              onClick={() => router.push(accountDetailsHref)}
+              className="mt-4 w-full rounded-full border border-[#ecebe7] bg-[#fafafa] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] transition hover:border-[#c8102e]/40 hover:text-[#c8102e]"
+            >
+              Account Details
+            </button>
+          </div>
+        ) : null}
         <button
           onClick={handleLogout}
           className="mt-6 w-full rounded-full border border-[#ecebe7] bg-white px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] transition hover:border-[#c8102e]/40 hover:text-[#c8102e]"
@@ -248,6 +349,22 @@ export default function AdminShell({ children }: AdminShellProps) {
             </a>
           ))}
         </nav>
+        {effectiveRole === 'teacher' ? (
+          <button
+            onClick={handleNewStudent}
+            className="mt-4 w-full rounded-full bg-[#c8102e] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+          >
+              New Student
+          </button>
+        ) : null}
+        {effectiveRole === 'company' ? (
+          <button
+            onClick={handleNewTeacher}
+            className="mt-4 w-full rounded-full bg-[#c8102e] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+          >
+            New Teacher
+          </button>
+        ) : null}
         {role === 'company' ? (
           <div className="mt-10 rounded-xl border border-[#ecebe7] bg-white/80 p-4 text-xs text-[#7a776f]">
             <p className="uppercase tracking-[0.2em]">View As</p>
@@ -269,11 +386,49 @@ export default function AdminShell({ children }: AdminShellProps) {
           </div>
         ) : null}
         <div className="mt-12 rounded-xl border border-[#ecebe7] bg-white/80 p-4 text-xs text-[#7a776f]">
-          <p className="uppercase tracking-[0.2em]">Clean, modern</p>
+          <p className="uppercase tracking-[0.2em]">
+            {effectiveRole === 'company'
+              ? 'Company Pulse'
+              : effectiveRole === 'teacher'
+                ? 'Today’s Studio'
+                : 'Practice Focus'}
+          </p>
           <p className="mt-2 text-sm text-[#4a4740]">
-            Simple, readable, calm.
+            {effectiveRole === 'company'
+              ? 'Monitor network health, active studios, and open support threads.'
+              : effectiveRole === 'teacher'
+                ? 'Next lessons, student check-ins, and notes to capture.'
+                : 'Your next lesson, practice plan, and support in one place.'}
           </p>
         </div>
+        {user ? (
+          <div className="mt-6 rounded-xl border border-[#ecebe7] bg-white p-4 text-xs text-[#7a776f]">
+            <p className="uppercase tracking-[0.2em]">Account</p>
+            <p className="mt-2 text-sm font-semibold text-[#1f1f1d]">
+              {accountInfo?.name ?? user.username}
+            </p>
+            <p className="mt-1 text-xs text-[#9a9892]">
+              {accountInfo?.email ?? `${user.username}@simplymusic.com`}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[#6f6c65]">
+              <span className="rounded-full border border-[#e5e3dd] px-2 py-1">
+                {accountInfo?.status ?? 'Active'}
+              </span>
+              <span className="rounded-full border border-[#e5e3dd] px-2 py-1">
+                Last login:{' '}
+                {accountInfo?.lastLogin
+                  ? new Date(accountInfo.lastLogin).toLocaleDateString()
+                  : 'Today'}
+              </span>
+            </div>
+            <button
+              onClick={() => router.push(accountDetailsHref)}
+              className="mt-4 w-full rounded-full border border-[#ecebe7] bg-white px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] transition hover:border-[#c8102e]/40 hover:text-[#c8102e]"
+            >
+              Account Details
+            </button>
+          </div>
+        ) : null}
         <button
           onClick={handleLogout}
           className="mt-6 w-full rounded-full border border-[#ecebe7] bg-white px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] transition hover:border-[#c8102e]/40 hover:text-[#c8102e]"
