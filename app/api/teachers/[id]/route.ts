@@ -8,7 +8,14 @@ type TeacherRecord = {
   name: string;
   email: string;
   region: string;
-  status: 'Active' | 'Onboarding' | 'Inactive';
+  status:
+    | 'Licensed'
+    | 'Certified'
+    | 'Advanced'
+    | 'Master'
+    | 'Onboarding'
+    | 'Inactive'
+    | 'Active';
   createdAt: string;
   updatedAt: string;
 };
@@ -18,6 +25,18 @@ type TeachersFile = {
 };
 
 const dataFile = path.join(process.cwd(), 'data', 'teachers.json');
+
+const normalizeStatus = (
+  status:
+    | 'Licensed'
+    | 'Certified'
+    | 'Advanced'
+    | 'Master'
+    | 'Onboarding'
+    | 'Inactive'
+    | 'Active'
+    | undefined,
+) => (status === 'Active' || !status ? 'Licensed' : status);
 
 async function readTeachersFile(): Promise<TeachersFile> {
   try {
@@ -50,7 +69,14 @@ export async function PATCH(
     name?: string;
     email?: string;
     region?: string;
-    status?: 'Active' | 'Onboarding' | 'Inactive';
+    status?:
+      | 'Licensed'
+      | 'Certified'
+      | 'Advanced'
+      | 'Master'
+      | 'Onboarding'
+      | 'Inactive'
+      | 'Active';
   };
 
   if (!body.company) {
@@ -72,7 +98,7 @@ export async function PATCH(
     name: body.name ?? current.name,
     email: body.email ?? current.email,
     region: body.region ?? current.region,
-    status: body.status ?? current.status,
+    status: normalizeStatus(body.status ?? current.status),
     updatedAt: new Date().toISOString(),
   };
 

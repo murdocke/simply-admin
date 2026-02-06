@@ -70,18 +70,18 @@ export default function CartPanel({ context }: CartPanelProps) {
   const total = cartTotals[context];
 
   return (
-    <section className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Cart
           </p>
-          <h2 className="text-lg font-semibold text-[#1f1f1d] mt-2">
+          <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)] mt-2">
             {copy.title}
           </h2>
-          <p className="text-sm text-[#6f6c65] mt-1">{copy.subtitle}</p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-1">{copy.subtitle}</p>
         </div>
-        <div className="rounded-full border border-[#ecebe7] bg-[#fcfcfb] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65]">
+        <div className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
           {total.items}
         </div>
       </div>
@@ -90,13 +90,13 @@ export default function CartPanel({ context }: CartPanelProps) {
         {items.map(item => (
           <div
             key={item.name}
-            className="flex flex-col gap-2 rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935] md:flex-row md:items-center md:justify-between"
+            className="flex flex-col gap-2 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)] md:flex-row md:items-center md:justify-between"
           >
             <div>
-              <p className="font-medium text-[#1f1f1d]">{item.name}</p>
-              <p className="text-xs text-[#6f6c65]">{item.detail}</p>
+              <p className="font-medium text-[var(--c-1f1f1d)]">{item.name}</p>
+              <p className="text-xs text-[var(--c-6f6c65)]">{item.detail}</p>
             </div>
-            <div className="text-sm font-semibold text-[#1f1f1d]">
+            <div className="text-sm font-semibold text-[var(--c-1f1f1d)]">
               {item.price}
             </div>
           </div>
@@ -104,10 +104,10 @@ export default function CartPanel({ context }: CartPanelProps) {
       </div>
 
       <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm text-[#6f6c65]">
-          Subtotal <span className="font-semibold text-[#1f1f1d]">{total.subtotal}</span>
+        <div className="text-sm text-[var(--c-6f6c65)]">
+          Subtotal <span className="font-semibold text-[var(--c-1f1f1d)]">{total.subtotal}</span>
         </div>
-        <button className="rounded-full bg-[#c8102e] px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110">
+        <button className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110">
           {copy.cta}
         </button>
       </div>

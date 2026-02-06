@@ -71,7 +71,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] text-[#1f1f1d] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--c-f7f7f5)] text-[var(--c-1f1f1d)] relative overflow-hidden">
       <div className="absolute inset-0 z-0">
         {backgroundImages.map((src, index) => (
           <div
@@ -86,13 +86,13 @@ export default function LoginPage() {
           />
         ))}
       </div>
-      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#ecebe7] bg-white p-8 shadow-sm">
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-8 shadow-sm">
         <div className="mb-6 flex items-center justify-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-[#c8102e] text-white flex items-center justify-center font-semibold">
+          <div className="h-10 w-10 rounded-lg bg-[var(--c-c8102e)] text-white flex items-center justify-center font-semibold">
             SM
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[#9a9892]">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
               Admin
             </p>
             <h1 className="text-xl font-semibold">Simply Music</h1>
@@ -106,14 +106,14 @@ export default function LoginPage() {
           }}
         >
           <input
-            className="w-full mb-3 px-4 py-2 rounded-lg border border-[#e5e3dd] bg-[#fcfcfb] outline-none focus:border-[#c8102e]"
+            className="w-full mb-3 px-4 py-2 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
             placeholder="Username"
             value={user}
             onChange={e => setUser(e.target.value)}
           />
 
           <input
-            className="w-full mb-5 px-4 py-2 rounded-lg border border-[#e5e3dd] bg-[#fcfcfb] outline-none focus:border-[#c8102e]"
+            className="w-full mb-5 px-4 py-2 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
             type="password"
             placeholder="Password"
             value={pass}
@@ -121,9 +121,9 @@ export default function LoginPage() {
           />
 
         {error ? (
-          <div className="mb-4 rounded-lg border border-[#f2d7db] bg-[#fff5f6] px-3 py-2 text-sm text-[#8f2f3b]">
+          <div className="mb-4 rounded-lg border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-2 text-sm text-[var(--c-8f2f3b)]">
             <p className="uppercase tracking-[0.2em]">{error}</p>
-            <div className="mt-2 text-sm text-[#8f2f3b]/80">
+            <div className="mt-2 text-sm text-[color:var(--c-8f2f3b)]/80">
               <p>Demo users:</p>
               <p>
                 <span className="font-semibold">neil</span> — company
@@ -142,7 +142,7 @@ export default function LoginPage() {
         ) : null}
 
           <button
-            className="w-full bg-[#c8102e] text-white py-2.5 rounded-lg font-medium shadow-sm hover:brightness-105 transition"
+            className="w-full bg-[var(--c-c8102e)] text-white py-2.5 rounded-lg font-medium shadow-sm hover:brightness-105 transition"
             type="submit"
           >
             Sign In

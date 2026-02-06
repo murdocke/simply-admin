@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
+import { useRouter } from 'next/navigation';
+import { VIEW_TEACHER_STORAGE_KEY } from '../components/auth';
 
 type TeacherRecord = {
   id: string;
@@ -20,6 +20,23 @@ type TeacherRecord = {
     | 'Active';
   createdAt: string;
   updatedAt: string;
+};
+
+type StudentRecord = {
+  id: string;
+  teacher: string;
+  name: string;
+  email: string;
+  level: string;
+  status: 'Active' | 'Paused';
+  createdAt: string;
+  updatedAt: string;
+};
+
+type SelectedTeacher = {
+  id: string;
+  name: string;
+  username: string;
 };
 
 const defaultForm = {
@@ -49,12 +66,10 @@ const statusStyles: Record<string, string> = {
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
 };
 
-export default function TeachersPage() {
+export default function AccountsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
-  const [viewRole, setViewRole] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,18 +77,14 @@ export default function TeachersPage() {
   const [formState, setFormState] = useState(defaultForm);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const notifyTeachersUpdated = () => {
-    try {
-      window.localStorage.setItem(
-        'sm_teachers_updated',
-        String(Date.now()),
-      );
-      window.dispatchEvent(new Event('sm-teachers-updated'));
-    } catch {
-      window.dispatchEvent(new Event('sm-teachers-updated'));
-    }
-  };
+  const [selectedTeacher, setSelectedTeacher] =
+    useState<SelectedTeacher | null>(null);
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const viewTeacherKey = useMemo(() => {
+    if (!companyName) return VIEW_TEACHER_STORAGE_KEY;
+    return `${VIEW_TEACHER_STORAGE_KEY}:${companyName}`;
+  }, [companyName]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('sm_user');
@@ -87,32 +98,85 @@ export default function TeachersPage() {
         setRole(parsed.role);
       }
       if (parsed?.role === 'company') {
-        const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
-        if (storedView) {
-          setViewRole(storedView);
+        const viewTeacherKey = parsed.username
+          ? `${VIEW_TEACHER_STORAGE_KEY}:${parsed.username}`
+          : VIEW_TEACHER_STORAGE_KEY;
+        const storedTeacher =
+          window.localStorage.getItem(viewTeacherKey) ??
+          window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+        if (storedTeacher) {
+          try {
+            const selected = JSON.parse(storedTeacher) as SelectedTeacher;
+            if (selected?.id && selected?.username) {
+              setSelectedTeacher(selected);
+              window.localStorage.setItem(viewTeacherKey, storedTeacher);
+            }
+          } catch {
+            setSelectedTeacher(null);
+          }
         }
       }
     } catch {
       setCompanyName(null);
       setRole(null);
-      setViewRole(null);
+      setSelectedTeacher(null);
     }
   }, []);
 
-  const effectiveRole = role === 'company' && viewRole ? viewRole : role;
-  const hubMode = useMemo(
-    () => (searchParams.get('mode') === 'teaching' ? 'teaching' : 'training'),
-    [searchParams],
-  );
-
   useEffect(() => {
-    if (effectiveRole === 'company') {
-      router.replace('/accounts');
+    const handleSelectionUpdate = () => {
+      if (role !== 'company') return;
+      const storedTeacher =
+        window.localStorage.getItem(viewTeacherKey) ??
+        window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+      if (!storedTeacher) {
+        setSelectedTeacher(null);
+        return;
+      }
+      try {
+        const selected = JSON.parse(storedTeacher) as SelectedTeacher;
+        if (selected?.id && selected?.username) {
+          setSelectedTeacher(selected);
+          window.localStorage.setItem(viewTeacherKey, storedTeacher);
+        } else {
+          setSelectedTeacher(null);
+        }
+      } catch {
+        setSelectedTeacher(null);
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key === viewTeacherKey ||
+        event.key === VIEW_TEACHER_STORAGE_KEY
+      ) {
+        handleSelectionUpdate();
+      }
+    };
+
+    window.addEventListener('sm-view-teacher-updated', handleSelectionUpdate);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(
+        'sm-view-teacher-updated',
+        handleSelectionUpdate,
+      );
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [role, viewTeacherKey]);
+
+  const notifyTeachersUpdated = () => {
+    try {
+      window.localStorage.setItem('sm_teachers_updated', String(Date.now()));
+      window.dispatchEvent(new Event('sm-teachers-updated'));
+    } catch {
+      window.dispatchEvent(new Event('sm-teachers-updated'));
     }
-  }, [effectiveRole, router]);
+  };
 
   useEffect(() => {
-    if (!companyName || effectiveRole !== 'company') return;
+    if (!companyName || role !== 'company') return;
     let isActive = true;
     const fetchTeachers = async () => {
       try {
@@ -134,21 +198,43 @@ export default function TeachersPage() {
     return () => {
       isActive = false;
     };
-  }, [companyName, effectiveRole]);
+  }, [companyName, role]);
 
   useEffect(() => {
-    if (effectiveRole !== 'company') return;
-    if (searchParams.get('new') === '1') {
-      openCreateModal();
-      router.replace('/teachers', { scroll: false });
+    if (!selectedTeacher?.username) {
+      setStudents([]);
+      return;
     }
-  }, [searchParams, router, effectiveRole]);
+    let isActive = true;
+    const fetchStudents = async () => {
+      try {
+        setStudentsLoading(true);
+        const response = await fetch(
+          `/api/students?teacher=${encodeURIComponent(selectedTeacher.username)}`,
+        );
+        const data = (await response.json()) as { students: StudentRecord[] };
+        if (isActive) {
+          setStudents(data.students ?? []);
+        }
+      } catch {
+        if (isActive) setStudents([]);
+      } finally {
+        if (isActive) setStudentsLoading(false);
+      }
+    };
+    fetchStudents();
+    return () => {
+      isActive = false;
+    };
+  }, [selectedTeacher?.username]);
 
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
-
-  const handleHubModeChange = (nextMode: 'training' | 'teaching') => {
-    router.push(`/teachers?mode=${nextMode}`, { scroll: false });
-  };
+  const selectedTeacherInfo = useMemo(() => {
+    if (!selectedTeacher) return null;
+    return (
+      teachers.find(teacher => teacher.id === selectedTeacher.id) ?? null
+    );
+  }, [selectedTeacher, teachers]);
 
   const openCreateModal = () => {
     setEditing(null);
@@ -263,126 +349,12 @@ export default function TeachersPage() {
     }
   };
 
-  if (effectiveRole !== 'company') {
+  if (role && role !== 'company') {
     return (
-      <div className="space-y-8">
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-              Teachers
-            </p>
-            <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-              Training + Teaching Hub
-            </h1>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              One place for curriculum, coaching, and studio resources.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                hubMode === 'training'
-                  ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
-                  : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
-              }`}
-              onClick={() => handleHubModeChange('training')}
-            >
-              Training
-            </button>
-            <button
-              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                hubMode === 'teaching'
-                  ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
-                  : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
-              }`}
-              onClick={() => handleHubModeChange('teaching')}
-            >
-              Teaching
-            </button>
-          </div>
-        </header>
-
-        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">
-            Teacher Dashboard
-          </h2>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Studio cards now live on the dashboard view.
-          </p>
-          <a
-            href="/teachers/dashboard"
-            className="mt-4 inline-flex rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Go to Dashboard
-          </a>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Curriculum
-              </p>
-              <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-                Program Library
-              </h2>
-              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-                Jump into a specific pathway or program set.
-              </p>
-            </div>
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-              Updated weekly
-            </span>
-          </div>
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <a
-              href="/curriculum/foundation"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Foundation Program
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">Levels 1-9</p>
-            </a>
-            <a
-              href="/curriculum/development"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Development Program
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">Levels 10-18</p>
-            </a>
-            <a
-              href="/curriculum/special"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Special Programs
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                Masterclasses + Intensives
-              </p>
-            </a>
-            <a
-              href="/curriculum/supplemental"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Supplemental Programs
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                Teacher Created Programs
-              </p>
-            </a>
-          </div>
-        </section>
+      <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-sm text-[var(--c-6f6c65)]">
+        Accounts is available for company admins.
       </div>
     );
-  }
-
-  if (effectiveRole === 'company') {
-    return null;
   }
 
   return (
@@ -393,10 +365,10 @@ export default function TeachersPage() {
             Company
           </p>
           <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-            Teachers
+            Accounts
           </h1>
           <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Add new teachers, update status, and track studio coverage.
+            Manage teacher accounts and view roster details.
           </p>
         </div>
         <button
@@ -494,6 +466,109 @@ export default function TeachersPage() {
         </div>
       </section>
 
+      {selectedTeacher ? (
+        <section className="space-y-4">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Selected Teacher
+                </p>
+                <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+                  {selectedTeacher.name}
+                </h2>
+                <p className="text-sm text-[var(--c-6f6c65)] mt-1">
+                  {selectedTeacherInfo?.email ?? 'Email on file'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                {selectedTeacherInfo?.region ? (
+                  <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                    {selectedTeacherInfo.region}
+                  </span>
+                ) : null}
+                {selectedTeacherInfo?.status ? (
+                  <span
+                    className={`rounded-full px-3 py-1 ${
+                      statusStyles[
+                        normalizeTeacherStatus(selectedTeacherInfo.status)
+                      ] ?? statusStyles.Inactive
+                    }`}
+                  >
+                    {normalizeTeacherStatus(selectedTeacherInfo.status)}
+                  </span>
+                ) : null}
+                <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                  {students.length} students
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                  Student Roster
+                </p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  {students.length} students
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
+              <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                <div className="col-span-4">Student</div>
+                <div className="col-span-4">Email</div>
+                <div className="col-span-2">Level</div>
+                <div className="col-span-2">Status</div>
+              </div>
+              <div className="divide-y divide-[var(--c-ecebe7)]">
+                {studentsLoading ? (
+                  <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                    Loading students...
+                  </div>
+                ) : students.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                    No students yet for this teacher.
+                  </div>
+                ) : (
+                  students.map(student => (
+                    <div
+                      key={student.id}
+                      className="grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm"
+                    >
+                      <div className="col-span-4">
+                        <p className="font-medium text-[var(--c-1f1f1d)]">
+                          {student.name}
+                        </p>
+                        <p className="text-xs text-[var(--c-9a9892)]">
+                          Added {new Date(student.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="col-span-4 text-[var(--c-6f6c65)]">
+                        {student.email || '—'}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
+                          {student.level}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
+                          {student.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div
@@ -528,7 +603,6 @@ export default function TeachersPage() {
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   Name
                   <input
-                    type="text"
                     value={formState.name}
                     onChange={event =>
                       setFormState(current => ({
@@ -536,14 +610,13 @@ export default function TeachersPage() {
                         name: event.target.value,
                       }))
                     }
-                    className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
                     placeholder="Teacher name"
                   />
                 </label>
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   Email
                   <input
-                    type="email"
                     value={formState.email}
                     onChange={event =>
                       setFormState(current => ({
@@ -551,15 +624,13 @@ export default function TeachersPage() {
                         email: event.target.value,
                       }))
                     }
-                    className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                    placeholder="teacher@email.com"
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                    placeholder="Email address"
                   />
                 </label>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   Region
-                  <select
+                  <input
                     value={formState.region}
                     onChange={event =>
                       setFormState(current => ({
@@ -567,14 +638,9 @@ export default function TeachersPage() {
                         region: event.target.value,
                       }))
                     }
-                    className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  >
-                    <option value="Unassigned">Unassigned</option>
-                    <option value="North">North</option>
-                    <option value="South">South</option>
-                    <option value="East">East</option>
-                    <option value="West">West</option>
-                  </select>
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                    placeholder="Region"
+                  />
                 </label>
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   Status
@@ -583,34 +649,34 @@ export default function TeachersPage() {
                     onChange={event =>
                       setFormState(current => ({
                         ...current,
-                        status: event.target.value as
-                          | 'Licensed'
-                          | 'Certified'
-                          | 'Advanced'
-                          | 'Master'
-                          | 'Onboarding'
-                          | 'Inactive',
+                        status: event.target.value as typeof formState.status,
                       }))
                     }
-                    className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
                   >
-                    <option value="Licensed">Licensed</option>
-                    <option value="Certified">Certified</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Master">Master</option>
-                    <option value="Onboarding">Onboarding</option>
-                    <option value="Inactive">Inactive</option>
+                    {[
+                      'Licensed',
+                      'Certified',
+                      'Advanced',
+                      'Master',
+                      'Onboarding',
+                      'Inactive',
+                    ].map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
 
               {error ? (
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                <div className="rounded-xl border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-4 py-3 text-sm text-[var(--c-8f2f3b)]">
                   {error}
-                </p>
+                </div>
               ) : null}
 
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={closeModal}
@@ -621,13 +687,9 @@ export default function TeachersPage() {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-full bg-[var(--c-c8102e)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSaving
-                    ? 'Saving...'
-                    : editing
-                      ? 'Save Changes'
-                      : 'Add Teacher'}
+                  {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Add Teacher'}
                 </button>
               </div>
             </form>

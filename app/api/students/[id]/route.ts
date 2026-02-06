@@ -9,6 +9,15 @@ type StudentRecord = {
   email: string;
   level: string;
   status: 'Active' | 'Paused';
+  lessonFeeAmount?: string;
+  lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
+  lessonDay?: string;
+  lessonTime?: string;
+  lessonDuration?: '30M' | '45M' | '1HR';
+  lessonType?: 'Individual' | 'Group';
+  lessonLocation?: 'In-Person' | 'Virtual' | 'Home-Visit';
+  lessonNotes?: string;
+  studentAlert?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -51,6 +60,15 @@ export async function PATCH(
     email?: string;
     level?: string;
     status?: 'Active' | 'Paused';
+    lessonFeeAmount?: string;
+    lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
+    lessonDay?: string;
+    lessonTime?: string;
+    lessonDuration?: '30M' | '45M' | '1HR';
+    lessonType?: 'Individual' | 'Group';
+    lessonLocation?: 'In-Person' | 'Virtual' | 'Home-Visit';
+    lessonNotes?: string;
+    studentAlert?: string;
   };
 
   if (!body.teacher) {
@@ -73,6 +91,17 @@ export async function PATCH(
     email: body.email ?? current.email,
     level: body.level ?? current.level,
     status: body.status ?? current.status,
+    lessonFeeAmount: body.lessonFeeAmount ?? current.lessonFeeAmount ?? '',
+    lessonFeePeriod: body.lessonFeePeriod ?? current.lessonFeePeriod ?? 'Per Mo',
+    lessonDay: body.lessonDay ?? current.lessonDay ?? '',
+    lessonTime: body.lessonTime ?? current.lessonTime ?? '',
+    lessonDuration:
+      body.lessonDuration ?? current.lessonDuration ?? '30M',
+    lessonType: body.lessonType ?? current.lessonType ?? 'Individual',
+    lessonLocation:
+      body.lessonLocation ?? current.lessonLocation ?? 'In-Person',
+    lessonNotes: body.lessonNotes ?? current.lessonNotes ?? '',
+    studentAlert: body.studentAlert ?? current.studentAlert ?? '',
     updatedAt: new Date().toISOString(),
   };
 

@@ -1,26 +1,142 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import {
+  VIEW_ROLE_STORAGE_KEY,
+  VIEW_TEACHER_STORAGE_KEY,
+} from '../../components/auth';
 import CartPanel from '../../components/cart-panel';
 
 export default function TeacherDashboardPage() {
+  const [teacherLabel, setTeacherLabel] = useState<string | null>(null);
+  const [canBrowse, setCanBrowse] = useState(false);
+  const [isTeacherUser, setIsTeacherUser] = useState(false);
+
+  useEffect(() => {
+    const loadTeacherSelection = () => {
+      const stored = window.localStorage.getItem('sm_user');
+      if (!stored) {
+        setTeacherLabel(null);
+        setCanBrowse(false);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(stored) as { username?: string; role?: string };
+        if (parsed?.role === 'company') {
+          setIsTeacherUser(false);
+          const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
+          const isTeacherView = storedView === 'teacher';
+          setCanBrowse(isTeacherView);
+
+          const viewTeacherKey = parsed?.username
+            ? `${VIEW_TEACHER_STORAGE_KEY}:${parsed.username}`
+            : VIEW_TEACHER_STORAGE_KEY;
+          const storedTeacher =
+            window.localStorage.getItem(viewTeacherKey) ??
+            window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+
+          if (isTeacherView && storedTeacher) {
+            try {
+              const selected = JSON.parse(storedTeacher) as {
+                username?: string;
+                name?: string;
+              };
+              if (selected?.username) {
+                setTeacherLabel(selected.name ?? selected.username);
+                window.localStorage.setItem(viewTeacherKey, storedTeacher);
+                return;
+              }
+            } catch {
+              setTeacherLabel(null);
+            }
+          }
+
+          setTeacherLabel(null);
+          return;
+        }
+
+        if (parsed?.role === 'teacher') {
+          setTeacherLabel(parsed.username ?? null);
+          setCanBrowse(false);
+          setIsTeacherUser(true);
+          return;
+        }
+
+        setTeacherLabel(null);
+        setCanBrowse(false);
+        setIsTeacherUser(false);
+      } catch {
+        setTeacherLabel(null);
+        setCanBrowse(false);
+        setIsTeacherUser(false);
+      }
+    };
+
+    loadTeacherSelection();
+    const handleSelectionUpdate = () => loadTeacherSelection();
+    window.addEventListener('sm-view-teacher-updated', handleSelectionUpdate);
+    return () => {
+      window.removeEventListener(
+        'sm-view-teacher-updated',
+        handleSelectionUpdate,
+      );
+    };
+  }, []);
+
+  const handleBrowseTeachers = () => {
+    window.dispatchEvent(new Event('sm-open-teacher-lookup'));
+  };
+
   return (
     <div className="space-y-8">
-      <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-[#c8102e]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <header>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
           Teachers
         </p>
-        <h1 className="text-3xl font-semibold text-[#1f1f1d] mt-2">
+        <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
           Dashboard
         </h1>
-        <p className="text-sm text-[#6f6c65] mt-2">
+        <p className="text-sm text-[var(--c-6f6c65)] mt-2">
           Your studio snapshot, schedule, and fees in one place.
         </p>
-      </header>
+        </header>
+
+        {!isTeacherUser ? (
+          <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)] lg:max-w-sm lg:flex-1">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                Selected Teacher
+              </p>
+              <h2 className="text-xl font-semibold text-[var(--c-1f1f1d)]">
+                {teacherLabel ?? 'No teacher selected'}
+              </h2>
+              <p className="text-sm text-[var(--c-6f6c65)]">
+                {teacherLabel
+                  ? 'You are viewing the teacher dashboard for this studio.'
+                  : canBrowse
+                    ? 'Choose a teacher to personalize the dashboard view.'
+                    : 'Log in as a teacher to view your personalized dashboard.'}
+              </p>
+              {canBrowse && !teacherLabel ? (
+                <button
+                  onClick={handleBrowseTeachers}
+                  className="mt-2 w-fit rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                >
+                  Browse Teachers
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+      </div>
 
       <section
         id="students"
-        className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
+        className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm"
       >
-        <h2 className="text-lg font-semibold text-[#1f1f1d]">Students</h2>
-        <p className="text-sm text-[#6f6c65] mt-2">
+        <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">Students</h2>
+        <p className="text-sm text-[var(--c-6f6c65)] mt-2">
           Active student roster and progress highlights.
         </p>
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -32,7 +148,7 @@ export default function TeacherDashboardPage() {
           ].map(item => (
             <div
               key={item}
-              className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
+              className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
             >
               {item}
             </div>
@@ -43,10 +159,10 @@ export default function TeacherDashboardPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section
           id="this-week"
-          className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm"
         >
-          <h2 className="text-lg font-semibold text-[#1f1f1d]">This Week</h2>
-          <p className="text-sm text-[#6f6c65] mt-2">
+          <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">This Week</h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
             Upcoming lessons, recitals, and studio moments.
           </p>
           <div className="mt-5 space-y-3">
@@ -57,7 +173,7 @@ export default function TeacherDashboardPage() {
             ].map(item => (
               <div
                 key={item}
-                className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
               >
                 {item}
               </div>
@@ -67,10 +183,10 @@ export default function TeacherDashboardPage() {
 
         <section
           id="schedule"
-          className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm"
         >
-          <h2 className="text-lg font-semibold text-[#1f1f1d]">Schedule</h2>
-          <p className="text-sm text-[#6f6c65] mt-2">
+          <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">Schedule</h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
             Manage weekly blocks and upcoming sessions.
           </p>
           <div className="mt-5 space-y-3">
@@ -81,7 +197,7 @@ export default function TeacherDashboardPage() {
             ].map(item => (
               <div
                 key={item}
-                className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-3 text-sm text-[#3a3935]"
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
               >
                 {item}
               </div>
@@ -92,18 +208,18 @@ export default function TeacherDashboardPage() {
 
       <section
         id="lesson-fees"
-        className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm"
+        className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm"
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-[#1f1f1d]">
+            <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">
               Lesson Fees
             </h2>
-            <p className="text-sm text-[#6f6c65] mt-2">
+            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
               Track billing, payments, and pricing tiers.
             </p>
           </div>
-          <span className="rounded-full border border-[#ecebe7] bg-[#fcfcfb] px-3 py-1 text-xs text-[#6f6c65]">
+          <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
             Next payout Feb 18
           </span>
         </div>
@@ -115,12 +231,12 @@ export default function TeacherDashboardPage() {
           ].map(item => (
             <div
               key={item.label}
-              className="rounded-xl border border-[#ecebe7] bg-[#fcfcfb] px-4 py-4"
+              className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-4"
             >
-              <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                 {item.label}
               </p>
-              <p className="text-2xl font-semibold text-[#1f1f1d] mt-2">
+              <p className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
                 {item.value}
               </p>
             </div>

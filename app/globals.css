@@ -2,8 +2,73 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #f5f1ea;
+  --foreground: #1f1a17;
+  --page-bg-1: rgba(200, 176, 152, 0.22);
+  --page-bg-2: rgba(165, 184, 206, 0.18);
+  --page-bg-3: rgba(240, 220, 196, 0.18);
+  --sidebar-accent-bg: #2f3944;
+  --sidebar-accent-text: #f7f3ec;
+  --sidebar-accent-border: #2f3944;
+  --sidebar-selected-bg: #222a33;
+  --sidebar-selected-text: #f7f3ec;
+  --sidebar-selected-border: #222a33;
+  --c-0b6aa2: #0b6aa2;
+  --c-111111: #1a1512;
+  --c-1f1f1d: #1f1a17;
+  --c-28527a: #28527a;
+  --c-2b2b27: #2d2621;
+  --c-2d2b25: #2f2823;
+  --c-2d6a4f: #2d6a4f;
+  --c-3a342a: #3a322c;
+  --c-3a3935: #3a3530;
+  --c-3f4a2c: #4c5a2c;
+  --c-47308a: #4a2f86;
+  --c-4a4740: #4a433d;
+  --c-5a5650: #5a524b;
+  --c-5b5952: #5b534c;
+  --c-6f6c65: #6f645b;
+  --c-7a3b3b: #7a3b3b;
+  --c-7a4a17: #7a4a17;
+  --c-7a776f: #7a6f66;
+  --c-8a5b2b: #8a5b2b;
+  --c-8f2f3b: #8f2f3b;
+  --c-9a9892: #9a8f85;
+  --c-9c978f: #9c9187;
+  --c-b42318: #b42318;
+  --c-c8102e: #c8102e;
+  --c-d9e2ef: #e2d9cc;
+  --c-dfe6d2: #dfe6d2;
+  --c-e11b22: #e11b22;
+  --c-e5e3dd: #d8cec2;
+  --c-e6eef8: #e6eef8;
+  --c-e6f4ff: #e6f4ff;
+  --c-e7eddc: #e3e9d6;
+  --c-e8efe9: #e8efe9;
+  --c-ecebe7: #e1d8cd;
+  --c-efe7d5: #efe7d5;
+  --c-efece6: #e7dfd4;
+  --c-f1f0ec: #ece4d8;
+  --c-f1f1ef: #efe7dc;
+  --c-f2d7db: #f2d7db;
+  --c-f2dac5: #f2dac5;
+  --c-f3e5e5: #f3e5e5;
+  --c-f4f0ff: #f0ebff;
+  --c-f5f9ff: #f5f9ff;
+  --c-f6fbf7: #f6fbf7;
+  --c-f7f7f5: #f3efe6;
+  --c-f8d58a: #f8d58a;
+  --c-faf9f6: #f6f2ea;
+  --c-fafafa: #f7f3ec;
+  --c-fce8d6: #fce8d6;
+  --c-fcfcfb: #f9f6f0;
+  --c-ffe7d6: #ffe7d6;
+  --c-fff1f3: #fff1f3;
+  --c-fff2d9: #fff2d9;
+  --c-fff5f6: #fff5f6;
+  --c-fff7e8: #fff7e8;
+  --c-ffffff: #fcfaf6;
 }
 
 @theme inline {
@@ -13,17 +78,120 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #0f1115;
+  --foreground: #e6e9ef;
+  --page-bg-1: rgba(70, 82, 103, 0.35);
+  --page-bg-2: rgba(36, 52, 67, 0.28);
+  --page-bg-3: rgba(24, 30, 40, 0.4);
+  --sidebar-accent-bg: #2a323d;
+  --sidebar-accent-text: #eef2f7;
+  --sidebar-accent-border: #2a323d;
+  --sidebar-selected-bg: #1f2630;
+  --sidebar-selected-text: #eef2f7;
+  --sidebar-selected-border: #1f2630;
+  --c-0b6aa2: #6bb7e8;
+  --c-111111: #f5f7fb;
+  --c-1f1f1d: #e6e9ef;
+  --c-28527a: #78a8d6;
+  --c-2b2b27: #d8dde6;
+  --c-2d2b25: #d2d7e0;
+  --c-2d6a4f: #6eb690;
+  --c-3a342a: #c4cbd7;
+  --c-3a3935: #ccd3de;
+  --c-3f4a2c: #8faa6f;
+  --c-47308a: #9a87dc;
+  --c-4a4740: #b7bfcb;
+  --c-5a5650: #a5aebb;
+  --c-5b5952: #a0a9b6;
+  --c-6f6c65: #8b95a3;
+  --c-7a3b3b: #b76a6f;
+  --c-7a4a17: #d3a064;
+  --c-7a776f: #7f8897;
+  --c-8a5b2b: #d8ac73;
+  --c-8f2f3b: #cc6a7a;
+  --c-9a9892: #767f8d;
+  --c-9c978f: #727b88;
+  --c-b42318: #d94b43;
+  --c-c8102e: #e45269;
+  --c-d9e2ef: #242c36;
+  --c-dfe6d2: #242b24;
+  --c-e11b22: #ff5c6b;
+  --c-e5e3dd: #2b323b;
+  --c-e6eef8: #1f2a35;
+  --c-e6f4ff: #1a2430;
+  --c-e7eddc: #1f2622;
+  --c-e8efe9: #1f2923;
+  --c-ecebe7: #242b33;
+  --c-efe7d5: #1f242a;
+  --c-efece6: #1e2329;
+  --c-f1f0ec: #181d23;
+  --c-f1f1ef: #1a1f25;
+  --c-f2d7db: #33222a;
+  --c-f2dac5: #30261f;
+  --c-f3e5e5: #2a2126;
+  --c-f4f0ff: #1d2130;
+  --c-f5f9ff: #1a232e;
+  --c-f6fbf7: #1a2321;
+  --c-f7f7f5: #0f1115;
+  --c-f8d58a: #3b2d12;
+  --c-faf9f6: #14181e;
+  --c-fafafa: #13171d;
+  --c-fce8d6: #2a2321;
+  --c-fcfcfb: #161a20;
+  --c-ffe7d6: #2a221f;
+  --c-fff1f3: #2b1e22;
+  --c-fff2d9: #2a231c;
+  --c-fff5f6: #2b1e22;
+  --c-fff7e8: #2a241f;
+  --c-ffffff: #151a20;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(
+        1200px 900px at 10% -10%,
+        var(--page-bg-1),
+        transparent 65%
+      ),
+    radial-gradient(
+        1000px 700px at 80% 0%,
+        var(--page-bg-2),
+        transparent 70%
+      ),
+    radial-gradient(
+        900px 700px at 50% 120%,
+        var(--page-bg-3),
+        transparent 75%
+      ),
+    var(--background);
   color: var(--foreground);
   font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.app-shell-bg {
+  background:
+    radial-gradient(
+        1200px 900px at 10% -10%,
+        var(--page-bg-1),
+        transparent 65%
+      ),
+    radial-gradient(
+        1000px 700px at 80% 0%,
+        var(--page-bg-2),
+        transparent 70%
+      ),
+    radial-gradient(
+        900px 700px at 50% 120%,
+        var(--page-bg-3),
+        transparent 75%
+      ),
+    var(--background);
+}
+
+html {
+  background: var(--background);
 }
 
 .font-heading {

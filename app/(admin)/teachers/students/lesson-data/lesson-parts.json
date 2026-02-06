@@ -1,0 +1,540 @@
+{
+  "1.1": [
+    "1.1.1 – Demonstrate Piece",
+    "1.1.2 – RH Sentences 1 & 2",
+    "1.1.3 – RH Tailpiece",
+    "1.1.4 – Notes & Order",
+    "1.1.5 – LH Sentences 1 & 2",
+    "1.1.6 – BH Sentences 1 & 2",
+    "1.1.7 – BH Tailpiece"
+  ],
+  "1.2": [
+    "1.2.1 – Demonstrate Piece",
+    "1.2.2 – RH 1st Section",
+    "1.2.3 – LH 1st Section",
+    "1.2.4 – BH 1st Section",
+    "1.2.5 – BH Tailpiece",
+    "1.2.6 – Order"
+  ],
+  "1.3": [
+    "1.3.1 – Demonstrate Piece",
+    "1.3.2 – RH Chords",
+    "1.3.3 – Roman Numerals & Order",
+    "Learning Clue – One Step at a Time",
+    "1.3.4 – RH Chords – 4 Beats",
+    "1.3.5 – LH I, IV, V & Rhythm",
+    "1.3.6 – BH on Keyboard"
+  ],
+  "1.4": [
+    "Discussion Topic – About Accompaniment",
+    "1.4.1 – Demonstrate Piece",
+    "1.4.2 – RH Chords",
+    "1.4.3 – LH",
+    "1.4.4 – Ratio"
+  ],
+  "1.5": [
+    "Discussion Topic – Keeping Your Songs Alive",
+    "Discussion Topic – Managing Your Playlist",
+    "1.5.1 – Demonstrate Piece",
+    "1.5.2 – RH 3 Sentences",
+    "1.5.3 – BH 3 Sentences & Notes"
+  ],
+  "1.6": [
+    "1.6.1 – RH Sentences",
+    "1.6.2 – Demonstrate Piece",
+    "1.6.3 – RH Rhythm",
+    "1.6.4 – LH",
+    "1.6.5 – BH"
+  ],
+  "1.7": [
+    "Discussion Topic – Whole & Half Steps",
+    "Discussion Topic – Sharps & Flats",
+    "1.7.1 – Demonstrate Piece",
+    "1.7.2 – RH Chords & BH"
+  ],
+  "1.8": [
+    "1.8.1 – Demonstrate Piece",
+    "1.8.2 – Chords on Keyboard",
+    "1.8.3 – LH",
+    "1.8.4 – Ratio"
+  ],
+  "1.9": [
+    "1.9.1 – Demonstrate Piece",
+    "1.9.2 – RH on Keyboard",
+    "1.9.3 – LH on Keyboard",
+    "1.9.4 – BH on Keyboard"
+  ],
+  "1.10": [
+    "1.10.1 – Demonstrate Piece",
+    "1.10.2 – LH on Keyboard",
+    "1.10.3 – RH Rhythm – Humpty Dumpty",
+    "1.10.4 – BH Rhythm Diagram",
+    "1.10.5 – Pattern on I, IV, V"
+  ],
+  "2.1": [
+    "2.1.1 – Demonstrate Piece",
+    "2.1.2 – RH Pattern",
+    "2.1.3 – Notes & Order",
+    "2.1.4 – LH on Keyboard",
+    "2.1.5 – BH on Keyboard"
+  ],
+  "2.2": [
+    "2.2.1 – Demonstrate Piece",
+    "2.2.2 – BH on Keyboard",
+    "2.2.3 – Notes",
+    "2.2.4 – Order on Keyboard"
+  ],
+  "2.3": [
+    "2.3.1 – Demonstrate Piece",
+    "2.3.2 – RH Sentences",
+    "2.3.3 – Notes",
+    "2.3.4 – RH Rhythm",
+    "2.3.5 – LH on Keyboard",
+    "2.3.6 – BH on Keyboard & Order"
+  ],
+  "2.4": [
+    "2.4.1 – Demonstrate Piece",
+    "2.4.2 – 7th Chords & Notes",
+    "2.4.3 – BH on Keyboard"
+  ],
+  "2.5": [
+    "2.5.1 – Demonstrate Piece",
+    "2.5.2 – Sentences on Keyboard",
+    "2.5.3 – LH on Keyboard",
+    "2.5.4 – BH on Keyboard & Notes"
+  ],
+  "2.6": [
+    "2.6.1 – Demonstrate Piece",
+    "2.6.2 – BH on Keyboard with Rhythm",
+    "2.6.3 – Notes & Order"
+  ],
+  "2.7": [
+    "2.7.1 – Demonstrate Piece",
+    "2.7.2 – RH 1st Pattern",
+    "2.7.3 – LH 1st Pattern",
+    "2.7.4 – BH 1st Pattern",
+    "2.7.5 – RH 2nd Pattern",
+    "2.7.6 – LH 2nd Pattern",
+    "2.7.7 – BH 2nd Pattern"
+  ],
+  "2.8": [
+    "2.8.1 – Demonstrate Piece",
+    "2.8.2 – New Chords",
+    "2.8.3 – Split Chords",
+    "2.8.4 – Rhythm",
+    "About Reading Chords & Learning Slowly"
+  ],
+  "2.9": [
+    "2.9.1 – Demonstrate Piece",
+    "2.9.2 – RH A Section",
+    "2.9.3 – LH A Section",
+    "2.9.4 – BH A Section",
+    "2.9.5 – RH B Section",
+    "2.9.6 – LH B Section",
+    "2.9.7 – BH B Section",
+    "2.9.8 – BH C Section & Order"
+  ],
+  "2.10": [
+    "2.10.1 – Demonstrate Piece",
+    "2.10.2 – RH on Keyboard",
+    "2.10.3 – LH on Keyboard",
+    "2.10.4 – BH on Keyboard",
+    "2.10.5 – Last Section",
+    "2.10.6 – Order & FABE",
+    "2.10.7 – Notes"
+  ],
+  "2.11": [
+    "2.11.1 – Demonstrate Piece",
+    "2.11.2 – RH Sentence 5 & 6",
+    "2.11.3 – LH Chords",
+    "2.11.4 – BH on Keyboard",
+    "2.11.5 – Notes & Order"
+  ],
+  "3.1": [
+    "3.1.1 – Demonstrate Piece",
+    "3.1.2 – LH",
+    "3.1.3 – RH A Section & Rhythm",
+    "3.1.4 – BH & Rhythm",
+    "3.1.5 – BH B Section",
+    "3.1.6 – Reference Book & Order"
+  ],
+  "3.2": [
+    "3.2.1 – Demonstrate Piece",
+    "3.2.2 – RH Melody",
+    "3.2.3 – BH & Order"
+  ],
+  "3.3": [
+    "3.3.1 – Demonstrate Piece",
+    "3.3.2 – LH & RH",
+    "3.3.3 – Reference Book & Order"
+  ],
+  "3.4": [
+    "3.4.1 – Demonstrate Piece",
+    "3.4.2 – Reference Book & BH on Keyboard"
+  ],
+  "3.5": [
+    "3.5.1 – Demonstrate Piece",
+    "3.5.2 – RH Pattern",
+    "3.5.3 – LH Pattern",
+    "3.5.4 – BH Pattern",
+    "3.5.5 – Tailpiece",
+    "3.5.6 – Reference Book"
+  ],
+  "3.6": [
+    "3.6.1 – Demonstrate Piece",
+    "3.6.2 – LH on Keyboard",
+    "3.6.3 – RH on Keyboard",
+    "3.6.4 – BH on Keyboard"
+  ],
+  "3.7": [
+    "3.7.1 – Demonstrate Piece",
+    "3.7.2 – RH 3 Positions",
+    "3.7.3 – RH Melody",
+    "3.7.4 – RH Rhythm",
+    "3.7.5 – LH on Keyboard",
+    "3.7.6 – BH on Keyboard",
+    "3.7.7 – BH 2nd Section",
+    "3.7.8 – Middle Section",
+    "3.7.9 – Order"
+  ],
+  "3.8": [
+    "3.8.1 – Demonstration Piece",
+    "3.8.2 – About Making 'Mistakes'",
+    "3.8.3 – Ratio & Process"
+  ],
+  "3.9": [
+    "3.9.1 – Demonstrate Piece",
+    "3.9.2 – RH A Section",
+    "3.9.3 – LH A Section",
+    "3.9.4 – BH A Section",
+    "3.9.5 – RH B Section",
+    "3.9.6 – BH B Section",
+    "3.9.7 – Last A Section (or C Section)",
+    "3.9.8 – Order"
+  ],
+  "3.10": [
+    "3.10.1 – Demonstrate Piece",
+    "3.10.2 – LH 3 Sentences",
+    "3.10.3 – RH CAGE Chords",
+    "3.10.4 – BH on Keyboard",
+    "3.10.5 – Rhythm & Order"
+  ],
+  "5.1": [
+    "5.1.1 – Demonstrate Piece",
+    "5.1.2 – RH 1st Section",
+    "5.1.3 – LH 1st Section",
+    "5.1.4 – BH 1st Section",
+    "5.1.5 – RH 2nd Section",
+    "5.1.6 – LH 2nd Section",
+    "5.1.7 – BH 2nd Section"
+  ],
+  "5.2": [
+    "5.2.1 – Demonstrate Piece",
+    "5.2.2 – RH 1st Section",
+    "5.2.3 – LH 1st Section",
+    "5.2.4 – BH 1st Section",
+    "5.2.5 – BH 2nd Section",
+    "5.2.6 – Descent & Transition",
+    "5.2.7 – BH Last Section & Order"
+  ],
+  "5.3": [
+    "5.3.1 – Demonstrate Piece",
+    "5.3.2 – LH Main Section",
+    "5.3.3 – RH Main Section",
+    "5.3.4 – BH Main Section",
+    "5.3.5 – BH Next Section",
+    "5.3.6 – BH Ending & Order"
+  ],
+  "5.4": [
+    "5.4.1 – Notes on Fur Elise"
+  ],
+  "5.5": [
+    "5.5.1 – Demonstrate Piece",
+    "5.5.2 – LH",
+    "5.5.3 – RH",
+    "5.5.4 – BH"
+  ],
+  "5.6": [
+    "5.6.1 – Demonstrate Piece",
+    "5.6.2 – RH 1st Section",
+    "5.6.3 – LH 1st Section",
+    "5.6.4 – BH 1st Section",
+    "5.6.5 – BH 1st Section – Broken LH",
+    "5.6.6 – RH 2nd Section",
+    "5.6.7 – LH 2nd Section",
+    "5.6.8 – BH 2nd Section",
+    "5.6.9 – BH Last Section"
+  ],
+  "6.1": [
+    "6.1.1 – Demonstrate Piece",
+    "6.1.2 – RH 1st Half",
+    "6.1.3 – LH 1st Half",
+    "6.1.4 – BH 1st Half",
+    "6.1.5 – RH 2nd Half",
+    "6.1.6 – LH 2nd Half",
+    "6.1.7 – BH 2nd Half"
+  ],
+  "6.2": [
+    "6.2.1 – Demonstrate Piece",
+    "6.2.2 – LH I, IV, I",
+    "6.2.3 – LH I, V, IV, I",
+    "6.2.4 – BH"
+  ],
+  "6.3": [
+    "6.3.1 – Demonstrate Piece",
+    "6.3.2 – RH 1st Half",
+    "6.3.3 – LH 1st Half",
+    "6.3.4 – BH 1st Half",
+    "6.3.5 – RH 2nd Half",
+    "6.3.6 – BH 2nd Half",
+    "6.3.7 – BH Ending"
+  ],
+  "6.4": [
+    "6.4.1 – Demonstrate Piece",
+    "6.4.2 – RH Descent",
+    "6.4.3 – RH Rhythm",
+    "6.4.4 – BH Descent",
+    "6.4.5 – RH Ascent",
+    "6.4.6 – BH Ascent",
+    "6.4.7 – Order",
+    "6.4.8 – Tailpiece"
+  ],
+  "6.5": [
+    "6.5.1 – Demonstrate Piece",
+    "6.5.2 – RH 1st Half",
+    "6.5.3 – LH 1st Half",
+    "6.5.4 – BH 1st Half",
+    "6.5.5 – RH 2nd Half",
+    "6.5.6 – LH 2nd Half",
+    "6.5.7 – BH 2nd Half"
+  ],
+  "6.6": [
+    "6.6.1 – Demonstrate Piece",
+    "6.6.2 – RH 1st Section",
+    "6.6.3 – LH 1st Section",
+    "6.6.4 – BH 1st Section",
+    "6.6.5 – RH 2nd Section",
+    "6.6.6 – LH 2nd Section",
+    "6.6.7 – BH 2nd Section"
+  ],
+  "7.1": [
+    "7.1.1 – Demonstrate Piece",
+    "7.1.2 – RH 1st Section",
+    "7.1.3 – LH 1st Section",
+    "7.1.4 – BH 1st Section",
+    "7.1.5 – RH Last Line",
+    "7.1.6 – BH Last Line"
+  ],
+  "7.2": [
+    "7.2.1 – Demonstrate Piece",
+    "7.2.2 – LH 1st Section",
+    "7.2.3 – RH 1st Section",
+    "7.2.4 – BH 1st Section",
+    "7.2.5 – LH 2nd Section",
+    "7.2.6 – RH 2nd Section",
+    "7.2.7 – BH 2nd Section",
+    "7.2.8 – BH 3rd Section",
+    "7.2.9 – LH 4th Section",
+    "7.2.10 – RH 4th Section",
+    "7.2.11 – BH 4th Section",
+    "7.2.12 – RH 5th Section",
+    "7.2.13 – BH 5th Section",
+    "7.2.14 – RH Last Section",
+    "7.2.15 – Transition and Order"
+  ],
+  "7.3": [
+    "7.3.1 – Demonstrate Piece",
+    "7.3.2 – BH 1st Line",
+    "7.3.3 – BH 2nd Line",
+    "7.3.4 – BH 3rd Line",
+    "7.3.5 – BH 4th Line"
+  ],
+  "7.4": [
+    "7.4.1 – Demonstrate Piece",
+    "7.4.2 – LH Order",
+    "7.4.3 – LH Process and Rhythm",
+    "7.4.4 – RH 1st Section",
+    "7.4.5 – BH 1st Section",
+    "7.4.6 – BH 2nd Section",
+    "7.4.7 – BH 3rd Section",
+    "7.4.8 – Transition and Tailpieces"
+  ],
+  "7.5": [
+    "7.5.1 – Demonstrate Piece",
+    "7.5.2 – RH 1st Section",
+    "7.5.3 – LH 1st Section",
+    "7.5.4 – BH 1st Section",
+    "7.5.5 – RH 2nd Section",
+    "7.5.6 – BH 2nd Section",
+    "7.5.7 – RH 3rd Section",
+    "7.5.8 – LH 3rd Section",
+    "7.5.9 – BH 3rd Section",
+    "7.5.10 – RH 4th Section",
+    "7.5.11 – BH 4th Section"
+  ],
+  "7.6": [
+    "7.6.1 – Demonstrate Piece",
+    "7.6.2 – RH 1st Section",
+    "7.6.3 – LH 1st Section",
+    "7.6.4 – BH 1st Section",
+    "7.6.5 – RH 2nd Section",
+    "7.6.6 – LH 2nd Section",
+    "7.6.7 – BH 2nd Section",
+    "7.6.8 – RH 3rd Section",
+    "7.6.9 – LH 3rd Section",
+    "7.6.10 – BH 3rd Section"
+  ],
+  "8.1": [
+    "8.1.1 – Demonstrate Piece",
+    "8.1.2 – LH 1st Section",
+    "8.1.3 – RH 1st Section",
+    "8.1.4 – BH 1st Section",
+    "8.1.5 – LH 2nd Section",
+    "8.1.6 – RH 2nd Section",
+    "8.1.7 – BH 2nd Section"
+  ],
+  "8.2": [
+    "8.2.1 – Demonstrate Piece",
+    "8.2.2 – LH 1st Cycle",
+    "8.2.3 – RH 1st Cycle",
+    "8.2.4 – BH 1st Cycle",
+    "8.2.5 – LH 2nd Cycle",
+    "8.2.6 – BH 2nd Cycle – 1st Line",
+    "8.2.7 – BH 2nd Cycle – 2nd Line",
+    "8.2.8 – BH 2nd Cycle – 3rd & 4th Lines",
+    "8.2.9 – BH 2nd Cycle – Last Line"
+  ],
+  "8.3": [
+    "8.3.1 – Demonstrate Piece",
+    "8.3.2 – LH",
+    "8.3.3 – BH 1st Section",
+    "8.3.4 – BH 2nd Section",
+    "8.3.5 – BH 3rd Section",
+    "8.3.6 – Last Line"
+  ],
+  "8.4": [
+    "8.4.1 – Demonstrate Piece",
+    "8.4.2 – BH 1st Line",
+    "8.4.3 – BH 2nd Line",
+    "8.4.4 – BH 3rd Line",
+    "8.4.5 – BH 4th Line",
+    "8.4.6 – BH 5th Line",
+    "8.4.7 – BH 6th Line",
+    "8.4.8 – BH 7th Line",
+    "8.4.9 – BH Last Line"
+  ],
+  "8.5": [
+    "8.5.1 – Demonstrate Piece",
+    "8.5.2 – BH 1st Section",
+    "8.5.3 – BH 2nd Section",
+    "8.5.4 – BH Last Section"
+  ],
+  "9.1": [
+    "9.1.1 – Demonstrate Piece",
+    "9.1.2 – BH Level 1",
+    "9.1.3 – BH Level 2",
+    "9.1.4 – BH Level 3",
+    "9.1.5 – BH Level 4",
+    "9.1.6 – BH Level 5",
+    "9.1.7 – BH Level 6",
+    "9.1.8 – BH Last Line"
+  ],
+  "9.2": [
+    "9.2.1 – Demonstrate Piece",
+    "9.2.2 – LH 1st Half",
+    "9.2.3 – RH 1st Half",
+    "9.2.4 – BH 1st Half",
+    "9.2.5 – BH 2nd Repeat Ending",
+    "9.2.6 – RH 2nd Half",
+    "9.2.7 – BH 2nd Half",
+    "9.2.8 – BH Tailpieces & Ending"
+  ],
+  "9.3": [
+    "9.3.1 – Demonstrate Piece",
+    "9.3.2 – BH Transition",
+    "9.3.3 – LH 1st 4 Measures",
+    "9.3.4 – RH 1st 4 Measures",
+    "9.3.5 – BH 1st 4 Measures",
+    "9.3.6 – LH Next 3 Measures",
+    "9.3.7 – RH Next 3 Measures",
+    "9.3.8 – BH Next 3 Measures",
+    "9.3.9 – LH Next 5 Measures",
+    "9.3.10 – RH Next 5 Measures",
+    "9.3.11 – BH Next 5 Measures",
+    "9.3.12 – Order"
+  ],
+  "9.4": [
+    "9.4.1 – Demonstrate Piece",
+    "9.4.2 – RH 1st 2 Lines",
+    "9.4.3 – LH 1st 2 Lines",
+    "9.4.4 – BH 1st Lines",
+    "9.4.5 – RH Next 2 Lines",
+    "9.4.6 – LH Next 2 Lines",
+    "9.4.7 – BH Next 2 Lines",
+    "9.4.8 – BH 2nd Half"
+  ],
+  "9.5": [
+    "9.5.1 – Demonstrate Piece",
+    "9.5.2 – BH 1st Line",
+    "9.5.3 – BH 2nd Line",
+    "9.5.4 – BH Last 2 Lines"
+  ],
+  "4.1": [
+    "4.1.1 – Demonstrate Piece",
+    "4.1.2 – RH 1st Section",
+    "4.1.3 – BH 1st Section",
+    "4.1.4 – RH 2nd Section",
+    "4.1.5 – BH 2nd Section",
+    "4.1.6 – Tailpiece and Order"
+  ],
+  "4.2": [
+    "4.2.1 – Demonstrate Piece",
+    "4.2.2 – RH 1st Section",
+    "4.2.3 – LH 1st Section",
+    "4.2.4 – BH 1st Section",
+    "4.2.5 – RH 2nd Section",
+    "4.2.6 – LH 2nd Section",
+    "4.2.7 – BH 2nd Section"
+  ],
+  "4.3": [
+    "4.3.1 – Demonstrate Piece",
+    "4.3.2 – RH Chords",
+    "4.3.3 – LH",
+    "4.3.4 – BH",
+    "4.3.5 – Last Section",
+    "4.3.6 – Tailpiece"
+  ],
+  "4.4": [
+    "4.4.1 – Demonstrate Piece",
+    "4.4.2 – RH A Section",
+    "4.4.3 – LH A Section",
+    "4.4.4 – BH A Section",
+    "4.4.5 – BH A2 Section",
+    "4.4.6 – BH B Section",
+    "4.4.7 – Last Section"
+  ],
+  "4.5": [
+    "4.5.1 – Demonstrate Piece",
+    "4.5.2 – RH 1st Section",
+    "4.5.3 – LH 1st Section",
+    "4.5.4 – BH 1st Section",
+    "4.5.5 – RH 2nd Section",
+    "4.5.6 – LH 2nd Section",
+    "4.5.7 – BH 2nd Section",
+    "4.5.8 – BH Tailpiece"
+  ],
+  "4.6": [
+    "4.6.1 – Demonstrate Piece",
+    "4.6.2 – LH & RH",
+    "4.6.3 – BH & Rhythm"
+  ],
+  "4.7": [
+    "4.7.1 – Demonstrate Piece",
+    "4.7.2 – LH 1st Section",
+    "4.7.3 – RH 1st Section",
+    "4.7.4 – BH 1st Section",
+    "4.7.5 – RH 2nd Section",
+    "4.7.6 – LH & BH 2nd Section",
+    "4.7.7 – Tailpiece"
+  ]
+}

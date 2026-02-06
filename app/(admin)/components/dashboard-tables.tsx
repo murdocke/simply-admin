@@ -1,10 +1,10 @@
 const tableBase =
-  'w-full text-left text-sm text-[#3a3935] border-separate border-spacing-0';
+  'w-full text-left text-sm text-[var(--c-3a3935)] border-separate border-spacing-0';
 
 const headerCell =
-  'px-4 py-3 text-xs uppercase tracking-[0.2em] text-[#6f6c65] border-b border-[#ecebe7] bg-[#fcfcfb]';
+  'px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] border-b border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)]';
 
-const bodyCell = 'px-4 py-3 border-b border-[#f1f0ec]';
+const bodyCell = 'px-4 py-3 border-b border-[var(--c-f1f0ec)]';
 
 export function OpenTeacherRequestsTable() {
   const rows = [
@@ -15,22 +15,22 @@ export function OpenTeacherRequestsTable() {
   ];
 
   return (
-    <section className="rounded-2xl border border-[#ecebe7] bg-white shadow-sm">
+    <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
       <div className="flex items-center justify-between px-6 pt-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Open Teacher Requests
           </p>
-          <h3 className="text-lg font-semibold text-[#1f1f1d] mt-2">
+          <h3 className="text-lg font-semibold text-[var(--c-1f1f1d)] mt-2">
             New Instructor Pipeline
           </h3>
         </div>
-        <span className="rounded-full border border-[#ecebe7] px-3 py-1 text-xs text-[#6f6c65]">
+        <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
           12 Open
         </span>
       </div>
       <div className="px-6 pb-6 pt-4">
-        <div className="overflow-hidden rounded-xl border border-[#ecebe7]">
+        <div className="overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
           <table className={tableBase}>
             <thead>
               <tr>
@@ -41,11 +41,11 @@ export function OpenTeacherRequestsTable() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.name} className="bg-white">
+                <tr key={row.name} className="bg-[var(--c-ffffff)]">
                   <td className={bodyCell}>{row.name}</td>
                   <td className={bodyCell}>{row.studio}</td>
                   <td className={bodyCell}>
-                    <span className="rounded-full bg-[#f1f1ef] px-3 py-1 text-xs text-[#5b5952]">
+                    <span className="rounded-full bg-[var(--c-f1f1ef)] px-3 py-1 text-xs text-[var(--c-5b5952)]">
                       {row.status}
                     </span>
                   </td>
@@ -68,22 +68,22 @@ export function OpenStudentRequestsTable() {
   ];
 
   return (
-    <section className="rounded-2xl border border-[#ecebe7] bg-white shadow-sm">
+    <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
       <div className="flex items-center justify-between px-6 pt-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Open Student Requests
           </p>
-          <h3 className="text-lg font-semibold text-[#1f1f1d] mt-2">
+          <h3 className="text-lg font-semibold text-[var(--c-1f1f1d)] mt-2">
             New Student Intake
           </h3>
         </div>
-        <span className="rounded-full border border-[#ecebe7] px-3 py-1 text-xs text-[#6f6c65]">
+        <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
           18 Open
         </span>
       </div>
       <div className="px-6 pb-6 pt-4">
-        <div className="overflow-hidden rounded-xl border border-[#ecebe7]">
+        <div className="overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
           <table className={tableBase}>
             <thead>
               <tr>
@@ -94,11 +94,11 @@ export function OpenStudentRequestsTable() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.name} className="bg-white">
+                <tr key={row.name} className="bg-[var(--c-ffffff)]">
                   <td className={bodyCell}>{row.name}</td>
                   <td className={bodyCell}>{row.level}</td>
                   <td className={bodyCell}>
-                    <span className="rounded-full bg-[#f1f1ef] px-3 py-1 text-xs text-[#5b5952]">
+                    <span className="rounded-full bg-[var(--c-f1f1ef)] px-3 py-1 text-xs text-[var(--c-5b5952)]">
                       {row.status}
                     </span>
                   </td>
@@ -121,22 +121,22 @@ export function UnpaidRoyaltiesTable() {
   ];
 
   return (
-    <section className="rounded-2xl border border-[#ecebe7] bg-white shadow-sm">
+    <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
       <div className="flex items-center justify-between px-6 pt-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Un-Paid Teacher Royalties
           </p>
-          <h3 className="text-lg font-semibold text-[#1f1f1d] mt-2">
+          <h3 className="text-lg font-semibold text-[var(--c-1f1f1d)] mt-2">
             Current Month
           </h3>
         </div>
-        <span className="rounded-full border border-[#ecebe7] px-3 py-1 text-xs text-[#6f6c65]">
+        <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
           $6,480 Due
         </span>
       </div>
       <div className="px-6 pb-6 pt-4">
-        <div className="overflow-hidden rounded-xl border border-[#ecebe7]">
+        <div className="overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
           <table className={tableBase}>
             <thead>
               <tr>
@@ -147,7 +147,7 @@ export function UnpaidRoyaltiesTable() {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.teacher} className="bg-white">
+                <tr key={row.teacher} className="bg-[var(--c-ffffff)]">
                   <td className={bodyCell}>{row.teacher}</td>
                   <td className={bodyCell}>{row.amount}</td>
                   <td className={bodyCell}>{row.due}</td>

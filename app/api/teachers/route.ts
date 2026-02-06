@@ -9,7 +9,14 @@ type TeacherRecord = {
   name: string;
   email: string;
   region: string;
-  status: 'Active' | 'Onboarding' | 'Inactive';
+  status:
+    | 'Licensed'
+    | 'Certified'
+    | 'Advanced'
+    | 'Master'
+    | 'Onboarding'
+    | 'Inactive'
+    | 'Active';
   createdAt: string;
   updatedAt: string;
 };
@@ -19,6 +26,18 @@ type TeachersFile = {
 };
 
 const dataFile = path.join(process.cwd(), 'data', 'teachers.json');
+
+const normalizeStatus = (
+  status:
+    | 'Licensed'
+    | 'Certified'
+    | 'Advanced'
+    | 'Master'
+    | 'Onboarding'
+    | 'Inactive'
+    | 'Active'
+    | undefined,
+) => (status === 'Active' || !status ? 'Licensed' : status);
 
 async function readTeachersFile(): Promise<TeachersFile> {
   try {
@@ -48,7 +67,11 @@ export async function GET(request: Request) {
   const filtered = company
     ? data.teachers.filter(teacher => teacher.company === company)
     : data.teachers;
-  return NextResponse.json({ teachers: filtered });
+  const normalized = filtered.map(teacher => ({
+    ...teacher,
+    status: normalizeStatus(teacher.status),
+  }));
+  return NextResponse.json({ teachers: normalized });
 }
 
 export async function POST(request: Request) {
@@ -57,7 +80,14 @@ export async function POST(request: Request) {
     name?: string;
     email?: string;
     region?: string;
-    status?: 'Active' | 'Onboarding' | 'Inactive';
+    status?:
+      | 'Licensed'
+      | 'Certified'
+      | 'Advanced'
+      | 'Master'
+      | 'Onboarding'
+      | 'Inactive'
+      | 'Active';
   };
 
   if (!body.company || !body.name) {
@@ -75,7 +105,7 @@ export async function POST(request: Request) {
     name: body.name,
     email: body.email ?? '',
     region: body.region ?? 'Unassigned',
-    status: body.status ?? 'Onboarding',
+    status: normalizeStatus(body.status),
     createdAt: now,
     updatedAt: now,
   };

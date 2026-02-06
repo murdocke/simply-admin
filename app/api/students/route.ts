@@ -10,6 +10,15 @@ type StudentRecord = {
   email: string;
   level: string;
   status: 'Active' | 'Paused';
+  lessonFeeAmount?: string;
+  lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
+  lessonDay?: string;
+  lessonTime?: string;
+  lessonDuration?: '30M' | '45M' | '1HR';
+  lessonType?: 'Individual' | 'Group';
+  lessonLocation?: 'In-Person' | 'Virtual' | 'Home-Visit';
+  lessonNotes?: string;
+  studentAlert?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -58,6 +67,15 @@ export async function POST(request: Request) {
     email?: string;
     level?: string;
     status?: 'Active' | 'Paused';
+    lessonFeeAmount?: string;
+    lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
+    lessonDay?: string;
+    lessonTime?: string;
+    lessonDuration?: '30M' | '45M' | '1HR';
+    lessonType?: 'Individual' | 'Group';
+    lessonLocation?: 'In-Person' | 'Virtual' | 'Home-Visit';
+    lessonNotes?: string;
+    studentAlert?: string;
   };
 
   if (!body.teacher || !body.name) {
@@ -76,6 +94,15 @@ export async function POST(request: Request) {
     email: body.email ?? '',
     level: body.level ?? 'Beginner',
     status: body.status ?? 'Active',
+    lessonFeeAmount: body.lessonFeeAmount ?? '',
+    lessonFeePeriod: body.lessonFeePeriod ?? 'Per Mo',
+    lessonDay: body.lessonDay ?? '',
+    lessonTime: body.lessonTime ?? '',
+    lessonDuration: body.lessonDuration ?? '30M',
+    lessonType: body.lessonType ?? 'Individual',
+    lessonLocation: body.lessonLocation ?? 'In-Person',
+    lessonNotes: body.lessonNotes ?? '',
+    studentAlert: body.studentAlert ?? '',
     createdAt: now,
     updatedAt: now,
   };

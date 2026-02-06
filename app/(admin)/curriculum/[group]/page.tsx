@@ -96,24 +96,24 @@ export function CurriculumGroupView({
     <div className="space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#c8102e]">
+          <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Curriculum
           </p>
-          <h1 className="text-3xl font-semibold text-[#1f1f1d] mt-2">
+          <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
             {group.title}
           </h1>
-          <p className="text-sm text-[#6f6c65] mt-2">{group.subtitle}</p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">{group.subtitle}</p>
         </div>
         {selectedKey ? (
-          <span className="rounded-full border border-[#ecebe7] bg-white px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#6f6c65] shadow-sm">
+          <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] shadow-sm">
             Key: {selectedKey}
           </span>
         ) : null}
       </header>
 
-      <section className="rounded-2xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         {group.items.length === 0 ? (
-          <p className="text-sm text-[#6f6c65]">
+          <p className="text-sm text-[var(--c-6f6c65)]">
             Pick a program from the curriculum library to view its levels.
           </p>
         ) : (
@@ -124,12 +124,12 @@ export function CurriculumGroupView({
                 href={`/curriculum/${groupKey}?key=${encodeURIComponent(
                   item.key,
                 )}`}
-                className="flex items-center gap-3 rounded-2xl border border-transparent p-2 transition hover:border-[#ecebe7] hover:bg-[#fafafa]"
+                className="flex items-center gap-3 rounded-2xl border border-transparent p-2 transition hover:border-[var(--c-ecebe7)] hover:bg-[var(--c-fafafa)]"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e11b22] text-xs font-semibold text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--c-e11b22)] text-xs font-semibold text-white">
                   {item.badge ?? group.badge}
                 </div>
-                <div className="text-sm font-medium text-[#5a5650]">
+                <div className="text-sm font-medium text-[var(--c-5a5650)]">
                   {item.label}
                 </div>
               </a>

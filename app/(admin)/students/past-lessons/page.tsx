@@ -196,28 +196,28 @@ export default function StudentPastLessonsPage() {
   return (
     <div className="space-y-8">
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-[#c8102e]">
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
           Students
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold text-[#1f1f1d]">
+          <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)]">
             Past Lessons
           </h1>
-          <span className="rounded-full border border-[#e6eef8] bg-[#f5f9ff] px-3 py-1 text-xs font-semibold tracking-wide text-[#28527a]">
+          <span className="rounded-full border border-[var(--c-e6eef8)] bg-[var(--c-f5f9ff)] px-3 py-1 text-xs font-semibold tracking-wide text-[var(--c-28527a)]">
             History of my lessons
           </span>
         </div>
-        <p className="text-sm text-[#6f6c65]">
+        <p className="text-sm text-[var(--c-6f6c65)]">
           Quick glance at the last six lessons, plus full history below.
         </p>
       </header>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs uppercase tracking-[0.25em] text-[#6f6c65]">
+          <p className="text-xs uppercase tracking-[0.25em] text-[var(--c-6f6c65)]">
             Last 6 Lessons
           </p>
-          <span className="text-xs font-semibold uppercase tracking-wide text-[#6f6c65]">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--c-6f6c65)]">
             3 per row
           </span>
         </div>
@@ -225,26 +225,26 @@ export default function StudentPastLessonsPage() {
           {recentLessons.map((lesson) => (
             <div
               key={lesson.title}
-              className="rounded-3xl border border-[#ecebe7] bg-white p-5 shadow-sm transition hover:-translate-y-1"
+              className="rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm transition hover:-translate-y-1"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[#c8102e]">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                     Past Lesson
                   </p>
-                  <h2 className="mt-2 text-lg font-semibold text-[#1f1f1d]">
+                  <h2 className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
                     {lesson.title}
                   </h2>
                 </div>
-                <span className="rounded-full border border-[#efe7d5] bg-[#fff7e8] px-3 py-1 text-xs font-semibold text-[#7a4a17]">
+                <span className="rounded-full border border-[var(--c-efe7d5)] bg-[var(--c-fff7e8)] px-3 py-1 text-xs font-semibold text-[var(--c-7a4a17)]">
                   {lesson.duration}
                 </span>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-[#1f1f1d]">
+                <span className="text-sm font-semibold text-[var(--c-1f1f1d)]">
                   {lesson.date}
                 </span>
-                <span className="rounded-full border border-[#e8efe9] bg-[#f6fbf7] px-3 py-1 text-xs font-semibold text-[#2d6a4f]">
+                <span className="rounded-full border border-[var(--c-e8efe9)] bg-[var(--c-f6fbf7)] px-3 py-1 text-xs font-semibold text-[var(--c-2d6a4f)]">
                   Focus: {lesson.focus}
                 </span>
               </div>
@@ -253,24 +253,24 @@ export default function StudentPastLessonsPage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-[#ecebe7] bg-white p-6 shadow-sm">
+      <section className="rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-[#c8102e]">
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--c-c8102e)]">
               Lesson History
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-[#1f1f1d]">
+            <h2 className="mt-2 text-xl font-semibold text-[var(--c-1f1f1d)]">
               All Past Lessons
             </h2>
           </div>
-          <span className="rounded-full border border-[#d9e2ef] bg-[#f5f9ff] px-3 py-1 text-xs font-semibold text-[#28527a]">
+          <span className="rounded-full border border-[var(--c-d9e2ef)] bg-[var(--c-f5f9ff)] px-3 py-1 text-xs font-semibold text-[var(--c-28527a)]">
             Showing 19 more
           </span>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-2xl border border-[#ecebe7]">
+        <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#faf9f6] text-xs uppercase tracking-[0.2em] text-[#6f6c65]">
+            <thead className="bg-[var(--c-faf9f6)] text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
               <tr>
                 <th className="px-4 py-3 font-semibold">Lesson</th>
                 <th className="px-4 py-3 font-semibold">Date</th>
@@ -283,14 +283,14 @@ export default function StudentPastLessonsPage() {
               {lessonHistory.map((lesson) => (
                 <tr
                   key={lesson.id}
-                  className="border-t border-[#ecebe7] text-[#1f1f1d]"
+                  className="border-t border-[var(--c-ecebe7)] text-[var(--c-1f1f1d)]"
                 >
                   <td className="px-4 py-3 font-semibold">{lesson.title}</td>
-                  <td className="px-4 py-3 text-[#6f6c65]">{lesson.date}</td>
+                  <td className="px-4 py-3 text-[var(--c-6f6c65)]">{lesson.date}</td>
                   <td className="px-4 py-3">{lesson.duration}</td>
-                  <td className="px-4 py-3 text-[#6f6c65]">{lesson.coach}</td>
+                  <td className="px-4 py-3 text-[var(--c-6f6c65)]">{lesson.coach}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full border border-[#e8efe9] bg-[#f6fbf7] px-3 py-1 text-xs font-semibold text-[#2d6a4f]">
+                    <span className="rounded-full border border-[var(--c-e8efe9)] bg-[var(--c-f6fbf7)] px-3 py-1 text-xs font-semibold text-[var(--c-2d6a4f)]">
                       {lesson.rating}
                     </span>
                   </td>
