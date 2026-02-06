@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 type TeacherRecord = {
   id: string;
   company: string;
+  username: string;
   name: string;
   email: string;
   region: string;
@@ -19,6 +20,7 @@ type TeacherRecord = {
     | 'Active';
   createdAt: string;
   updatedAt: string;
+  password?: string;
 };
 
 type TeachersFile = {
@@ -26,6 +28,7 @@ type TeachersFile = {
 };
 
 const dataFile = path.join(process.cwd(), 'data', 'teachers.json');
+const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
 
 const normalizeStatus = (
   status:
@@ -60,6 +63,42 @@ async function writeTeachersFile(data: TeachersFile) {
   await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+type AccountRecord = {
+  username: string;
+  role: 'company' | 'teacher' | 'student';
+  name: string;
+  email: string;
+  status: string;
+  lastLogin: string | null;
+  password?: string;
+  teacherId?: string;
+};
+
+type AccountsFile = {
+  accounts: AccountRecord[];
+};
+
+async function readAccountsFile(): Promise<AccountsFile> {
+  try {
+    const raw = await fs.readFile(accountsFile, 'utf-8');
+    const parsed = JSON.parse(raw) as AccountsFile;
+    if (!parsed.accounts) {
+      return { accounts: [] };
+    }
+    return parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { accounts: [] };
+    }
+    throw error;
+  }
+}
+
+async function writeAccountsFile(data: AccountsFile) {
+  await fs.mkdir(path.dirname(accountsFile), { recursive: true });
+  await fs.writeFile(accountsFile, JSON.stringify(data, null, 2), 'utf-8');
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const company = searchParams.get('company');
@@ -77,6 +116,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     company?: string;
+    username?: string;
     name?: string;
     email?: string;
     region?: string;
@@ -88,30 +128,79 @@ export async function POST(request: Request) {
       | 'Onboarding'
       | 'Inactive'
       | 'Active';
+    password?: string;
   };
 
-  if (!body.company || !body.name) {
+  const normalizedUsername = body.username?.trim().toLowerCase() ?? '';
+
+  if (!body.company || !body.name || !normalizedUsername) {
     return NextResponse.json(
-      { error: 'Company and name are required.' },
+      { error: 'Company, name, and username are required.' },
       { status: 400 },
     );
   }
 
   const data = await readTeachersFile();
+  const usernameTaken = data.teachers.some(
+    teacher =>
+      teacher.company === body.company &&
+      teacher.username?.trim().toLowerCase() === normalizedUsername,
+  );
+  const accountsData = await readAccountsFile();
+  const accountConflict = accountsData.accounts.find(
+    account => account.username.toLowerCase() === normalizedUsername,
+  );
+  if (accountConflict) {
+    return NextResponse.json(
+      { error: 'Username already in use.' },
+      { status: 409 },
+    );
+  }
+  if (usernameTaken) {
+    return NextResponse.json(
+      { error: 'Username already in use.' },
+      { status: 409 },
+    );
+  }
   const now = new Date().toISOString();
   const record: TeacherRecord = {
     id: randomUUID(),
     company: body.company,
+    username: normalizedUsername,
     name: body.name,
     email: body.email ?? '',
     region: body.region ?? 'Unassigned',
     status: normalizeStatus(body.status),
     createdAt: now,
     updatedAt: now,
+    password: body.password?.trim() || '',
   };
 
   data.teachers.unshift(record);
   await writeTeachersFile(data);
+
+  const accountIndex = accountsData.accounts.findIndex(
+    account =>
+      account.username.toLowerCase() === normalizedUsername &&
+      account.role === 'teacher',
+  );
+  const nextAccount: AccountRecord = {
+    username: normalizedUsername,
+    role: 'teacher',
+    name: record.name,
+    email: record.email,
+    status: record.status,
+    lastLogin:
+      accountIndex === -1 ? null : accountsData.accounts[accountIndex].lastLogin,
+    password: body.password?.trim() || '',
+    teacherId: record.id,
+  };
+  if (accountIndex === -1) {
+    accountsData.accounts.push(nextAccount);
+  } else {
+    accountsData.accounts[accountIndex] = nextAccount;
+  }
+  await writeAccountsFile(accountsData);
 
   return NextResponse.json({ teacher: record }, { status: 201 });
 }

@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
+import lessonTypes from './students/lesson-data/lesson-types.json';
+import lessonSections from './students/lesson-data/lesson-sections.json';
 
 type TeacherRecord = {
   id: string;
@@ -48,6 +51,12 @@ const statusStyles: Record<string, string> = {
   Onboarding: 'bg-[var(--c-fff2d9)] text-[var(--c-8a5b2b)]',
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
 };
+
+const toProgramSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 
 export default function TeachersPage() {
   const router = useRouter();
@@ -303,21 +312,6 @@ export default function TeachersPage() {
         </header>
 
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">
-            Teacher Dashboard
-          </h2>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Studio cards now live on the dashboard view.
-          </p>
-          <a
-            href="/teachers/dashboard"
-            className="mt-4 inline-flex rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Go to Dashboard
-          </a>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
@@ -327,54 +321,61 @@ export default function TeachersPage() {
                 Program Library
               </h2>
               <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-                Jump into a specific pathway or program set.
+                Browse each program and open a section to see materials.
               </p>
             </div>
             <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
               Updated weekly
             </span>
           </div>
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <a
-              href="/curriculum/foundation"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Foundation Program
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">Levels 1-9</p>
-            </a>
-            <a
-              href="/curriculum/development"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Development Program
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">Levels 10-18</p>
-            </a>
-            <a
-              href="/curriculum/special"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Special Programs
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                Masterclasses + Intensives
-              </p>
-            </a>
-            <a
-              href="/curriculum/supplemental"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Supplemental Programs
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                Teacher Created Programs
-              </p>
-            </a>
+          <div className="mt-6 space-y-6">
+            {lessonTypes.map(type => {
+              const sections =
+                lessonSections[type as keyof typeof lessonSections] ?? [];
+              return (
+                <div
+                  key={type}
+                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                        {type}
+                      </p>
+                      <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                        {sections.length > 0
+                          ? 'Choose a section to view materials.'
+                          : 'No sections available yet.'}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/teachers/programs/${toProgramSlug(type)}`}
+                      className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] hover:text-[var(--c-c8102e)]"
+                    >
+                      View all
+                    </Link>
+                  </div>
+                  {sections.length > 0 ? (
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {sections.map(section => (
+                        <Link
+                          key={section}
+                          href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}`}
+                          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-fcfcfb)]"
+                        >
+                          <p className="text-sm font-medium text-[var(--c-1f1f1d)]">
+                            {section}
+                          </p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                            View materials
+                          </p>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>

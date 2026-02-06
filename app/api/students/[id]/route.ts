@@ -8,7 +8,7 @@ type StudentRecord = {
   name: string;
   email: string;
   level: string;
-  status: 'Active' | 'Paused';
+  status: 'Active' | 'Paused' | 'Archived';
   lessonFeeAmount?: string;
   lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
   lessonDay?: string;
@@ -59,7 +59,7 @@ export async function PATCH(
     name?: string;
     email?: string;
     level?: string;
-    status?: 'Active' | 'Paused';
+    status?: 'Active' | 'Paused' | 'Archived';
     lessonFeeAmount?: string;
     lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
     lessonDay?: string;

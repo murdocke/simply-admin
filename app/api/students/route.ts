@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     name?: string;
     email?: string;
     level?: string;
-    status?: 'Active' | 'Paused';
+    status?: 'Active' | 'Paused' | 'Archived';
     lessonFeeAmount?: string;
     lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
     lessonDay?: string;

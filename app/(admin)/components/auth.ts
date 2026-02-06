@@ -8,6 +8,7 @@ export type AuthUser = {
 export const AUTH_STORAGE_KEY = 'sm_user';
 export const VIEW_ROLE_STORAGE_KEY = 'sm_view_role';
 export const VIEW_TEACHER_STORAGE_KEY = 'sm_view_teacher';
+export const VIEW_STUDENT_STORAGE_KEY = 'sm_view_student';
 
 export const roleHome: Record<UserRole, string> = {
   company: '/dashboard',
@@ -23,11 +24,11 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
       { label: 'Subscriptions', href: '/subscriptions' },
       { label: 'Royalties', href: '/royalties' },
       { label: 'Accounts', href: '/accounts' },
+      { label: 'Messages', href: '/company/messages' },
       { label: 'Support', href: '/support' },
     ],
     teacher: [
       { label: 'Dashboard', href: '/teachers/dashboard' },
-      { label: 'Teaching Hub', href: '/teachers?mode=teaching' },
       { label: 'This Week', href: '/teachers/this-week' },
       { label: 'Schedule', href: '/teachers/schedule' },
       { label: 'Students', href: '/teachers/students' },

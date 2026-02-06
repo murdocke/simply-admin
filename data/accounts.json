@@ -3,26 +3,88 @@
     {
       "username": "neil",
       "role": "company",
-      "name": "Neil (Company Admin)",
+      "name": "Neil Moore",
       "email": "neil@simplymusic.com",
-      "status": "Active",
-      "lastLogin": "2026-02-05T17:38:08.327Z"
+      "lastLogin": "2026-02-06T19:01:02.169Z",
+      "password": "123456",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
     },
     {
       "username": "brian",
       "role": "teacher",
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
-      "status": "Active",
-      "lastLogin": "2026-02-06T03:34:44.086Z"
+      "lastLogin": "2026-02-06T14:33:54.178Z",
+      "password": "123456",
+      "teacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
+      "membershipStatus": "Licensed",
+      "accountStatus": "Active"
     },
     {
       "username": "quinn",
       "role": "student",
       "name": "Quinn Harper",
       "email": "quinn@student.simplymusic.com",
-      "status": "Active",
-      "lastLogin": "2026-02-06T03:33:22.871Z"
+      "lastLogin": "2026-02-06T03:33:22.871Z",
+      "password": "123456",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "susan",
+      "role": "teacher",
+      "name": "Susan Friedman",
+      "email": "susan.f@gmail.com",
+      "lastLogin": null,
+      "password": "123456",
+      "teacherId": "32069b67-4c9a-4a32-990b-d971842f9810",
+      "membershipStatus": "Licensed",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "sheri",
+      "role": "teacher",
+      "name": "Sheri Reingold",
+      "email": "sheri.r@gmail.com",
+      "lastLogin": "2026-02-06T11:25:01.020Z",
+      "password": "123456",
+      "teacherId": "2679881d-5592-4a01-93d2-e174d0ebf79e",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "lanette",
+      "role": "teacher",
+      "name": "Lanette Saetre",
+      "email": "lanette.saetre@gmail.com",
+      "lastLogin": null,
+      "password": "123456",
+      "teacherId": "d9dac0b0-64a3-423a-8dd6-e0be75e33a18",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "kim",
+      "role": "teacher",
+      "name": "Kim Nelson",
+      "email": "kim.n@gmail.com",
+      "lastLogin": null,
+      "password": "123456",
+      "teacherId": "515494fa-3f01-43cb-b63f-9f5e788327b0",
+      "membershipStatus": "Licensed",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "nancy",
+      "role": "teacher",
+      "name": "Nancy Weddle",
+      "email": "nweddle@gmail.com",
+      "lastLogin": null,
+      "password": "123456",
+      "teacherId": "dbadc128-28fb-4f3f-afd0-1391bbdccf48",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
     }
   ]
 }

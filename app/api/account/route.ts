@@ -9,6 +9,7 @@ type AccountRecord = {
   email: string;
   status: string;
   lastLogin: string | null;
+  password?: string;
 };
 
 type AccountsFile = {
@@ -61,7 +62,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
   }
 
-  return NextResponse.json({ account });
+  const { password: _password, ...safe } = account;
+  return NextResponse.json({ account: safe });
 }
 
 export async function POST(request: Request) {

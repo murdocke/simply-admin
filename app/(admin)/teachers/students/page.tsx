@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
+  VIEW_STUDENT_STORAGE_KEY,
 } from '../../components/auth';
 import lessonTypes from './lesson-data/lesson-types.json';
 import lessonSections from './lesson-data/lesson-sections.json';
@@ -18,7 +19,7 @@ type StudentRecord = {
   name: string;
   email: string;
   level: string;
-  status: 'Active' | 'Paused';
+  status: 'Active' | 'Paused' | 'Archived';
   lessonFeeAmount?: string;
   lessonFeePeriod?: 'Per Mo' | 'Per Qtr' | 'Per Yr';
   lessonDay?: string;
@@ -38,6 +39,12 @@ const normalizeStudentLevel = (level: string) => {
   if (level === 'Intermediate') return 'Level 3';
   if (level === 'Advanced') return 'Level 5';
   return level;
+};
+
+const formatLessonFee = (student: StudentRecord) => {
+  if (!student.lessonFeeAmount) return '—';
+  const period = student.lessonFeePeriod ?? 'Per Mo';
+  return `${student.lessonFeeAmount} ${period}`;
 };
 
 const defaultForm = {
@@ -76,10 +83,12 @@ export default function TeacherStudentsPage() {
   );
   const [recentSelectedIds, setRecentSelectedIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [sortKey, setSortKey] = useState<'name' | 'email' | 'level' | 'status'>(
     'name',
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignForm, setAssignForm] = useState({
@@ -98,6 +107,9 @@ export default function TeacherStudentsPage() {
     { title: string; section: string; material: string; part: string }[]
   >([]);
   const [isPlanCollapsed, setIsPlanCollapsed] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<StudentRecord | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const timePickerMinutes = useMemo(() => ['00', '15', '30', '45'], []);
   const timePickerHours = useMemo(
@@ -126,6 +138,10 @@ export default function TeacherStudentsPage() {
     if (!teacherName) return null;
     return `sm_recent_selected_students:${teacherName}`;
   }, [teacherName]);
+  const viewStudentKey = useMemo(() => {
+    if (!userName) return VIEW_STUDENT_STORAGE_KEY;
+    return `${VIEW_STUDENT_STORAGE_KEY}:${userName}`;
+  }, [userName]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('sm_user');
@@ -199,6 +215,66 @@ export default function TeacherStudentsPage() {
   }, [legacySelectedStudentKey, selectedStudentKey]);
 
   useEffect(() => {
+    if (!selectedStudentKey) return;
+    const handleSelectedUpdate = () => {
+      const stored = window.localStorage.getItem(selectedStudentKey);
+      if (stored) {
+        setSelectedStudentId(stored);
+        return;
+      }
+      const storedView = window.localStorage.getItem(viewStudentKey);
+      if (storedView) {
+        try {
+          const parsed = JSON.parse(storedView) as {
+            id?: string;
+          };
+          if (parsed?.id) {
+            setSelectedStudentId(parsed.id);
+            window.localStorage.setItem(selectedStudentKey, parsed.id);
+            return;
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+      setSelectedStudentId(null);
+    };
+    window.addEventListener(
+      'sm-selected-student-updated',
+      handleSelectedUpdate,
+    );
+    return () => {
+      window.removeEventListener(
+        'sm-selected-student-updated',
+        handleSelectedUpdate,
+      );
+    };
+  }, [selectedStudentKey]);
+
+  useEffect(() => {
+    if (!selectedStudentKey) return;
+    const handleSelectionEvent = (event: Event) => {
+      const detail =
+        'detail' in event
+          ? (event as CustomEvent<{ selectedId?: string | null }>).detail
+          : undefined;
+      if (detail?.selectedId !== undefined) {
+        setSelectedStudentId(detail.selectedId ?? null);
+      }
+    };
+    window.addEventListener(
+      'sm-student-selection',
+      handleSelectionEvent as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        'sm-student-selection',
+        handleSelectionEvent as EventListener,
+      );
+    };
+  }, [selectedStudentKey]);
+
+  useEffect(() => {
     if (!recentSelectedKey) {
       setRecentSelectedIds([]);
       return;
@@ -240,6 +316,40 @@ export default function TeacherStudentsPage() {
     }
     setRecentSelectedIds([]);
   }, [legacyRecentSelectedKey, recentSelectedKey]);
+
+  useEffect(() => {
+    if (!recentSelectedKey) return;
+    const handleRecentUpdate = () => {
+      const stored = window.localStorage.getItem(recentSelectedKey);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as string[];
+          if (Array.isArray(parsed)) {
+            setRecentSelectedIds(parsed.filter(Boolean).slice(0, 3));
+            return;
+          }
+        } catch {
+          setRecentSelectedIds([]);
+          return;
+        }
+      }
+      setRecentSelectedIds([]);
+    };
+    window.addEventListener('sm-selected-student-updated', handleRecentUpdate);
+    window.addEventListener('sm-view-student-updated', handleRecentUpdate);
+    window.addEventListener('sm-student-selection', handleRecentUpdate as EventListener);
+    return () => {
+      window.removeEventListener(
+        'sm-selected-student-updated',
+        handleRecentUpdate,
+      );
+      window.removeEventListener('sm-view-student-updated', handleRecentUpdate);
+      window.removeEventListener(
+        'sm-student-selection',
+        handleRecentUpdate as EventListener,
+      );
+    };
+  }, [recentSelectedKey]);
 
   useEffect(() => {
     const handleTeacherChange = () => {
@@ -302,7 +412,19 @@ export default function TeacherStudentsPage() {
     }
   }, [searchParams, router]);
 
-  const rosterCount = useMemo(() => students.length, [students.length]);
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId) return;
+    const record = students.find(student => student.id === editId);
+    if (!record) return;
+    openEditModal(record);
+    router.replace('/teachers/students', { scroll: false });
+  }, [searchParams, router, students]);
+
+  const rosterCount = useMemo(
+    () => students.filter(student => student.status !== 'Archived').length,
+    [students],
+  );
   const needsTeacherSelection =
     role === 'company' && viewRole === 'teacher' && !teacherName;
 
@@ -319,7 +441,7 @@ export default function TeacherStudentsPage() {
       name: student.name,
       email: student.email,
       level: normalizeStudentLevel(student.level),
-      status: student.status,
+      status: student.status === 'Archived' ? 'Paused' : student.status,
       lessonFeeAmount: student.lessonFeeAmount ?? '',
       lessonFeePeriod: student.lessonFeePeriod ?? 'Per Mo',
       lessonDay: student.lessonDay ?? '',
@@ -360,6 +482,17 @@ export default function TeacherStudentsPage() {
 
   const closeAssignModal = () => {
     setIsAssignModalOpen(false);
+  };
+
+  const openDeleteModal = (student: StudentRecord) => {
+    setDeleteTarget(student);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setIsDeleteModalOpen(false);
+    setDeleteTarget(null);
   };
 
   const handleAddToLessonPlan = () => {
@@ -516,16 +649,14 @@ export default function TeacherStudentsPage() {
   const handleDelete = async (student: StudentRecord) => {
     const teacher = teacherName ?? student.teacher;
     if (!teacher) return;
-    const confirmed = window.confirm(
-      `Remove ${student.name} from your roster?`,
-    );
-    if (!confirmed) return;
-
     try {
+      setIsDeleting(true);
       const response = await fetch(
-        `/api/students/${student.id}?teacher=${encodeURIComponent(teacher)}`,
+        `/api/students/${student.id}`,
         {
-          method: 'DELETE',
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teacher, status: 'Archived' }),
         },
       );
 
@@ -533,11 +664,45 @@ export default function TeacherStudentsPage() {
         throw new Error('Request failed');
       }
 
+      const data = (await response.json()) as { student: StudentRecord };
       setStudents(current =>
-        current.filter(currentStudent => currentStudent.id !== student.id),
+        current.map(currentStudent =>
+          currentStudent.id === data.student.id ? data.student : currentStudent,
+        ),
       );
+      closeDeleteModal();
     } catch {
       setError('Unable to delete that student right now.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleUnarchive = async (student: StudentRecord) => {
+    const teacher = teacherName ?? student.teacher;
+    if (!teacher) return;
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/students/${student.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacher, status: 'Paused' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Request failed');
+      }
+
+      const data = (await response.json()) as { student: StudentRecord };
+      setStudents(current =>
+        current.map(currentStudent =>
+          currentStudent.id === data.student.id ? data.student : currentStudent,
+        ),
+      );
+    } catch {
+      setError('Unable to restore that student right now.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -555,26 +720,49 @@ export default function TeacherStudentsPage() {
       window.localStorage.removeItem(legacySelectedStudentKey);
     }
 
+    if (nextSelection) {
+      const selectedStudent = students.find(student => student.id === nextSelection);
+      if (selectedStudent) {
+        const payload = {
+          id: selectedStudent.id,
+          name: selectedStudent.name,
+          email: selectedStudent.email,
+        };
+        window.localStorage.setItem(viewStudentKey, JSON.stringify(payload));
+      }
+    } else {
+      window.localStorage.removeItem(viewStudentKey);
+      window.localStorage.removeItem(VIEW_STUDENT_STORAGE_KEY);
+    }
+    window.dispatchEvent(new Event('sm-view-student-updated'));
+    window.dispatchEvent(new Event('sm-selected-student-updated'));
+
+    let nextRecentIds: string[] = recentSelectedIds;
     if (recentSelectedKey && nextSelection) {
-      setRecentSelectedIds(current => {
-        const next = [
-          nextSelection,
-          ...current.filter(id => id !== nextSelection),
-        ].slice(0, 3);
-        window.localStorage.setItem(recentSelectedKey, JSON.stringify(next));
-        return next;
-      });
+      nextRecentIds = [
+        nextSelection,
+        ...recentSelectedIds.filter(id => id !== nextSelection),
+      ].slice(0, 3);
+      window.localStorage.setItem(recentSelectedKey, JSON.stringify(nextRecentIds));
+      setRecentSelectedIds(nextRecentIds);
     }
     if (recentSelectedKey && !nextSelection) {
-      setRecentSelectedIds(current => {
-        const next = current.filter(id => id !== studentId);
-        window.localStorage.setItem(recentSelectedKey, JSON.stringify(next));
-        return next;
-      });
+      nextRecentIds = recentSelectedIds.filter(id => id !== studentId);
+      window.localStorage.setItem(recentSelectedKey, JSON.stringify(nextRecentIds));
+      setRecentSelectedIds(nextRecentIds);
     }
     if (legacyRecentSelectedKey && legacyRecentSelectedKey !== recentSelectedKey) {
       window.localStorage.removeItem(legacyRecentSelectedKey);
     }
+
+    window.dispatchEvent(
+      new CustomEvent('sm-student-selection', {
+        detail: {
+          selectedId: nextSelection,
+          recentIds: nextRecentIds,
+        },
+      }),
+    );
   };
 
   const recentStudents = useMemo(() => {
@@ -588,14 +776,17 @@ export default function TeacherStudentsPage() {
 
   const filteredStudents = useMemo(() => {
     const query = studentSearch.trim().toLowerCase();
+    const base = students.filter(student =>
+      showArchived ? student.status === 'Archived' : student.status !== 'Archived',
+    );
     if (query) {
-      return students.filter(student =>
+      return base.filter(student =>
         `${student.name} ${student.email}`.toLowerCase().includes(query),
       );
     }
 
-    return students;
-  }, [studentSearch, students]);
+    return base;
+  }, [showArchived, studentSearch, students]);
 
   const sortedStudents = useMemo(() => {
     const direction = sortDirection === 'asc' ? 1 : -1;
@@ -605,7 +796,7 @@ export default function TeacherStudentsPage() {
       return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
     };
     const getStatusValue = (status: StudentRecord['status']) =>
-      status === 'Active' ? 0 : 1;
+      status === 'Active' ? 0 : status === 'Paused' ? 1 : 2;
 
     return [...filteredStudents].sort((a, b) => {
       let result = 0;
@@ -625,16 +816,28 @@ export default function TeacherStudentsPage() {
     });
   }, [filteredStudents, sortDirection, sortKey]);
 
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(sortedStudents.length / pageSize));
+  const orderedStudents = useMemo(() => {
+    if (!selectedStudentId) return sortedStudents;
+    const selected = sortedStudents.find(
+      student => student.id === selectedStudentId,
+    );
+    if (!selected) return sortedStudents;
+    return [
+      selected,
+      ...sortedStudents.filter(student => student.id !== selectedStudentId),
+    ];
+  }, [selectedStudentId, sortedStudents]);
+
+  const pageSize = viewMode === 'cards' ? 12 : 10;
+  const totalPages = Math.max(1, Math.ceil(orderedStudents.length / pageSize));
   const paginatedStudents = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
-    return sortedStudents.slice(startIndex, startIndex + pageSize);
-  }, [currentPage, pageSize, sortedStudents]);
+    return orderedStudents.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, orderedStudents, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [studentSearch, sortDirection, sortKey, students.length]);
+  }, [studentSearch, sortDirection, sortKey, students.length, viewMode]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -647,8 +850,120 @@ export default function TeacherStudentsPage() {
     return recentSelectedIds
       .map(id => byId.get(id))
       .filter((student): student is StudentRecord => Boolean(student))
+      .filter(student =>
+        showArchived ? student.status === 'Archived' : student.status !== 'Archived',
+      )
       .slice(0, 3);
-  }, [recentSelectedIds, students]);
+  }, [recentSelectedIds, showArchived, students]);
+
+  const lessonOverlapSummary = useMemo(() => {
+    const parseMinutes = (value: string) => {
+      const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (!match) return null;
+      let hour = Number(match[1]);
+      const minute = Number(match[2]);
+      const period = match[3].toUpperCase();
+      if (period === 'PM' && hour !== 12) hour += 12;
+      if (period === 'AM' && hour === 12) hour = 0;
+      return hour * 60 + minute;
+    };
+
+    const parseDuration = (value?: StudentRecord['lessonDuration']) => {
+      if (value === '45M') return 45;
+      if (value === '1HR') return 60;
+      return 30;
+    };
+
+    const byDay = new Map<
+      string,
+      { start: number; end: number; student: StudentRecord }[]
+    >();
+
+    students.forEach(student => {
+      if (student.status !== 'Active') return;
+      if (!student.lessonDay || !student.lessonTime) return;
+      const start = parseMinutes(student.lessonTime);
+      if (start === null) return;
+      const duration = parseDuration(student.lessonDuration);
+      const end = start + duration;
+      const key = student.lessonDay.trim();
+      const current = byDay.get(key) ?? [];
+      current.push({ start, end, student });
+      byDay.set(key, current);
+    });
+
+    const overlaps: {
+      day: string;
+      time: string;
+      students: { id: string; name: string }[];
+      count: number;
+      note?: string;
+    }[] = [];
+
+    byDay.forEach((slots, day) => {
+      const sorted = [...slots].sort((a, b) => a.start - b.start);
+      const groups: typeof sorted[] = [];
+      let currentGroup: typeof sorted = [];
+      let currentEnd = -1;
+
+      const formatMinutes = (value: number) => {
+        const hour = Math.floor(value / 60);
+        const minute = String(value % 60).padStart(2, '0');
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+        return `${displayHour}:${minute} ${period}`;
+      };
+
+      sorted.forEach(slot => {
+        if (currentGroup.length === 0) {
+          currentGroup = [slot];
+          currentEnd = slot.end;
+          return;
+        }
+        if (slot.start < currentEnd) {
+          currentGroup.push(slot);
+          currentEnd = Math.max(currentEnd, slot.end);
+        } else {
+          if (currentGroup.length > 1) groups.push(currentGroup);
+          currentGroup = [slot];
+          currentEnd = slot.end;
+        }
+      });
+      if (currentGroup.length > 1) groups.push(currentGroup);
+
+      groups.forEach(group => {
+        const starts = new Set(group.map(item => item.start));
+        const hasNonGroup = group.some(
+          item => item.student.lessonType !== 'Group',
+        );
+        const isGroupOnly = !hasNonGroup;
+        if (isGroupOnly && starts.size === 1) return;
+        const start = Math.min(...group.map(item => item.start));
+        const startLabel = formatMinutes(start);
+        const startLabels = Array.from(starts)
+          .sort((a, b) => a - b)
+          .map(formatMinutes);
+        const startTimesNote =
+          startLabels.length > 1 ? `Starts at ${startLabels.join(', ')}` : undefined;
+        overlaps.push({
+          day,
+          time: startLabel,
+          students: group.map(item => ({
+            id: item.student.id,
+            name: item.student.name,
+          })),
+          count: group.length,
+          note: startTimesNote,
+        });
+      });
+    });
+
+    const totalPairs = overlaps.reduce((sum, item) => sum + item.count, 0);
+    return {
+      overlaps,
+      totalPairs,
+    };
+  }, [students]);
 
   const handleSort = (key: typeof sortKey) => {
     if (sortKey === key) {
@@ -882,57 +1197,76 @@ export default function TeacherStudentsPage() {
               No students selected yet. Choose a student to pin them here.
             </div>
           ) : (
-            recentSelectedStudents.map((student, index) => (
-              <div
-                key={student.id}
-                className={`rounded-2xl border px-4 py-4 ${
-                  index === 0
-                    ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)] shadow-sm'
-                    : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                    {index === 0 ? 'Current selection' : 'Recently selected'}
+            recentSelectedStudents.map((student, index) => {
+              const containerClass = `w-full text-left rounded-2xl border px-4 py-4 transition ${
+                index === 0
+                  ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)]/85 shadow-sm'
+                  : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] hover:border-[color:var(--c-c8102e)]/40'
+              }`;
+              const content = (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                      {index === 0 ? 'Current selection' : 'Recently selected'}
+                    </p>
+                    {index === 0 ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
+                          type="button"
+                          onClick={openAssignModal}
+                        >
+                          Assign Lesson
+                        </button>
+                        <button
+                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
+                          type="button"
+                        >
+                          Practice Log
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <p
+                    className={`mt-2 text-sm font-semibold ${
+                      index === 0
+                        ? 'text-[var(--sidebar-selected-text)]'
+                        : 'text-[var(--c-1f1f1d)]'
+                    }`}
+                  >
+                    {student.name}
                   </p>
-                  {index === 0 ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
-                        type="button"
-                        onClick={openAssignModal}
-                      >
-                        Assign Lesson
-                      </button>
-                      <button
-                        className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
-                        type="button"
-                      >
-                        Practice Log
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                <p
-                  className={`mt-2 text-sm font-semibold ${
-                    index === 0
-                      ? 'text-[var(--sidebar-selected-text)]'
-                      : 'text-[var(--c-1f1f1d)]'
-                  }`}
+                  <p
+                    className={`mt-1 text-xs ${
+                      index === 0
+                        ? 'text-[var(--sidebar-selected-text)]/80'
+                        : 'text-[var(--c-6f6c65)]'
+                    }`}
+                  >
+                    {student.email || '—'}
+                  </p>
+                </>
+              );
+
+              if (index === 0) {
+                return (
+                  <div key={student.id} className={containerClass}>
+                    {content}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={student.id}
+                  type="button"
+                  onClick={() => handleStudentSelect(student.id)}
+                  className={containerClass}
                 >
-                  {student.name}
-                </p>
-                <p
-                  className={`mt-1 text-xs ${
-                    index === 0
-                      ? 'text-[var(--sidebar-selected-text)]/80'
-                      : 'text-[var(--c-6f6c65)]'
-                  }`}
-                >
-                  {student.email || '—'}
-                </p>
-              </div>
-            ))
+                  {content}
+                </button>
+              );
+            })
           )}
         </div>
 
@@ -955,137 +1289,479 @@ export default function TeacherStudentsPage() {
               ))}
             </datalist>
           </label>
-          {studentSearch ? (
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setStudentSearch('')}
-              className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              type="button"
+              onClick={() => setShowArchived(current => !current)}
+              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                showArchived
+                  ? 'border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)]'
+                  : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+              }`}
             >
-              Clear Search
+              {showArchived ? 'Viewing Archived' : 'Show Archived'}
             </button>
-          ) : null}
+            {studentSearch ? (
+              <button
+                onClick={() => setStudentSearch('')}
+                className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              >
+                Clear Search
+              </button>
+            ) : null}
+            <div className="flex items-center overflow-hidden rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)]">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                aria-pressed={viewMode === 'table'}
+                aria-label="View As Table"
+                className={`flex items-center justify-center px-3 py-2 transition ${
+                  viewMode === 'table'
+                    ? 'bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)]'
+                    : 'text-[var(--c-6f6c65)] hover:text-[var(--c-1f1f1d)]'
+                }`}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-4 w-4"
+                >
+                  <path d="M3 4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4zm2 1v3h4V5H5zm6 0v3h4V5h-4zM5 10v3h4v-3H5zm6 0v3h4v-3h-4z" />
+                </svg>
+              </button>
+              <div className="h-7 w-px bg-[var(--c-e5e3dd)]" />
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                aria-pressed={viewMode === 'cards'}
+                aria-label="View As Cards"
+                className={`flex items-center justify-center px-3 py-2 transition ${
+                  viewMode === 'cards'
+                    ? 'bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)]'
+                    : 'text-[var(--c-6f6c65)] hover:text-[var(--c-1f1f1d)]'
+                }`}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-4 w-4"
+                >
+                  <path d="M4 3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4zm0 10a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H4zm9-9a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-3z" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
-          <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-            <div className="col-span-1 text-center">Select</div>
-            <button
-              type="button"
-              onClick={() => handleSort('name')}
-              className="col-span-3 flex items-center gap-2 text-left"
-              aria-sort={sortKey === 'name' ? sortDirection : 'none'}
-            >
-              Student{sortKey === 'name' ? (sortDirection === 'asc' ? ' ^' : ' v') : ''}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSort('email')}
-              className="col-span-3 flex items-center gap-2 text-left"
-              aria-sort={sortKey === 'email' ? sortDirection : 'none'}
-            >
-              Email{sortKey === 'email' ? (sortDirection === 'asc' ? ' ^' : ' v') : ''}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSort('level')}
-              className="col-span-2 flex items-center gap-2 text-left"
-              aria-sort={sortKey === 'level' ? sortDirection : 'none'}
-            >
-              Level{sortKey === 'level' ? (sortDirection === 'asc' ? ' ^' : ' v') : ''}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSort('status')}
-              className="col-span-2 flex items-center gap-2 text-left"
-              aria-sort={sortKey === 'status' ? sortDirection : 'none'}
-            >
-              Status{sortKey === 'status' ? (sortDirection === 'asc' ? ' ^' : ' v') : ''}
-            </button>
-            <div className="col-span-1 text-right">Actions</div>
+        {lessonOverlapSummary.overlaps.length > 0 ? (
+          <div className="mt-6 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-5 py-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--c-fff5f6)] text-[var(--c-c8102e)]">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l6.451 11.47c.75 1.334-.213 2.99-1.742 2.99H3.548c-1.53 0-2.492-1.656-1.743-2.99l6.452-11.47zM11 14a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-1-7a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 10 7z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    Scheduling Overlaps
+                  </p>
+                  <p className="text-sm text-[var(--c-6f6c65)]">
+                    {lessonOverlapSummary.totalPairs} students share overlapping
+                    lesson times.
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[var(--c-f8f7f4)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Resolve conflicts
+              </span>
+            </div>
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+              {lessonOverlapSummary.overlaps.map(overlap => (
+                <div
+                  key={`${overlap.day}-${overlap.time}`}
+                  className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--c-fcfcfb)] px-3 py-2"
+                >
+                  <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-f8f7f4)] px-4 py-1.5 text-sm uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] shadow-sm">
+                    {overlap.day} · {overlap.time}
+                  </span>
+                  {overlap.note ? (
+                    <span className="rounded-full border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-1 text-xs uppercase tracking-[0.18em] text-[var(--c-8f2f3b)]">
+                      {overlap.note}
+                    </span>
+                  ) : null}
+                  {overlap.students.map(student => (
+                    <button
+                      key={student.id}
+                      type="button"
+                      className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-f8f7f4)] px-4 py-1.5 text-sm uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                      onClick={() => {
+                        const record = students.find(
+                          item => item.id === student.id,
+                        );
+                        if (record) openEditModal(record);
+                      }}
+                    >
+                      Update {student.name}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="divide-y divide-[var(--c-ecebe7)]">
+        ) : null}
+
+        {viewMode === 'table' ? (
+          <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
+            <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <div className="col-span-1 text-center">Select</div>
+              <button
+                type="button"
+                onClick={() => handleSort('name')}
+                className="col-span-3 flex items-center gap-2 text-left"
+                aria-sort={sortKey === 'name' ? sortDirection : 'none'}
+              >
+                Student
+                {sortKey === 'name' ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className={`h-3 w-3 ${
+                      sortDirection === 'asc' ? 'rotate-180' : ''
+                    }`}
+                  >
+                    <path d="M10 12.5a.75.75 0 0 1-.53-.22l-3.75-3.75a.75.75 0 1 1 1.06-1.06L10 10.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-.53.22z" />
+                  </svg>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSort('email')}
+                className="col-span-3 flex items-center gap-2 text-left"
+                aria-sort={sortKey === 'email' ? sortDirection : 'none'}
+              >
+                Email
+                {sortKey === 'email' ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className={`h-3 w-3 ${
+                      sortDirection === 'asc' ? 'rotate-180' : ''
+                    }`}
+                  >
+                    <path d="M10 12.5a.75.75 0 0 1-.53-.22l-3.75-3.75a.75.75 0 1 1 1.06-1.06L10 10.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-.53.22z" />
+                  </svg>
+                ) : null}
+              </button>
+              <div className="col-span-2 text-left">Lesson Fee</div>
+              <button
+                type="button"
+                onClick={() => handleSort('level')}
+                className="col-span-1 flex items-center gap-2 text-left"
+                aria-sort={sortKey === 'level' ? sortDirection : 'none'}
+              >
+                Level
+                {sortKey === 'level' ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className={`h-3 w-3 ${
+                      sortDirection === 'asc' ? 'rotate-180' : ''
+                    }`}
+                  >
+                    <path d="M10 12.5a.75.75 0 0 1-.53-.22l-3.75-3.75a.75.75 0 1 1 1.06-1.06L10 10.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-.53.22z" />
+                  </svg>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSort('status')}
+                className="col-span-1 flex items-center gap-2 text-left"
+                aria-sort={sortKey === 'status' ? sortDirection : 'none'}
+              >
+                Status
+                {sortKey === 'status' ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className={`h-3 w-3 ${
+                      sortDirection === 'asc' ? 'rotate-180' : ''
+                    }`}
+                  >
+                    <path d="M10 12.5a.75.75 0 0 1-.53-.22l-3.75-3.75a.75.75 0 1 1 1.06-1.06L10 10.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-.53.22z" />
+                  </svg>
+                ) : null}
+              </button>
+              <div className="col-span-1 text-right">Actions</div>
+            </div>
+            <div className="divide-y divide-[var(--c-ecebe7)]">
+              {isLoading ? (
+                <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                  Loading roster...
+                </div>
+              ) : sortedStudents.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                  {studentSearch
+                    ? 'No matches yet. Try a different search.'
+                    : showArchived
+                      ? 'No archived students yet.'
+                      : 'No students yet. Add your first student to get started.'}
+                </div>
+              ) : (
+                paginatedStudents.map(student => {
+                  const isSelected = selectedStudentId === student.id;
+                  return (
+                    <div
+                      key={student.id}
+                      className={`grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm ${
+                        isSelected
+                          ? 'bg-[var(--sidebar-selected-bg)]/85 text-[var(--sidebar-selected-text)]'
+                          : 'bg-[var(--c-ffffff)]'
+                      }`}
+                    >
+                      <div className="col-span-1 flex justify-center">
+                        <button
+                          onClick={() => handleStudentSelect(student.id)}
+                          className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                            isSelected
+                              ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)] text-[var(--sidebar-selected-text)]'
+                              : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                          }`}
+                          aria-pressed={isSelected}
+                          aria-label={
+                            isSelected
+                              ? `Clear ${student.name} selection`
+                              : `Select ${student.name}`
+                          }
+                        >
+                          {isSelected ? 'Selected' : 'Select'}
+                        </button>
+                      </div>
+                      <div className="col-span-3">
+                        <p
+                          className={`font-medium ${
+                            isSelected
+                              ? 'text-[var(--sidebar-selected-text)]'
+                              : 'text-[var(--c-1f1f1d)]'
+                          }`}
+                        >
+                          {student.name}
+                        </p>
+                        <p
+                          className={`text-xs ${
+                            isSelected
+                              ? 'text-[var(--sidebar-selected-text)]/80'
+                              : 'text-[var(--c-9a9892)]'
+                          }`}
+                        >
+                          Added {new Date(student.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div
+                        className={`col-span-3 ${
+                          isSelected
+                            ? 'text-[var(--sidebar-selected-text)]/80'
+                            : 'text-[var(--c-6f6c65)]'
+                        }`}
+                      >
+                        {student.email || '—'}
+                      </div>
+                      <div
+                        className={`col-span-2 ${
+                          isSelected
+                            ? 'text-[var(--sidebar-selected-text)]/80'
+                            : 'text-[var(--c-6f6c65)]'
+                        }`}
+                      >
+                        {formatLessonFee(student)}
+                      </div>
+                      <div className="col-span-1">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs ${
+                            isSelected
+                              ? 'border-white/35 bg-white/15 text-[var(--sidebar-selected-text)]'
+                              : 'border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'
+                          }`}
+                        >
+                          {normalizeStudentLevel(student.level)}
+                        </span>
+                      </div>
+                      <div className="col-span-1">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs ${
+                            student.status === 'Active'
+                              ? 'bg-[var(--c-e7eddc)] text-[var(--c-3f4a2c)]'
+                              : student.status === 'Paused'
+                                ? 'bg-[var(--c-fce8d6)] text-[var(--c-8a5b2b)]'
+                                : 'bg-[var(--c-f2f1ec)] text-[var(--c-6f6c65)]'
+                          }`}
+                        >
+                          {student.status}
+                        </span>
+                      </div>
+                      <div className="col-span-1 flex justify-end gap-2">
+                        <button
+                          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                          onClick={() => openEditModal(student)}
+                        >
+                          Edit
+                        </button>
+                        {showArchived ? (
+                          <button
+                            className="rounded-full border border-[var(--c-e7eddc)] bg-[var(--c-e7eddc)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-3f4a2c)] transition hover:brightness-105"
+                            onClick={() => handleUnarchive(student)}
+                            disabled={isDeleting}
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                            onClick={() => openDeleteModal(student)}
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6">
             {isLoading ? (
-              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-6 text-sm text-[var(--c-6f6c65)]">
                 Loading roster...
               </div>
             ) : sortedStudents.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-6 text-sm text-[var(--c-6f6c65)]">
                 {studentSearch
                   ? 'No matches yet. Try a different search.'
-                  : 'No students yet. Add your first student to get started.'}
+                  : showArchived
+                    ? 'No archived students yet.'
+                    : 'No students yet. Add your first student to get started.'}
               </div>
             ) : (
-              paginatedStudents.map(student => {
-                const isSelected = selectedStudentId === student.id;
-                return (
-                <div
-                  key={student.id}
-                  className="grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm"
-                >
-                  <div className="col-span-1 flex justify-center">
-                    <button
-                      onClick={() => handleStudentSelect(student.id)}
-                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+              <div className="grid gap-4 md:grid-cols-3">
+                {paginatedStudents.map(student => {
+                  const isSelected = selectedStudentId === student.id;
+                  return (
+                    <div
+                      key={student.id}
+                      className={`rounded-2xl border p-4 shadow-sm ${
                         isSelected
-                          ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)] text-[var(--sidebar-selected-text)]'
-                          : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
-                      }`}
-                      aria-pressed={isSelected}
-                      aria-label={
-                        isSelected
-                          ? `Clear ${student.name} selection`
-                          : `Select ${student.name}`
-                      }
-                    >
-                      {isSelected ? 'Selected' : 'Select'}
-                    </button>
-                  </div>
-                  <div className="col-span-3">
-                    <p className="font-medium text-[var(--c-1f1f1d)]">
-                      {student.name}
-                    </p>
-                    <p className="text-xs text-[var(--c-9a9892)]">
-                      Added {new Date(student.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="col-span-3 text-[var(--c-6f6c65)]">
-                    {student.email || '—'}
-                  </div>
-                  <div className="col-span-2">
-                    <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-                      {normalizeStudentLevel(student.level)}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${
-                        student.status === 'Active'
-                          ? 'bg-[var(--c-e7eddc)] text-[var(--c-3f4a2c)]'
-                          : 'bg-[var(--c-fce8d6)] text-[var(--c-8a5b2b)]'
+                          ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)]'
+                          : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]'
                       }`}
                     >
-                      {student.status}
-                    </span>
-                  </div>
-                  <div className="col-span-1 flex justify-end gap-2">
-                    <button
-                      className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                      onClick={() => openEditModal(student)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="rounded-full border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-8f2f3b)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                      onClick={() => handleDelete(student)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p
+                            className={`text-sm font-semibold ${
+                              isSelected
+                                ? 'text-[var(--sidebar-selected-text)]'
+                                : 'text-[var(--c-1f1f1d)]'
+                            }`}
+                          >
+                            {student.name}
+                          </p>
+                          <p
+                            className={`text-xs ${
+                              isSelected
+                                ? 'text-[var(--sidebar-selected-text)]/80'
+                                : 'text-[var(--c-6f6c65)]'
+                            }`}
+                          >
+                            {student.email || '—'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleStudentSelect(student.id)}
+                          className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                            isSelected
+                              ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)] text-[var(--sidebar-selected-text)]'
+                              : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                          }`}
+                          aria-pressed={isSelected}
+                          aria-label={
+                            isSelected
+                              ? `Clear ${student.name} selection`
+                              : `Select ${student.name}`
+                          }
+                        >
+                          {isSelected ? 'Selected' : 'Select'}
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--c-6f6c65)]">
+                        <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                          {normalizeStudentLevel(student.level)}
+                        </span>
+                        <span
+                          className={`rounded-full px-3 py-1 ${
+                            student.status === 'Active'
+                              ? 'bg-[var(--c-e7eddc)] text-[var(--c-3f4a2c)]'
+                              : student.status === 'Paused'
+                                ? 'bg-[var(--c-fce8d6)] text-[var(--c-8a5b2b)]'
+                                : 'bg-[var(--c-f2f1ec)] text-[var(--c-6f6c65)]'
+                          }`}
+                        >
+                          {student.status}
+                        </span>
+                        <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                          {formatLessonFee(student)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs text-[var(--c-9a9892)]">
+                        Added {new Date(student.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <button
+                          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                          onClick={() => openEditModal(student)}
+                        >
+                          Edit
+                        </button>
+                        {showArchived ? (
+                          <button
+                            className="rounded-full border border-[var(--c-e7eddc)] bg-[var(--c-e7eddc)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-3f4a2c)] transition hover:brightness-105"
+                            onClick={() => handleUnarchive(student)}
+                            disabled={isDeleting}
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                            onClick={() => openDeleteModal(student)}
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
-        </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
           <p>
@@ -1803,6 +2479,49 @@ export default function TeacherStudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteModalOpen && deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={closeDeleteModal}
+          />
+          <div className="relative w-full max-w-lg rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Confirm Archive
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  Archive {deleteTarget.name}?
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  This keeps the student history but hides them from your active
+                  roster. You can restore them later.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(deleteTarget)}
+                className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-1f1f1d)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-ffffff)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Archiving...' : 'Archive Student'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

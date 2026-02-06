@@ -7,6 +7,7 @@ import { VIEW_TEACHER_STORAGE_KEY } from '../components/auth';
 type TeacherRecord = {
   id: string;
   company: string;
+  username?: string;
   name: string;
   email: string;
   region: string;
@@ -20,6 +21,7 @@ type TeacherRecord = {
     | 'Active';
   createdAt: string;
   updatedAt: string;
+  password?: string;
 };
 
 type StudentRecord = {
@@ -40,10 +42,12 @@ type SelectedTeacher = {
 };
 
 const defaultForm = {
+  username: '',
   name: '',
   email: '',
   region: 'Unassigned',
   status: 'Licensed' as const,
+  password: '',
 };
 
 const normalizeTeacherStatus = (
@@ -77,6 +81,7 @@ export default function AccountsPage() {
   const [formState, setFormState] = useState(defaultForm);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedTeacher, setSelectedTeacher] =
     useState<SelectedTeacher | null>(null);
   const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -246,6 +251,7 @@ export default function AccountsPage() {
   const openEditModal = (teacher: TeacherRecord) => {
     setEditing(teacher);
     setFormState({
+      username: teacher.username ?? '',
       name: teacher.name,
       email: teacher.email,
       region: teacher.region,
@@ -256,6 +262,7 @@ export default function AccountsPage() {
         | 'Master'
         | 'Onboarding'
         | 'Inactive',
+      password: '',
     });
     setError(null);
     setIsModalOpen(true);
@@ -276,14 +283,31 @@ export default function AccountsPage() {
     try {
       const payload = {
         company: companyName ?? editing?.company ?? 'company',
+        username: formState.username.trim().toLowerCase(),
         name: formState.name.trim(),
         email: formState.email.trim(),
         region: formState.region,
         status: formState.status,
+        password: formState.password.trim() || undefined,
       };
 
+      if (!payload.username) {
+        setError('Username is required.');
+        setIsSaving(false);
+        return;
+      }
       if (!payload.name) {
         setError('Teacher name is required.');
+        setIsSaving(false);
+        return;
+      }
+      const duplicateUsername = teachers.some(
+        teacher =>
+          teacher.id !== editing?.id &&
+          teacher.username?.trim().toLowerCase() === payload.username,
+      );
+      if (duplicateUsername) {
+        setError('That username is already in use.');
         setIsSaving(false);
         return;
       }
@@ -297,17 +321,32 @@ export default function AccountsPage() {
         },
       );
 
-      if (!response.ok) {
-        throw new Error('Request failed');
+      const data = (await response.json()) as {
+        teacher?: TeacherRecord;
+        error?: string;
+      };
+      if (!response.ok || !data.teacher) {
+        throw new Error(data.error ?? 'Request failed');
       }
-
-      const data = (await response.json()) as { teacher: TeacherRecord };
       if (editing) {
         setTeachers(current =>
           current.map(teacher =>
             teacher.id === data.teacher.id ? data.teacher : teacher,
           ),
         );
+        if (selectedTeacher?.id === data.teacher.id) {
+          const nextSelection: SelectedTeacher = {
+            id: data.teacher.id,
+            name: data.teacher.name,
+            username: data.teacher.username ?? selectedTeacher.username,
+          };
+          setSelectedTeacher(nextSelection);
+          window.localStorage.setItem(
+            viewTeacherKey,
+            JSON.stringify(nextSelection),
+          );
+          window.dispatchEvent(new Event('sm-view-teacher-updated'));
+        }
       } else {
         setTeachers(current => [data.teacher, ...current]);
       }
@@ -315,8 +354,12 @@ export default function AccountsPage() {
       setIsModalOpen(false);
       setEditing(null);
       setFormState(defaultForm);
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Something went wrong. Please try again.',
+      );
     } finally {
       setIsSaving(false);
     }
@@ -629,18 +672,64 @@ export default function AccountsPage() {
                   />
                 </label>
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                  Region
+                  Username
                   <input
-                    value={formState.region}
+                    value={formState.username}
                     onChange={event =>
                       setFormState(current => ({
                         ...current,
-                        region: event.target.value,
+                        username: event.target.value,
                       }))
                     }
                     className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
-                    placeholder="Region"
+                    placeholder="unique username"
                   />
+                </label>
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Password
+                  <div className="relative mt-2">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={formState.password}
+                      onChange={event =>
+                        setFormState(current => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 pr-12 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                      placeholder={
+                        editing ? 'Set new password' : 'Create password'
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(current => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)]"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="h-5 w-5"
+                        >
+                          <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                          <path d="M4.3 3.3a1 1 0 0 1 1.4 0l15 15a1 1 0 0 1-1.4 1.4l-2.06-2.06A12.6 12.6 0 0 1 12 19c-5 0-9.27-3.11-11-7a13.3 13.3 0 0 1 3.2-4.52L4.3 4.7a1 1 0 0 1 0-1.4Zm4.03 4.03 1.6 1.6A2.5 2.5 0 0 0 9.5 12a2.5 2.5 0 0 0 3.08 2.42l1.6 1.6A5 5 0 0 1 8.33 7.33ZM12 7a5 5 0 0 1 5 5c0 .52-.08 1.02-.22 1.5l-1.65-1.65a2.5 2.5 0 0 0-3.08-3.08L10.4 7.12c.5-.13 1.06-.12 1.6-.12Z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="h-5 w-5"
+                        >
+                          <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </label>
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   Status
@@ -668,6 +757,20 @@ export default function AccountsPage() {
                     ))}
                   </select>
                 </label>
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Region
+                  <input
+                    value={formState.region}
+                    onChange={event =>
+                      setFormState(current => ({
+                        ...current,
+                        region: event.target.value,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                    placeholder="Region"
+                  />
+                </label>
               </div>
 
               {error ? (
@@ -676,18 +779,18 @@ export default function AccountsPage() {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="grid w-full gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                  className="w-full rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="rounded-full bg-[var(--c-c8102e)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="w-full rounded-full bg-[var(--c-c8102e)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Add Teacher'}
                 </button>

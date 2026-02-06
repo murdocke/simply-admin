@@ -2,13 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import teachersData from "@/data/teachers.json";
-import studentsData from "@/data/students.json";
-import {
-  AUTH_STORAGE_KEY,
-  VIEW_ROLE_STORAGE_KEY,
-  VIEW_STUDENT_STORAGE_KEY,
-  type AuthUser,
-} from "../../components/auth";
 
 type Teacher = {
   id: string;
@@ -16,30 +9,14 @@ type Teacher = {
   email: string;
   region?: string;
   status?: string;
-  username?: string;
-};
-
-type Student = {
-  id: string;
-  name: string;
-  email: string;
-  teacher?: string;
 };
 
 type Message = {
   id: string;
-  sender: "student" | "teacher";
+  sender: "corporate" | "teacher";
   text: string;
   timestamp: string;
 };
-
-const getInitials = (name: string) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 
 const formatTime = (date: Date) =>
   date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -55,31 +32,39 @@ const THREADS_STORAGE_KEY = "sm_message_threads";
 
 type ThreadStore = Record<string, Message[]>;
 
-const buildThreadId = (studentId: string, teacherId: string) =>
-  `student:${studentId}|teacher:${teacherId}`;
+const buildCorporateThreadId = (teacherId: string) =>
+  `corporate|teacher:${teacherId}`;
 
 const parseTeacherIdFromThread = (threadId: string) => {
-  if (!threadId.includes("|teacher:")) return null;
-  const [, teacherPart] = threadId.split("|");
-  return teacherPart?.replace("teacher:", "") ?? null;
+  if (!threadId.startsWith("corporate|teacher:")) return null;
+  return threadId.replace("corporate|teacher:", "");
 };
 
-export default function StudentMessagesPage() {
-  const teachers = useMemo(() => {
-    const list = (teachersData.teachers as Teacher[]).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    return list;
-  }, []);
-
-  const students = useMemo(
-    () => (studentsData.students as Student[]) ?? [],
+export default function CompanyMessagesPage() {
+  const teachers = useMemo(
+    () => (teachersData.teachers as Teacher[]) ?? [],
     []
   );
-  const [activeStudent, setActiveStudent] = useState<Student | null>(null);
-  const [selectedTeacherId] = useState(teachers[0]?.id ?? "");
+  const [teacherQuery, setTeacherQuery] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState(
+    teachers[0]?.id ?? ""
+  );
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
+
+  const filteredTeachers = useMemo(() => {
+    if (!teacherQuery.trim()) return teachers;
+    const query = teacherQuery.trim().toLowerCase();
+    return teachers.filter((teacher) =>
+      [teacher.name, teacher.email, teacher.region].some((field) =>
+        field?.toLowerCase().includes(query)
+      )
+    );
+  }, [teacherQuery, teachers]);
+
+  const activeTeacher = teachers.find(
+    (teacher) => teacher.id === selectedTeacherId
+  );
 
   const loadThreads = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -102,140 +87,33 @@ export default function StudentMessagesPage() {
     window.dispatchEvent(new Event("sm-message-thread-updated"));
   }, []);
 
-  const resolveStudent = useCallback(() => {
-    const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!stored) {
-      setActiveStudent(null);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(stored) as AuthUser;
-      if (parsed?.role === "teacher") {
-        const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
-        const isStudentView = storedView === "student";
-        if (!isStudentView) {
-          setActiveStudent(null);
-          return;
-        }
-
-        const viewStudentKey = parsed?.username
-          ? `${VIEW_STUDENT_STORAGE_KEY}:${parsed.username}`
-          : VIEW_STUDENT_STORAGE_KEY;
-        const storedStudent =
-          window.localStorage.getItem(viewStudentKey) ??
-          window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY);
-
-        if (storedStudent) {
-          try {
-            const selected = JSON.parse(storedStudent) as {
-              id?: string;
-              name?: string;
-              email?: string;
-            };
-            if (selected?.id) {
-              const matched =
-                students.find((student) => student.id === selected.id) ?? null;
-              setActiveStudent(matched);
-              window.localStorage.setItem(viewStudentKey, storedStudent);
-              return;
-            }
-            const byName = selected?.name
-              ? students.find(
-                  (student) =>
-                    student.name.toLowerCase() === selected.name?.toLowerCase()
-                )
-              : null;
-            const byEmail = selected?.email
-              ? students.find(
-                  (student) =>
-                    student.email.toLowerCase() === selected.email?.toLowerCase()
-                )
-              : null;
-            setActiveStudent(byName ?? byEmail ?? null);
-            return;
-          } catch {
-            setActiveStudent(null);
-            return;
-          }
-        }
-
-        setActiveStudent(null);
-        return;
-      }
-
-      if (parsed?.role === "student") {
-        const normalized = parsed.username?.toLowerCase() ?? "";
-        const match =
-          students.find(
-            (student) => student.email.toLowerCase() === normalized
-          ) ??
-          students.find(
-            (student) => student.name.toLowerCase() === normalized
-          ) ??
-          students.find((student) =>
-            student.name.toLowerCase().startsWith(normalized)
-          ) ??
-          null;
-        setActiveStudent(match ?? students[0] ?? null);
-        return;
-      }
-
-      setActiveStudent(null);
-    } catch {
-      setActiveStudent(null);
-    }
-  }, [students]);
-
   useEffect(() => {
-    resolveStudent();
-    window.addEventListener("sm-view-student-updated", resolveStudent);
-    window.addEventListener("sm-student-selection", resolveStudent);
+    loadThreads();
     window.addEventListener("sm-message-thread-updated", loadThreads);
     window.addEventListener("storage", loadThreads);
     return () => {
-      window.removeEventListener("sm-view-student-updated", resolveStudent);
-      window.removeEventListener("sm-student-selection", resolveStudent);
       window.removeEventListener("sm-message-thread-updated", loadThreads);
       window.removeEventListener("storage", loadThreads);
     };
-  }, [loadThreads, resolveStudent]);
-
-  useEffect(() => {
-    loadThreads();
   }, [loadThreads]);
 
-  const activeTeacher = useMemo(() => {
-    if (!activeStudent) {
-      return null;
-    }
-    if (!activeStudent?.teacher) {
-      return teachers.find((teacher) => teacher.id === selectedTeacherId);
-    }
-    return (
-      teachers.find((teacher) => teacher.username === activeStudent.teacher) ??
-      teachers.find((teacher) => teacher.id === selectedTeacherId)
-    );
-  }, [activeStudent, selectedTeacherId, teachers]);
+  const activeThreadId = activeTeacher
+    ? buildCorporateThreadId(activeTeacher.id)
+    : "unassigned";
 
-  const activeThreadId =
-    activeTeacher && activeStudent
-      ? buildThreadId(activeStudent.id, activeTeacher.id)
-      : "unassigned";
   const messages = messagesByThread[activeThreadId] ?? [];
   const threadEntries = Object.entries(messagesByThread).filter(
-    ([, threadMessages]) => threadMessages.length > 0
-  );
-  const visibleThreadEntries = threadEntries.filter(
-    ([threadId]) => threadId === activeThreadId
+    ([threadId, threadMessages]) =>
+      threadMessages.length > 0 && threadId.startsWith("corporate|teacher:")
   );
 
   const canSend = draft.trim().length > 0 && Boolean(activeTeacher);
 
   const handleSend = () => {
-    if (!canSend) return;
+    if (!canSend || !activeTeacher) return;
     const message: Message = {
       id: crypto.randomUUID(),
-      sender: "student",
+      sender: "corporate",
       text: draft.trim(),
       timestamp: new Date().toISOString(),
     };
@@ -254,13 +132,13 @@ export default function StudentMessagesPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
-          Students
+          Company
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-[var(--c-1f1f1d)]">
           Messages
         </h1>
         <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-          Conversation threads with your teacher.
+          Message teachers and respond to incoming staff threads.
         </p>
       </header>
 
@@ -271,7 +149,7 @@ export default function StudentMessagesPage() {
               Send a message
             </h2>
             <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
-              Message your teacher any time. No subject line needed.
+              Look up a teacher, type your note, and send. No subject line needed.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -291,9 +169,46 @@ export default function StudentMessagesPage() {
                 New Message
               </p>
               <div className="mt-4 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    Teacher Lookup
+                  </label>
+                  <input
+                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                    placeholder="Search by name, email, or region"
+                    value={teacherQuery}
+                    onChange={(event) => setTeacherQuery(event.target.value)}
+                  />
+                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
+                    {filteredTeachers.map((teacher) => (
+                      <button
+                        key={teacher.id}
+                        className={
+                          selectedTeacherId === teacher.id
+                            ? "w-full rounded-xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-2 text-left"
+                            : "w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
+                        }
+                        onClick={() => setSelectedTeacherId(teacher.id)}
+                      >
+                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                          {teacher.name}
+                        </p>
+                        <p className="text-xs text-[var(--c-6f6c65)]">
+                          {teacher.region ?? "Region"} · {teacher.email}
+                        </p>
+                      </button>
+                    ))}
+                    {filteredTeachers.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-[var(--c-ecebe7)] px-3 py-3 text-xs text-[var(--c-6f6c65)]">
+                        No teachers found. Try a different search.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Assigned Teacher
+                    Selected Teacher
                   </p>
                   {activeTeacher ? (
                     <div className="mt-2">
@@ -301,32 +216,12 @@ export default function StudentMessagesPage() {
                         {activeTeacher.name}
                       </p>
                       <p className="text-xs text-[var(--c-6f6c65)]">
-                        {activeTeacher.region ?? "Region"} · {activeTeacher.email}
+                        {activeTeacher.email}
                       </p>
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
-                      Your teacher connection is being set up.
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Student Profile
-                  </p>
-                  {activeStudent ? (
-                    <div className="mt-2">
-                      <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                        {activeStudent.name}
-                      </p>
-                      <p className="text-xs text-[var(--c-6f6c65)]">
-                        {activeStudent.email}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
-                      Student profile unavailable.
+                      Choose a teacher to start messaging.
                     </p>
                   )}
                 </div>
@@ -339,35 +234,40 @@ export default function StudentMessagesPage() {
                   Threads
                 </p>
                 <span className="rounded-full bg-[var(--c-f8f6f1)] px-2 py-1 text-[11px] font-semibold text-[var(--c-6f6c65)]">
-                  {visibleThreadEntries.length} Active
+                  {threadEntries.length} Active
                 </span>
               </div>
               <div className="mt-4 space-y-3">
-                  {visibleThreadEntries.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-3 py-4 text-center text-xs text-[var(--c-6f6c65)]">
-                      Threads will appear once you or your teacher starts a conversation.
-                    </div>
-                  ) : (
-                  visibleThreadEntries.map(([threadId, threadMessages]) => {
+                {threadEntries.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-3 py-4 text-center text-xs text-[var(--c-6f6c65)]">
+                    Threads will appear once you or a teacher starts a conversation.
+                  </div>
+                ) : (
+                  threadEntries.map(([threadId, threadMessages]) => {
                     const threadTeacherId = parseTeacherIdFromThread(threadId);
                     const threadTeacher = teachers.find(
                       (teacher) => teacher.id === threadTeacherId
                     );
                     const lastMessage =
                       threadMessages[threadMessages.length - 1];
-                    const isActive = activeThreadId === threadId;
+                    const isActive = activeTeacher?.id === threadTeacherId;
 
                     return (
-                      <div
+                      <button
                         key={threadId}
                         className={
                           isActive
                             ? "w-full rounded-2xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-3 text-left"
                             : "w-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-left"
                         }
+                        onClick={() => {
+                          if (threadTeacherId) {
+                            setSelectedTeacherId(threadTeacherId);
+                          }
+                        }}
                       >
                         <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {activeTeacher?.name ?? threadTeacher?.name ?? "Teacher"}
+                          {threadTeacher?.name ?? "Teacher"}
                         </p>
                         <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                           {lastMessage?.text ?? "New conversation"}
@@ -379,7 +279,7 @@ export default function StudentMessagesPage() {
                             )}
                           </p>
                         ) : null}
-                      </div>
+                      </button>
                     );
                   })
                 )}
@@ -399,7 +299,7 @@ export default function StudentMessagesPage() {
                 <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                   {activeTeacher
                     ? `${activeTeacher.region ?? "Region"} · ${activeTeacher.email}`
-                    : "Your teacher will appear here"}
+                    : "Select a teacher to start messaging"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -419,8 +319,8 @@ export default function StudentMessagesPage() {
                 </div>
               ) : (
                 messages.map((message) => {
-                  const isStudent = message.sender === "student";
-                  const bubbleStyles = isStudent
+                  const isCorporate = message.sender === "corporate";
+                  const bubbleStyles = isCorporate
                     ? "max-w-[70%] rounded-2xl bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)] px-4 py-3 text-right"
                     : "max-w-[70%] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3";
 
@@ -428,20 +328,20 @@ export default function StudentMessagesPage() {
                     <div
                       key={message.id}
                       className={
-                        isStudent
+                        isCorporate
                           ? "flex items-start justify-end gap-3"
                           : "flex items-start gap-3"
                       }
                     >
-                      {!isStudent && (
+                      {!isCorporate && (
                         <div className="rounded-full bg-[var(--c-f8f6f1)] px-3 py-2 text-xs font-semibold text-[var(--c-6f6c65)]">
-                          {activeTeacher ? getInitials(activeTeacher.name) : "TE"}
+                          TR
                         </div>
                       )}
                       <div className={bubbleStyles}>
                         <p
                           className={
-                            isStudent
+                            isCorporate
                               ? "text-sm text-[var(--c-ffffff)]"
                               : "text-sm text-[var(--c-1f1f1d)]"
                           }
@@ -450,16 +350,16 @@ export default function StudentMessagesPage() {
                         </p>
                         <p
                           className={
-                            isStudent
+                            isCorporate
                               ? "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-ffffff)]/70"
                               : "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
                           }
                         >
-                          {isStudent ? "You" : "Incoming"} ·{" "}
+                          {isCorporate ? "You" : "Incoming"} ·{" "}
                           {formatTime(new Date(message.timestamp))}
                         </p>
                       </div>
-                      {isStudent && (
+                      {isCorporate && (
                         <div className="rounded-full bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold text-[var(--c-ffffff)]">
                           You
                         </div>
