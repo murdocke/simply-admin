@@ -7,6 +7,7 @@ type AccountRecord = {
   role: 'company' | 'teacher' | 'student';
   name: string;
   email: string;
+  goesBy?: string;
   status: string;
   lastLogin: string | null;
   password?: string;
@@ -24,6 +25,7 @@ type TeachersFile = {
     name: string;
     email: string;
     status: string;
+    goesBy?: string;
   }>;
 };
 
@@ -69,6 +71,7 @@ export async function PATCH(
     name?: string;
     email?: string;
     password?: string;
+    goesBy?: string;
   };
 
   if (!body.role) {
@@ -94,6 +97,7 @@ export async function PATCH(
     ...current,
     name: body.name ?? current.name,
     email: body.email ?? current.email,
+    goesBy: body.goesBy ?? current.goesBy ?? '',
     password:
       body.password !== undefined ? body.password.trim() : current.password ?? '',
   };
@@ -115,6 +119,7 @@ export async function PATCH(
         ...teachersData.teachers[teacherIndex],
         name: updated.name,
         email: updated.email,
+        goesBy: updated.goesBy,
         status: updated.status,
       };
       await writeJson(teachersFile, teachersData);

@@ -1,0 +1,66 @@
+{
+  "threads": {
+    "student:88036240-9852-43ef-94da-4f275d25ccd7|teacher:23119e0d-2d21-4f17-99a4-c56e3aac4d8a": [
+      {
+        "id": "bb9c2911-8369-4e31-97be-76832639ba57",
+        "sender": "teacher",
+        "text": "Hey.... how is the left hand going?",
+        "timestamp": "2026-02-06T21:35:22.257Z"
+      },
+      {
+        "id": "9273b11e-2de8-4bd2-856d-f22e1b61c4c1",
+        "sender": "student",
+        "text": "Good... but I may need a quick video.  not sure I am playing it right",
+        "timestamp": "2026-02-06T21:36:05.903Z"
+      },
+      {
+        "id": "b5246e8e-11a7-4f2c-ad5a-1f8c4ec4f84c",
+        "sender": "teacher",
+        "text": "no problem - I can make one later this afternoon.",
+        "timestamp": "2026-02-06T21:36:55.454Z"
+      },
+      {
+        "id": "4e069688-b862-40c7-b71d-53110d8c8326",
+        "sender": "student",
+        "text": "ok, thanks!",
+        "timestamp": "2026-02-06T21:37:12.775Z"
+      },
+      {
+        "id": "6af605db-a62a-4dbf-8ebd-a6fd84618cba",
+        "sender": "teacher",
+        "text": "Did you finish playing Light Blue?  How is it sounding?",
+        "timestamp": "2026-02-06T21:40:33.334Z"
+      },
+      {
+        "id": "fcfd05e9-c84a-4e1b-8301-b91df4685cf9",
+        "sender": "student",
+        "text": "It is is pretty good..  I will work on it more tonight.",
+        "timestamp": "2026-02-06T21:40:58.360Z"
+      },
+      {
+        "id": "a4e2bb6d-1b45-4def-b1a8-601dcc14e795",
+        "sender": "teacher",
+        "text": "ok, sounds good",
+        "timestamp": "2026-02-06T21:41:12.709Z"
+      },
+      {
+        "id": "3537731a-6f57-410d-a3ab-900db75078f0",
+        "sender": "student",
+        "text": "I can play it now.  Both hands together!",
+        "timestamp": "2026-02-06T21:47:17.886Z"
+      },
+      {
+        "id": "8b7dea8f-c575-47ca-8fd4-a57eb629c17f",
+        "sender": "teacher",
+        "text": "Awesome!",
+        "timestamp": "2026-02-06T21:47:27.857Z"
+      },
+      {
+        "id": "20cce82c-e3e3-4b0f-9acf-10f9c891efc3",
+        "sender": "student",
+        "text": "See you Monday!",
+        "timestamp": "2026-02-06T21:47:43.126Z"
+      }
+    ]
+  }
+}

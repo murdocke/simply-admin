@@ -28,7 +28,7 @@ const formatThreadTimestamp = (date: Date) =>
     minute: "2-digit",
   });
 
-const THREADS_STORAGE_KEY = "sm_message_threads";
+const THREAD_READS_KEY_BASE = "sm_message_thread_reads";
 
 type ThreadStore = Record<string, Message[]>;
 
@@ -51,6 +51,7 @@ export default function CompanyMessagesPage() {
   );
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
+  const [threadReads, setThreadReads] = useState<Record<string, string>>({});
 
   const filteredTeachers = useMemo(() => {
     if (!teacherQuery.trim()) return teachers;
@@ -66,36 +67,60 @@ export default function CompanyMessagesPage() {
     (teacher) => teacher.id === selectedTeacherId
   );
 
-  const loadThreads = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(THREADS_STORAGE_KEY);
-    if (!stored) {
-      setMessagesByThread({});
-      return;
-    }
+  const loadThreads = useCallback(async () => {
     try {
-      const parsed = JSON.parse(stored) as ThreadStore;
-      setMessagesByThread(parsed ?? {});
+      const response = await fetch("/api/messages");
+      if (!response.ok) {
+        setMessagesByThread({});
+        return;
+      }
+      const data = (await response.json()) as { threads?: ThreadStore };
+      setMessagesByThread(data.threads ?? {});
     } catch {
       setMessagesByThread({});
     }
   }, []);
 
-  const persistThreads = useCallback((next: ThreadStore) => {
+  const persistMessage = useCallback(
+    async (threadId: string, message: Message) => {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId, message }),
+      });
+    },
+    []
+  );
+
+  const loadReads = useCallback(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(THREADS_STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("sm-message-thread-updated"));
+    const scopedKey = `${THREAD_READS_KEY_BASE}:corporate`;
+    const stored =
+      window.localStorage.getItem(scopedKey) ??
+      window.localStorage.getItem(THREAD_READS_KEY_BASE);
+    if (!stored) {
+      setThreadReads({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as Record<string, string>;
+      setThreadReads(parsed ?? {});
+    } catch {
+      setThreadReads({});
+    }
   }, []);
 
   useEffect(() => {
-    loadThreads();
-    window.addEventListener("sm-message-thread-updated", loadThreads);
-    window.addEventListener("storage", loadThreads);
+    void loadThreads();
+    const interval = window.setInterval(() => {
+      void loadThreads();
+    }, 5000);
+    window.addEventListener("storage", loadReads);
     return () => {
-      window.removeEventListener("sm-message-thread-updated", loadThreads);
-      window.removeEventListener("storage", loadThreads);
+      window.removeEventListener("storage", loadReads);
+      window.clearInterval(interval);
     };
-  }, [loadThreads]);
+  }, [loadReads, loadThreads]);
 
   const activeThreadId = activeTeacher
     ? buildCorporateThreadId(activeTeacher.id)
@@ -106,8 +131,29 @@ export default function CompanyMessagesPage() {
     ([threadId, threadMessages]) =>
       threadMessages.length > 0 && threadId.startsWith("corporate|teacher:")
   );
+  const getUnreadCount = (threadId: string, threadMessages: Message[]) => {
+    const lastRead = threadReads[threadId];
+    return threadMessages.filter((message) => {
+      if (message.sender === "corporate") return false;
+      if (!lastRead) return true;
+      return new Date(message.timestamp) > new Date(lastRead);
+    }).length;
+  };
 
   const canSend = draft.trim().length > 0 && Boolean(activeTeacher);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!activeThreadId) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    setThreadReads((prev) => {
+      const next = { ...prev, [activeThreadId]: lastMessage.timestamp };
+      const scopedKey = `${THREAD_READS_KEY_BASE}:corporate`;
+      window.localStorage.setItem(scopedKey, JSON.stringify(next));
+      return next;
+    });
+  }, [activeThreadId, messages]);
 
   const handleSend = () => {
     if (!canSend || !activeTeacher) return;
@@ -117,13 +163,12 @@ export default function CompanyMessagesPage() {
       text: draft.trim(),
       timestamp: new Date().toISOString(),
     };
-    setMessagesByThread((prev) => {
-      const next = {
-        ...prev,
-        [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
-      };
-      persistThreads(next);
-      return next;
+    setMessagesByThread((prev) => ({
+      ...prev,
+      [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
+    }));
+    void persistMessage(activeThreadId, message).then(() => {
+      void loadThreads();
     });
     setDraft("");
   };
@@ -149,7 +194,7 @@ export default function CompanyMessagesPage() {
               Send a message
             </h2>
             <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
-              Look up a teacher, type your note, and send. No subject line needed.
+              Select a teacher and send a quick update or note.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -250,6 +295,10 @@ export default function CompanyMessagesPage() {
                     );
                     const lastMessage =
                       threadMessages[threadMessages.length - 1];
+                    const unreadCount = getUnreadCount(
+                      threadId,
+                      threadMessages
+                    );
                     const isActive = activeTeacher?.id === threadTeacherId;
 
                     return (
@@ -266,9 +315,16 @@ export default function CompanyMessagesPage() {
                           }
                         }}
                       >
-                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {threadTeacher?.name ?? "Teacher"}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                            {threadTeacher?.name ?? "Teacher"}
+                          </p>
+                          {unreadCount > 0 ? (
+                            <span className="rounded-full bg-[var(--c-c8102e)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                              {unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                           {lastMessage?.text ?? "New conversation"}
                         </p>

@@ -5,7 +5,7 @@
       "role": "company",
       "name": "Neil Moore",
       "email": "neil@simplymusic.com",
-      "lastLogin": "2026-02-06T19:01:02.169Z",
+      "lastLogin": "2026-02-07T00:55:31.639Z",
       "password": "123456",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -15,18 +15,19 @@
       "role": "teacher",
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
-      "lastLogin": "2026-02-06T14:33:54.178Z",
+      "lastLogin": "2026-02-06T21:16:02.430Z",
       "password": "123456",
       "teacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
+      "goesBy": "Mr. Brian",
       "membershipStatus": "Licensed",
       "accountStatus": "Active"
     },
     {
-      "username": "quinn",
+      "username": "axel",
       "role": "student",
-      "name": "Quinn Harper",
-      "email": "quinn@student.simplymusic.com",
-      "lastLogin": "2026-02-06T03:33:22.871Z",
+      "name": "Axel",
+      "email": "joybeth.martinez@gmail.com",
+      "lastLogin": "2026-02-06T20:49:59.212Z",
       "password": "123456",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -83,6 +84,16 @@
       "lastLogin": null,
       "password": "123456",
       "teacherId": "dbadc128-28fb-4f3f-afd0-1391bbdccf48",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "quinn",
+      "role": "student",
+      "name": "Quinn",
+      "email": "dawnfrancour@gmail.com",
+      "lastLogin": null,
+      "password": "123456",
       "membershipStatus": "Active",
       "accountStatus": "Active"
     }

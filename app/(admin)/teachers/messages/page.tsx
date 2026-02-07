@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import studentsData from "@/data/students.json";
 import teachersData from "@/data/teachers.json";
 import { AUTH_STORAGE_KEY, type AuthUser } from "../../components/auth";
@@ -49,7 +50,7 @@ const formatThreadTimestamp = (date: Date) =>
     minute: "2-digit",
   });
 
-const THREADS_STORAGE_KEY = "sm_message_threads";
+const THREAD_READS_KEY_BASE = "sm_message_thread_reads";
 
 type ThreadStore = Record<string, Message[]>;
 
@@ -65,11 +66,13 @@ const parseStudentIdFromThread = (threadId: string) => {
 };
 
 export default function TeacherMessagesPage() {
+  const searchParams = useSearchParams();
   const teachers = useMemo(
     () => (teachersData.teachers as Teacher[]) ?? [],
     []
   );
   const [activeTeacher, setActiveTeacher] = useState<Teacher | null>(null);
+  const [viewerRole, setViewerRole] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
@@ -79,6 +82,7 @@ export default function TeacherMessagesPage() {
     }
     try {
       const parsed = JSON.parse(stored) as AuthUser;
+      setViewerRole(parsed?.role ?? null);
       if (parsed?.role !== "teacher") {
         setActiveTeacher(teachers[0] ?? null);
         return;
@@ -90,6 +94,7 @@ export default function TeacherMessagesPage() {
       setActiveTeacher(match);
     } catch {
       setActiveTeacher(teachers[0] ?? null);
+      setViewerRole(null);
     }
   }, [teachers]);
 
@@ -108,38 +113,72 @@ export default function TeacherMessagesPage() {
   );
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
+  const [threadReads, setThreadReads] = useState<Record<string, string>>({});
+  const [studentOnline, setStudentOnline] = useState(false);
+  const [teacherOnline, setTeacherOnline] = useState(false);
+  const [studentTyping, setStudentTyping] = useState(false);
+  const lastTypingPing = useRef(0);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const loadThreads = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(THREADS_STORAGE_KEY);
-    if (!stored) {
-      setMessagesByThread({});
-      return;
-    }
+  const loadThreads = useCallback(async () => {
     try {
-      const parsed = JSON.parse(stored) as ThreadStore;
-      setMessagesByThread(parsed ?? {});
+      const response = await fetch("/api/messages");
+      if (!response.ok) {
+        setMessagesByThread({});
+        return;
+      }
+      const data = (await response.json()) as { threads?: ThreadStore };
+      setMessagesByThread(data.threads ?? {});
     } catch {
       setMessagesByThread({});
     }
   }, []);
 
-  const persistThreads = useCallback((next: ThreadStore) => {
+  const loadReads = useCallback(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(THREADS_STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("sm-message-thread-updated"));
-  }, []);
+    const scopedKey = `${THREAD_READS_KEY_BASE}:teacher:${teacherId}`;
+    const stored =
+      window.localStorage.getItem(scopedKey) ??
+      window.localStorage.getItem(THREAD_READS_KEY_BASE);
+    if (!stored) {
+      setThreadReads({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as Record<string, string>;
+      setThreadReads(parsed ?? {});
+    } catch {
+      setThreadReads({});
+    }
+  }, [teacherId]);
+
+  const persistMessage = useCallback(
+    async (threadId: string, message: Message) => {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId, message }),
+      });
+    },
+    []
+  );
 
   useEffect(() => {
-    loadThreads();
-    const handleUpdate = () => loadThreads();
-    window.addEventListener("sm-message-thread-updated", handleUpdate);
+    void loadThreads();
+    const interval = window.setInterval(() => {
+      void loadThreads();
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [loadThreads]);
+
+  useEffect(() => {
+    loadReads();
+    const handleUpdate = () => loadReads();
     window.addEventListener("storage", handleUpdate);
     return () => {
-      window.removeEventListener("sm-message-thread-updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
-  }, [loadThreads]);
+  }, [loadReads]);
 
   const filteredStudents = useMemo(() => {
     if (!studentQuery.trim()) return students;
@@ -167,6 +206,146 @@ export default function TeacherMessagesPage() {
   const visibleThreadEntries = threadEntries.filter(([threadId]) =>
     threadId.endsWith(`teacher:${teacherId}`)
   );
+  const getUnreadCount = (threadId: string, threadMessages: Message[]) => {
+    const lastRead = threadReads[threadId];
+    return threadMessages.filter((message) => {
+      if (message.sender === "teacher") return false;
+      if (!lastRead) return true;
+      return new Date(message.timestamp) > new Date(lastRead);
+    }).length;
+  };
+
+  useEffect(() => {
+    const threadParam = searchParams.get("thread");
+    if (!threadParam) return;
+    if (threadParam.startsWith("corporate|")) {
+      setRecipientType("corporate");
+      return;
+    }
+    if (threadParam.startsWith("student:")) {
+      const studentId = parseStudentIdFromThread(threadParam);
+      if (studentId) {
+        setRecipientType("student");
+        setSelectedStudentId(studentId);
+      }
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, activeThreadId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!activeThreadId) return;
+    if (viewerRole !== "teacher") return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    setThreadReads((prev) => {
+      const next = { ...prev, [activeThreadId]: lastMessage.timestamp };
+      const scopedKey = `${THREAD_READS_KEY_BASE}:teacher:${teacherId}`;
+      window.localStorage.setItem(scopedKey, JSON.stringify(next));
+      return next;
+    });
+  }, [activeThreadId, messages, teacherId]);
+
+  useEffect(() => {
+    if (recipientType === "corporate") {
+      setStudentTyping(false);
+      return;
+    }
+    if (!activeThreadId) return;
+    const key = `typing:${activeThreadId}:student`;
+    const checkTyping = async () => {
+      try {
+        const response = await fetch(
+          `/api/typing?key=${encodeURIComponent(key)}`
+        );
+        if (!response.ok) {
+          setStudentTyping(false);
+          return;
+        }
+        const data = (await response.json()) as { lastSeen?: string | null };
+        if (!data.lastSeen) {
+          setStudentTyping(false);
+          return;
+        }
+        const diff = Date.now() - new Date(data.lastSeen).getTime();
+        setStudentTyping(diff < 4000);
+      } catch {
+        setStudentTyping(false);
+      }
+    };
+    void checkTyping();
+    const interval = window.setInterval(() => {
+      void checkTyping();
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeThreadId, recipientType]);
+
+  useEffect(() => {
+    if (recipientType === "corporate") return;
+    if (!activeThreadId) return;
+    if (!draft.trim()) return;
+    const now = Date.now();
+    if (now - lastTypingPing.current < 2000) return;
+    lastTypingPing.current = now;
+    void fetch("/api/typing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: `typing:${activeThreadId}:teacher` }),
+    });
+  }, [activeThreadId, draft, recipientType]);
+
+  useEffect(() => {
+    if (viewerRole !== "teacher") return;
+    const key = `teacher:${teacherId}`;
+    const markOnline = async () => {
+      try {
+        await fetch("/api/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+        setTeacherOnline(true);
+      } catch {
+        setTeacherOnline(false);
+      }
+    };
+    void markOnline();
+    const interval = window.setInterval(() => {
+      void markOnline();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [teacherId, viewerRole]);
+
+  useEffect(() => {
+    if (!activeStudent) return;
+    const key = `student:${activeStudent.id}`;
+    const checkOnline = async () => {
+      try {
+        const response = await fetch(`/api/presence?key=${encodeURIComponent(key)}`);
+        if (!response.ok) {
+          setStudentOnline(false);
+          return;
+        }
+        const data = (await response.json()) as { lastSeen?: string | null };
+        if (!data.lastSeen) {
+          setStudentOnline(false);
+          return;
+        }
+        const diff = Date.now() - new Date(data.lastSeen).getTime();
+        setStudentOnline(diff < 120000);
+      } catch {
+        setStudentOnline(false);
+      }
+    };
+    void checkOnline();
+    const interval = window.setInterval(() => {
+      void checkOnline();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [activeStudent]);
 
   const canSend =
     draft.trim().length > 0 &&
@@ -181,13 +360,12 @@ export default function TeacherMessagesPage() {
       text: draft.trim(),
       timestamp: new Date().toISOString(),
     };
-    setMessagesByThread((prev) => {
-      const next = {
-        ...prev,
-        [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
-      };
-      persistThreads(next);
-      return next;
+    setMessagesByThread((prev) => ({
+      ...prev,
+      [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
+    }));
+    void persistMessage(activeThreadId, message).then(() => {
+      void loadThreads();
     });
     setDraft("");
   };
@@ -202,7 +380,7 @@ export default function TeacherMessagesPage() {
           Messages
         </h1>
         <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-          Conversation threads with students and studio staff.
+          Keep track of student conversations and studio updates in one place.
         </p>
       </header>
 
@@ -213,26 +391,18 @@ export default function TeacherMessagesPage() {
               Send a message
             </h2>
             <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
-              Choose a student or corporate, then type and send. No subject line needed.
+              Select a recipient and send a quick update or note.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              Text Only
-            </span>
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              Replies Enabled
-            </span>
-          </div>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+            Messages sync in real time.
+          </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-6">
-            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 p-4 backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
-                New Message
-              </p>
-              <div className="mt-4 space-y-4">
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 p-4 pt-1 backdrop-blur">
+              <div className="mt-1 space-y-4">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                     Send To
@@ -358,6 +528,10 @@ export default function TeacherMessagesPage() {
                     );
                     const lastMessage =
                       threadMessages[threadMessages.length - 1];
+                    const unreadCount = getUnreadCount(
+                      threadId,
+                      threadMessages
+                    );
                     const isActive =
                       (isCorporateThread && recipientType === "corporate") ||
                       (!isCorporateThread &&
@@ -383,11 +557,18 @@ export default function TeacherMessagesPage() {
                           }
                         }}
                       >
-                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {isCorporateThread
-                            ? "Corporate Inbox"
-                            : threadStudent?.name ?? "Student"}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                            {isCorporateThread
+                              ? "Corporate Inbox"
+                              : threadStudent?.name ?? "Student"}
+                          </p>
+                          {unreadCount > 0 ? (
+                            <span className="rounded-full bg-[var(--c-c8102e)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                              {unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                           {lastMessage?.text ?? "New conversation"}
                         </p>
@@ -417,25 +598,36 @@ export default function TeacherMessagesPage() {
                     ? "Corporate Inbox"
                     : activeStudent?.name ?? "Select a student"}
                 </h3>
-                <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
-                  {recipientType === "corporate"
-                    ? "Shared studio line"
-                    : activeStudent
-                      ? `${activeStudent.lessonDay ?? "Lesson"} · ${activeStudent.lessonTime ?? "Time TBD"}`
-                      : "Student messages will appear here"}
-                </p>
+                {recipientType === "corporate" ? (
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                    Shared studio line
+                  </p>
+                ) : activeStudent ? null : (
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                    Student messages will appear here
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-xs font-semibold text-[var(--c-6f6c65)]">
-                  Live
+                <span
+                  className={`rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${
+                    recipientType === "corporate"
+                      ? "border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]"
+                      : studentOnline
+                        ? "border-[color:rgba(16,185,129,0.35)] bg-[color:rgba(16,185,129,0.18)] text-[color:rgb(16,185,129)]"
+                        : "border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]"
+                  }`}
+                >
+                  {recipientType === "corporate"
+                    ? "Online"
+                    : studentOnline
+                      ? "Online"
+                      : "Offline"}
                 </span>
-                <button className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                  View Details
-                </button>
               </div>
             </div>
 
-            <div className="flex-1 space-y-4 px-5 py-6">
+            <div className="flex-1 space-y-4 px-5 py-6 min-h-[320px] max-h-[560px] overflow-y-auto">
               {messages.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-4 py-6 text-center text-sm text-[var(--c-6f6c65)]">
                   No messages yet. Send a note to start the conversation.
@@ -443,6 +635,10 @@ export default function TeacherMessagesPage() {
               ) : (
                 messages.map((message) => {
                   const isTeacher = message.sender === "teacher";
+                  const senderLabel =
+                    message.sender === "corporate"
+                      ? "Simply Music"
+                      : activeStudent?.name?.split(" ")[0] ?? "Student";
                   const bubbleStyles = isTeacher
                     ? "max-w-[70%] rounded-2xl bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)] px-4 py-3 text-right"
                     : "max-w-[70%] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3";
@@ -459,10 +655,8 @@ export default function TeacherMessagesPage() {
                       {!isTeacher && (
                         <div className="rounded-full bg-[var(--c-f8f6f1)] px-3 py-2 text-xs font-semibold text-[var(--c-6f6c65)]">
                           {message.sender === "corporate"
-                            ? "CO"
-                            : activeStudent
-                              ? getInitials(activeStudent.name)
-                              : "ST"}
+                            ? "Simply Music"
+                            : activeStudent?.name?.split(" ")[0] ?? "Student"}
                         </div>
                       )}
                       <div className={bubbleStyles}>
@@ -482,7 +676,7 @@ export default function TeacherMessagesPage() {
                               : "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
                           }
                         >
-                          {isTeacher ? "You" : "Incoming"} ·{" "}
+                          {isTeacher ? "You" : senderLabel} ·{" "}
                           {formatTime(new Date(message.timestamp))}
                         </p>
                       </div>
@@ -495,6 +689,17 @@ export default function TeacherMessagesPage() {
                   );
                 })
               )}
+              {recipientType !== "corporate" && studentTyping ? (
+                <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:0ms] [animation-duration:1s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:150ms] [animation-duration:1s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:300ms] [animation-duration:1s]" />
+                  </span>
+                  {activeStudent?.name?.split(" ")[0] ?? "Student"} is typing
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} />
             </div>
 
             <div className="border-t border-[var(--c-ecebe7)] px-5 py-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import teachersData from "@/data/teachers.json";
 import studentsData from "@/data/students.json";
 import {
@@ -17,6 +17,7 @@ type Teacher = {
   region?: string;
   status?: string;
   username?: string;
+  goesBy?: string;
 };
 
 type Student = {
@@ -51,7 +52,7 @@ const formatThreadTimestamp = (date: Date) =>
     minute: "2-digit",
   });
 
-const THREADS_STORAGE_KEY = "sm_message_threads";
+const THREAD_READS_KEY_BASE = "sm_message_thread_reads";
 
 type ThreadStore = Record<string, Message[]>;
 
@@ -77,39 +78,71 @@ export default function StudentMessagesPage() {
     []
   );
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
+  const [viewerRole, setViewerRole] = useState<string | null>(null);
   const [selectedTeacherId] = useState(teachers[0]?.id ?? "");
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
+  const [threadReads, setThreadReads] = useState<Record<string, string>>({});
+  const [teacherOnline, setTeacherOnline] = useState(false);
+  const [studentOnline, setStudentOnline] = useState(false);
+  const [teacherTyping, setTeacherTyping] = useState(false);
+  const lastTypingPing = useRef(0);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const loadThreads = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(THREADS_STORAGE_KEY);
-    if (!stored) {
-      setMessagesByThread({});
-      return;
-    }
+  const loadThreads = useCallback(async () => {
     try {
-      const parsed = JSON.parse(stored) as ThreadStore;
-      setMessagesByThread(parsed ?? {});
+      const response = await fetch("/api/messages");
+      if (!response.ok) {
+        setMessagesByThread({});
+        return;
+      }
+      const data = (await response.json()) as { threads?: ThreadStore };
+      setMessagesByThread(data.threads ?? {});
     } catch {
       setMessagesByThread({});
     }
   }, []);
 
-  const persistThreads = useCallback((next: ThreadStore) => {
+  const persistMessage = useCallback(
+    async (threadId: string, message: Message) => {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId, message }),
+      });
+    },
+    []
+  );
+
+  const loadReads = useCallback(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(THREADS_STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("sm-message-thread-updated"));
-  }, []);
+    const studentId = activeStudent?.id ?? "unknown";
+    const scopedKey = `${THREAD_READS_KEY_BASE}:student:${studentId}`;
+    const stored =
+      window.localStorage.getItem(scopedKey) ??
+      window.localStorage.getItem(THREAD_READS_KEY_BASE);
+    if (!stored) {
+      setThreadReads({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as Record<string, string>;
+      setThreadReads(parsed ?? {});
+    } catch {
+      setThreadReads({});
+    }
+  }, [activeStudent?.id]);
 
   const resolveStudent = useCallback(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (!stored) {
       setActiveStudent(null);
+      setViewerRole(null);
       return;
     }
     try {
       const parsed = JSON.parse(stored) as AuthUser;
+      setViewerRole(parsed?.role ?? null);
       if (parsed?.role === "teacher") {
         const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
         const isStudentView = storedView === "student";
@@ -170,6 +203,9 @@ export default function StudentMessagesPage() {
             (student) => student.email.toLowerCase() === normalized
           ) ??
           students.find(
+            (student) => student.username?.toLowerCase() === normalized
+          ) ??
+          students.find(
             (student) => student.name.toLowerCase() === normalized
           ) ??
           students.find((student) =>
@@ -183,6 +219,7 @@ export default function StudentMessagesPage() {
       setActiveStudent(null);
     } catch {
       setActiveStudent(null);
+      setViewerRole(null);
     }
   }, [students]);
 
@@ -190,19 +227,27 @@ export default function StudentMessagesPage() {
     resolveStudent();
     window.addEventListener("sm-view-student-updated", resolveStudent);
     window.addEventListener("sm-student-selection", resolveStudent);
-    window.addEventListener("sm-message-thread-updated", loadThreads);
-    window.addEventListener("storage", loadThreads);
+    const interval = window.setInterval(() => {
+      void loadThreads();
+    }, 5000);
+    window.addEventListener("sm-message-thread-updated", loadReads);
+    window.addEventListener("storage", loadReads);
     return () => {
       window.removeEventListener("sm-view-student-updated", resolveStudent);
       window.removeEventListener("sm-student-selection", resolveStudent);
-      window.removeEventListener("sm-message-thread-updated", loadThreads);
-      window.removeEventListener("storage", loadThreads);
+      window.removeEventListener("sm-message-thread-updated", loadReads);
+      window.removeEventListener("storage", loadReads);
+      window.clearInterval(interval);
     };
-  }, [loadThreads, resolveStudent]);
+  }, [loadReads, loadThreads, resolveStudent]);
 
   useEffect(() => {
-    loadThreads();
+    void loadThreads();
   }, [loadThreads]);
+
+  useEffect(() => {
+    loadReads();
+  }, [loadReads]);
 
   const activeTeacher = useMemo(() => {
     if (!activeStudent) {
@@ -216,6 +261,58 @@ export default function StudentMessagesPage() {
       teachers.find((teacher) => teacher.id === selectedTeacherId)
     );
   }, [activeStudent, selectedTeacherId, teachers]);
+  const teacherDisplayName =
+    activeTeacher?.goesBy ?? activeTeacher?.name ?? "Teacher";
+
+  useEffect(() => {
+    if (!activeStudent || viewerRole !== "student") return;
+    const key = `student:${activeStudent.id}`;
+    const markOnline = async () => {
+      try {
+        await fetch("/api/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+        setStudentOnline(true);
+      } catch {
+        setStudentOnline(false);
+      }
+    };
+    void markOnline();
+    const interval = window.setInterval(() => {
+      void markOnline();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [activeStudent, viewerRole]);
+
+  useEffect(() => {
+    if (!activeTeacher) return;
+    const key = `teacher:${activeTeacher.id}`;
+    const checkOnline = async () => {
+      try {
+        const response = await fetch(`/api/presence?key=${encodeURIComponent(key)}`);
+        if (!response.ok) {
+          setTeacherOnline(false);
+          return;
+        }
+        const data = (await response.json()) as { lastSeen?: string | null };
+        if (!data.lastSeen) {
+          setTeacherOnline(false);
+          return;
+        }
+        const diff = Date.now() - new Date(data.lastSeen).getTime();
+        setTeacherOnline(diff < 120000);
+      } catch {
+        setTeacherOnline(false);
+      }
+    };
+    void checkOnline();
+    const interval = window.setInterval(() => {
+      void checkOnline();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [activeTeacher]);
 
   const activeThreadId =
     activeTeacher && activeStudent
@@ -228,8 +325,78 @@ export default function StudentMessagesPage() {
   const visibleThreadEntries = threadEntries.filter(
     ([threadId]) => threadId === activeThreadId
   );
+  const getUnreadCount = (threadId: string, threadMessages: Message[]) => {
+    const lastRead = threadReads[threadId];
+    return threadMessages.filter((message) => {
+      if (message.sender === "student") return false;
+      if (!lastRead) return true;
+      return new Date(message.timestamp) > new Date(lastRead);
+    }).length;
+  };
 
   const canSend = draft.trim().length > 0 && Boolean(activeTeacher);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!activeThreadId) return;
+    if (viewerRole !== "student") return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    setThreadReads((prev) => {
+      const next = { ...prev, [activeThreadId]: lastMessage.timestamp };
+      const studentId = activeStudent?.id ?? "unknown";
+      const scopedKey = `${THREAD_READS_KEY_BASE}:student:${studentId}`;
+      window.localStorage.setItem(scopedKey, JSON.stringify(next));
+      return next;
+    });
+  }, [activeStudent?.id, activeThreadId, messages]);
+
+  useEffect(() => {
+    if (!activeThreadId) return;
+    const key = `typing:${activeThreadId}:teacher`;
+    const checkTyping = async () => {
+      try {
+        const response = await fetch(
+          `/api/typing?key=${encodeURIComponent(key)}`
+        );
+        if (!response.ok) {
+          setTeacherTyping(false);
+          return;
+        }
+        const data = (await response.json()) as { lastSeen?: string | null };
+        if (!data.lastSeen) {
+          setTeacherTyping(false);
+          return;
+        }
+        const diff = Date.now() - new Date(data.lastSeen).getTime();
+        setTeacherTyping(diff < 4000);
+      } catch {
+        setTeacherTyping(false);
+      }
+    };
+    void checkTyping();
+    const interval = window.setInterval(() => {
+      void checkTyping();
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeThreadId]);
+
+  useEffect(() => {
+    if (!activeThreadId) return;
+    if (!draft.trim()) return;
+    const now = Date.now();
+    if (now - lastTypingPing.current < 2000) return;
+    lastTypingPing.current = now;
+    void fetch("/api/typing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: `typing:${activeThreadId}:student` }),
+    });
+  }, [activeThreadId, draft]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, activeThreadId]);
 
   const handleSend = () => {
     if (!canSend) return;
@@ -239,13 +406,12 @@ export default function StudentMessagesPage() {
       text: draft.trim(),
       timestamp: new Date().toISOString(),
     };
-    setMessagesByThread((prev) => {
-      const next = {
-        ...prev,
-        [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
-      };
-      persistThreads(next);
-      return next;
+    setMessagesByThread((prev) => ({
+      ...prev,
+      [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
+    }));
+    void persistMessage(activeThreadId, message).then(() => {
+      void loadThreads();
     });
     setDraft("");
   };
@@ -271,17 +437,10 @@ export default function StudentMessagesPage() {
               Send a message
             </h2>
             <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
-              Message your teacher any time. No subject line needed.
+              Send a quick update or question to your teacher.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              Text Only
-            </span>
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              Replies Enabled
-            </span>
-          </div>
+          <div />
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -293,15 +452,12 @@ export default function StudentMessagesPage() {
               <div className="mt-4 space-y-4">
                 <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Assigned Teacher
+                    Teacher
                   </p>
                   {activeTeacher ? (
                     <div className="mt-2">
                       <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                        {activeTeacher.name}
-                      </p>
-                      <p className="text-xs text-[var(--c-6f6c65)]">
-                        {activeTeacher.region ?? "Region"} · {activeTeacher.email}
+                        {teacherDisplayName}
                       </p>
                     </div>
                   ) : (
@@ -313,7 +469,7 @@ export default function StudentMessagesPage() {
 
                 <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Student Profile
+                    Student
                   </p>
                   {activeStudent ? (
                     <div className="mt-2">
@@ -355,6 +511,10 @@ export default function StudentMessagesPage() {
                     );
                     const lastMessage =
                       threadMessages[threadMessages.length - 1];
+                    const unreadCount = getUnreadCount(
+                      threadId,
+                      threadMessages
+                    );
                     const isActive = activeThreadId === threadId;
 
                     return (
@@ -366,9 +526,20 @@ export default function StudentMessagesPage() {
                             : "w-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-left"
                         }
                       >
-                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {activeTeacher?.name ?? threadTeacher?.name ?? "Teacher"}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                            {activeTeacher?.goesBy ??
+                              activeTeacher?.name ??
+                              threadTeacher?.goesBy ??
+                              threadTeacher?.name ??
+                              "Teacher"}
+                          </p>
+                          {unreadCount > 0 ? (
+                            <span className="rounded-full bg-[var(--c-c8102e)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                              {unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                           {lastMessage?.text ?? "New conversation"}
                         </p>
@@ -387,32 +558,35 @@ export default function StudentMessagesPage() {
             </div>
           </aside>
 
-          <div className="flex min-h-[calc(100vh-420px)] flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/90 backdrop-blur">
-            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-h-[calc(100vh-420px)] flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/90 backdrop-blur overflow-hidden">
+            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
                   Conversation
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                  {activeTeacher?.name ?? "Teacher"}
+                  {teacherDisplayName}
                 </h3>
-                <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
-                  {activeTeacher
-                    ? `${activeTeacher.region ?? "Region"} · ${activeTeacher.email}`
-                    : "Your teacher will appear here"}
-                </p>
+                {activeTeacher ? null : (
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                    Your teacher will appear here
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-xs font-semibold text-[var(--c-6f6c65)]">
-                  Live
+                <span
+                  className={`rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${
+                    teacherOnline
+                      ? "border-[color:rgba(16,185,129,0.35)] bg-[color:rgba(16,185,129,0.18)] text-[color:rgb(16,185,129)]"
+                      : "border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]"
+                  }`}
+                >
+                  {teacherOnline ? "Online" : "Offline"}
                 </span>
-                <button className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                  View Details
-                </button>
               </div>
             </div>
 
-            <div className="flex-1 space-y-4 px-5 py-6">
+            <div className="flex-1 space-y-4 px-5 py-6 min-h-[320px] max-h-[560px] overflow-y-auto">
               {messages.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-4 py-6 text-center text-sm text-[var(--c-6f6c65)]">
                   No messages yet. Send a note to start the conversation.
@@ -435,7 +609,7 @@ export default function StudentMessagesPage() {
                     >
                       {!isStudent && (
                         <div className="rounded-full bg-[var(--c-f8f6f1)] px-3 py-2 text-xs font-semibold text-[var(--c-6f6c65)]">
-                          {activeTeacher ? getInitials(activeTeacher.name) : "TE"}
+                          {teacherDisplayName}
                         </div>
                       )}
                       <div className={bubbleStyles}>
@@ -455,7 +629,7 @@ export default function StudentMessagesPage() {
                               : "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
                           }
                         >
-                          {isStudent ? "You" : "Incoming"} ·{" "}
+                          {isStudent ? "You" : teacherDisplayName} ·{" "}
                           {formatTime(new Date(message.timestamp))}
                         </p>
                       </div>
@@ -468,17 +642,28 @@ export default function StudentMessagesPage() {
                   );
                 })
               )}
+              {teacherTyping ? (
+                <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:0ms] [animation-duration:1s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:150ms] [animation-duration:1s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--c-9a9892)] [animation-delay:300ms] [animation-duration:1s]" />
+                  </span>
+                  {teacherDisplayName} is typing
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-[var(--c-ecebe7)] px-5 py-4">
-              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-4 py-3">
+            <div className="border-t border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4">
+              <div className="rounded-2xl border border-[var(--c-d9e2ef)] bg-[var(--c-d9e2ef)] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
                       Reply
                     </p>
                     <p className="text-sm text-[var(--c-6f6c65)]">
-                      Type your message. Press send to deliver instantly.
+                      Type your message and press send.
                     </p>
                   </div>
                   <button

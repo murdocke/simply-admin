@@ -7,6 +7,7 @@ type AccountRecord = {
   role: string;
   name: string;
   email: string;
+  goesBy?: string;
   status: string;
   lastLogin: string | null;
   password?: string;

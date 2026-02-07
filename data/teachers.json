@@ -52,10 +52,10 @@
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
       "region": "South",
-      "status": "Licensed",
       "createdAt": "2026-02-05T00:37:54.486Z",
       "updatedAt": "2026-02-06T11:25:34.243Z",
       "username": "brian",
+      "goesBy": "Mr. Brian",
       "password": "123456"
     },
     {

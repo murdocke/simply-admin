@@ -24,8 +24,10 @@
       "teacher": "brian",
       "name": "Axel",
       "email": "joybeth.martinez@gmail.com",
+      "username": "axel",
       "level": "Level 2",
       "status": "Active",
+      "password": "123456",
       "lessonFeeAmount": "320",
       "lessonFeePeriod": "Per Mo",
       "lessonDay": "Friday",
@@ -169,7 +171,9 @@
       "lessonNotes": "",
       "studentAlert": "",
       "createdAt": "2026-02-06T09:54:45.256Z",
-      "updatedAt": "2026-02-06T09:54:45.256Z"
+      "updatedAt": "2026-02-06T09:54:45.256Z",
+      "username": "quinn",
+      "password": "123456"
     },
     {
       "id": "ae84f7af-4839-4d59-b694-18fae50cb4bd",
@@ -302,7 +306,7 @@
       "lessonNotes": "",
       "studentAlert": "",
       "createdAt": "2026-02-06T09:43:11.210Z",
-      "updatedAt": "2026-02-06T09:43:11.210Z"
+      "updatedAt": "2026-02-06T20:01:28.612Z"
     },
     {
       "id": "4e14b3c8-e8eb-4434-93e4-1193eb139393",

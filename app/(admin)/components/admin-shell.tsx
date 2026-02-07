@@ -101,6 +101,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [accountInfo, setAccountInfo] = useState<{
     name: string;
     email: string;
+    goesBy?: string;
     status: string;
     lastLogin: string | null;
   } | null>(null);
@@ -108,6 +109,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [accountForm, setAccountForm] = useState({
     name: '',
     email: '',
+    goesBy: '',
     password: '',
   });
   const [accountSaving, setAccountSaving] = useState(false);
@@ -160,6 +162,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             account?: {
               name: string;
               email: string;
+              goesBy?: string;
               status: string;
               lastLogin: string | null;
             };
@@ -537,6 +540,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     setAccountForm({
       name: accountInfo?.name ?? '',
       email: accountInfo?.email ?? '',
+      goesBy: accountInfo?.goesBy ?? '',
       password: '',
     });
     setAccountError(null);
@@ -565,12 +569,13 @@ export default function AdminShell({ children }: AdminShellProps) {
             role: user.role,
             name: accountForm.name.trim(),
             email: accountForm.email.trim(),
+            goesBy: accountForm.goesBy.trim(),
             password: accountForm.password.trim() || undefined,
           }),
         },
       );
       const data = (await response.json()) as {
-        account?: { name: string; email: string; status: string };
+        account?: { name: string; email: string; status: string; goesBy?: string };
         error?: string;
       };
       if (!response.ok || !data.account) {
@@ -579,6 +584,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       setAccountInfo(current => ({
         name: data.account?.name ?? current?.name ?? '',
         email: data.account?.email ?? current?.email ?? '',
+        goesBy: data.account?.goesBy ?? current?.goesBy ?? '',
         status: data.account?.status ?? current?.status ?? 'Active',
         lastLogin: current?.lastLogin ?? null,
       }));
@@ -1189,19 +1195,30 @@ export default function AdminShell({ children }: AdminShellProps) {
                 Update your profile details. Role and username are locked.
               </p>
             </div>
-            <button
-              onClick={closeAccountModal}
-              className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
-            >
-              Close
-            </button>
           </div>
 
-          <form className="mt-6 space-y-4" onSubmit={handleAccountSave}>
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={handleAccountSave}
+            autoComplete="off"
+            onKeyDown={event => {
+              if (
+                event.key === 'Enter' &&
+                event.target instanceof HTMLTextAreaElement
+              ) {
+                return;
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleAccountSave(event as React.FormEvent<HTMLFormElement>);
+              }
+            }}
+          >
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                 Name
                 <input
+                  autoComplete="name"
                   value={accountForm.name}
                   onChange={event =>
                     setAccountForm(current => ({
@@ -1216,6 +1233,7 @@ export default function AdminShell({ children }: AdminShellProps) {
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                 Email
                 <input
+                  autoComplete="email"
                   value={accountForm.email}
                   onChange={event =>
                     setAccountForm(current => ({
@@ -1228,10 +1246,26 @@ export default function AdminShell({ children }: AdminShellProps) {
                 />
               </label>
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Goes By
+                <input
+                  autoComplete="nickname"
+                  value={accountForm.goesBy}
+                  onChange={event =>
+                    setAccountForm(current => ({
+                      ...current,
+                      goesBy: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                  placeholder="e.g., Mr. Neil"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                 Username
                 <input
                   value={user?.username ?? ''}
                   disabled
+                  autoComplete="username"
                   className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f0ec)] px-4 py-3 text-sm text-[var(--c-6f6c65)]"
                 />
               </label>
@@ -1240,6 +1274,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                 <input
                   value={user?.role ?? ''}
                   disabled
+                  autoComplete="organization"
                   className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f0ec)] px-4 py-3 text-sm text-[var(--c-6f6c65)]"
                 />
               </label>
@@ -1247,6 +1282,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                 Password
                 <input
                   type="password"
+                  autoComplete="new-password"
                   value={accountForm.password}
                   onChange={event =>
                     setAccountForm(current => ({
