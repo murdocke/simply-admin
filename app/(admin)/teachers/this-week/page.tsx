@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -100,6 +100,7 @@ export default function TeacherThisWeekPage() {
       color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
       recurring: boolean;
       startWeek: string;
+      dateKey?: string;
     }[]
   >([]);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -169,7 +170,7 @@ export default function TeacherThisWeekPage() {
     }
   }, [teacherName]);
 
-  useEffect(() => {
+  const loadPersonalEvents = useCallback(() => {
     if (!teacherName) return;
     const key = `sm_personal_events:${teacherName}`;
     const stored = window.localStorage.getItem(key);
@@ -180,12 +181,46 @@ export default function TeacherThisWeekPage() {
     try {
       const parsed = JSON.parse(stored) as typeof personalEvents;
       if (Array.isArray(parsed)) {
-        setPersonalEvents(parsed);
+        let didUpdate = false;
+        const next = parsed.map(event => {
+          if (event.recurring || event.dateKey || !event.startWeek) return event;
+          const startWeek = new Date(event.startWeek);
+          if (Number.isNaN(startWeek.getTime())) return event;
+          const startIndex = startWeek.getDay();
+          const targetIndex = WEEK_DAYS.findIndex(
+            day => day.toLowerCase() === event.day.toLowerCase(),
+          );
+          if (targetIndex < 0) return event;
+          const offset = (targetIndex - startIndex + 7) % 7;
+          const eventDate = new Date(startWeek);
+          eventDate.setDate(startWeek.getDate() + offset);
+          const dateKey = eventDate.toISOString().slice(0, 10);
+          didUpdate = true;
+          return { ...event, dateKey };
+        });
+        if (didUpdate) {
+          window.localStorage.setItem(key, JSON.stringify(next));
+        }
+        setPersonalEvents(next);
       }
     } catch {
       setPersonalEvents([]);
     }
   }, [teacherName]);
+
+  useEffect(() => {
+    loadPersonalEvents();
+  }, [loadPersonalEvents]);
+
+  useEffect(() => {
+    const handleSync = () => loadPersonalEvents();
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('sm-personal-events-updated', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('sm-personal-events-updated', handleSync);
+    };
+  }, [loadPersonalEvents]);
 
   useEffect(() => {
     if (!teacherName) return;
@@ -299,11 +334,43 @@ export default function TeacherThisWeekPage() {
       current.push({ ...student, kind: 'lesson' });
       map.set(day, current);
     });
+    const weekStartDate = weekDates[0];
+    const weekEndDate = weekDates[weekDates.length - 1];
+
+    const weekDateMap = new Map(
+      weekDates.map(entry => [
+        entry.date.toISOString().slice(0, 10),
+        entry.day,
+      ]),
+    );
+
     personalEvents.forEach(event => {
-      if (!event.recurring && event.startWeek !== currentWeekKey) return;
-      const current = map.get(event.day) ?? [];
+      if (event.recurring) {
+        const current = map.get(event.day) ?? [];
+        current.push({ ...event, kind: 'event' });
+        map.set(event.day, current);
+        return;
+      }
+      const eventDate = event.dateKey
+        ? new Date(`${event.dateKey}T00:00:00`)
+        : new Date(event.startWeek);
+      if (!event.dateKey) {
+        if (Number.isNaN(eventDate.getTime())) return;
+        const startIndex = eventDate.getDay();
+        const targetIndex = WEEK_DAYS.findIndex(
+          day => day.toLowerCase() === event.day.toLowerCase(),
+        );
+        if (targetIndex < 0) return;
+        const offset = (targetIndex - startIndex + 7) % 7;
+        eventDate.setDate(eventDate.getDate() + offset);
+      }
+      if (eventDate < weekStartDate || eventDate > weekEndDate) return;
+      const eventKey = eventDate.toISOString().slice(0, 10);
+      const dayLabel = weekDateMap.get(eventKey);
+      if (!dayLabel) return;
+      const current = map.get(dayLabel) ?? [];
       current.push({ ...event, kind: 'event' });
-      map.set(event.day, current);
+      map.set(dayLabel, current);
     });
     map.forEach((list, day) => {
       map.set(
@@ -320,6 +387,14 @@ export default function TeacherThisWeekPage() {
     return map;
   }, [currentWeekKey, personalEvents, students]);
 
+  const getDateKeyForDay = (day: WeekDay) => {
+    const matched = weekDates.find(entry => entry.day === day);
+    if (!matched) return currentWeekKey;
+    const date = new Date(matched.date);
+    date.setHours(0, 0, 0, 0);
+    return date.toISOString().slice(0, 10);
+  };
+
   const savePersonalEvents = (nextEvents: typeof personalEvents) => {
     if (teacherName) {
       window.localStorage.setItem(
@@ -328,6 +403,7 @@ export default function TeacherThisWeekPage() {
       );
     }
     setPersonalEvents(nextEvents);
+    window.dispatchEvent(new Event('sm-personal-events-updated'));
   };
 
   const handleWeekStartChange = (value: WeekDay) => {
@@ -380,6 +456,13 @@ export default function TeacherThisWeekPage() {
     setIsEventModalOpen(false);
   };
 
+  const handleDeleteEvent = () => {
+    if (!editingEventId) return;
+    const next = personalEvents.filter(event => event.id !== editingEventId);
+    savePersonalEvents(next);
+    setIsEventModalOpen(false);
+  };
+
   const handleAddEvent = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const label = eventForm.label.trim();
@@ -396,6 +479,9 @@ export default function TeacherThisWeekPage() {
                 duration: eventForm.duration,
                 color: eventForm.color,
                 recurring: eventForm.recurring,
+                dateKey: eventForm.recurring
+                  ? item.dateKey
+                  : getDateKeyForDay(eventForm.day),
               }
             : item,
         )
@@ -409,6 +495,9 @@ export default function TeacherThisWeekPage() {
             color: eventForm.color,
             recurring: eventForm.recurring,
             startWeek: currentWeekKey,
+            dateKey: eventForm.recurring
+              ? undefined
+              : getDateKeyForDay(eventForm.day),
           },
           ...personalEvents,
         ];
@@ -882,20 +971,33 @@ export default function TeacherThisWeekPage() {
                 Recurring weekly
               </label>
 
-              <div className="flex items-center justify-end gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={closeEventModal}
-                  className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-6 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-6 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
-                >
-                  {editingEventId ? 'Save Event' : 'Add Event'}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {editingEventId ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteEvent}
+                    className="rounded-full border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-5 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-8f2f3b)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  >
+                    Delete Event
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={closeEventModal}
+                    className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-6 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-6 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                  >
+                    {editingEventId ? 'Save Event' : 'Add Event'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

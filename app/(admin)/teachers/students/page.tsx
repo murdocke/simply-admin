@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -45,6 +45,51 @@ const formatLessonFee = (student: StudentRecord) => {
   if (!student.lessonFeeAmount) return '—';
   const period = student.lessonFeePeriod ?? 'Per Mo';
   return `${student.lessonFeeAmount} ${period}`;
+};
+
+const WEEK_DAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+const startOfDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(date.getDate() + days);
+  return next;
+};
+
+const formatDateKey = (date: Date) => {
+  const value = startOfDay(date);
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLessonDateForPlan = (lessonDay?: string, baseDate = new Date()) => {
+  if (!lessonDay) return startOfDay(baseDate);
+  const dayIndex = WEEK_DAYS.findIndex(
+    day => day.toLowerCase() === lessonDay.toLowerCase(),
+  );
+  if (dayIndex < 0) return startOfDay(baseDate);
+  const today = startOfDay(baseDate);
+  const diffPrev = (today.getDay() - dayIndex + 7) % 7;
+  const prev = addDays(today, -diffPrev);
+  const diffNext = (dayIndex - today.getDay() + 7) % 7;
+  const next = addDays(today, diffNext);
+  const daysSincePrev = (today.getTime() - prev.getTime()) / 86400000;
+  const daysUntilNext = (next.getTime() - today.getTime()) / 86400000;
+  if (daysSincePrev <= 3) return prev;
+  if (daysUntilNext <= 3) return next;
+  return next;
 };
 
 const defaultForm = {
@@ -103,10 +148,20 @@ export default function TeacherStudentsPage() {
     notes: '',
     resources: '',
   });
+  const [planWindow, setPlanWindow] = useState<{
+    lessonDate: string;
+    rangeStart: string;
+    rangeEnd: string;
+  } | null>(null);
   const [lessonPlanItems, setLessonPlanItems] = useState<
     { title: string; section: string; material: string; part: string }[]
   >([]);
   const [isPlanCollapsed, setIsPlanCollapsed] = useState(false);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [isPlanSaving, setIsPlanSaving] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [assignToast, setAssignToast] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StudentRecord | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -477,6 +532,8 @@ export default function TeacherStudentsPage() {
     });
     setLessonPlanItems([]);
     setIsPlanCollapsed(false);
+    setPlanError(null);
+    setAssignToast(null);
     setIsAssignModalOpen(true);
   };
 
@@ -563,6 +620,62 @@ export default function TeacherStudentsPage() {
         material: '',
         part: '',
       }));
+    }
+  };
+
+  const handleAssignLessonSave = async () => {
+    if (!selectedStudent) return;
+    if (lessonPlanItems.length === 0 && !assignForm.notes.trim()) {
+      setPlanError('Add at least one lesson item or a note before saving.');
+      return;
+    }
+    const lessonDate = getLessonDateForPlan(selectedStudent.lessonDay);
+    const lessonDateKey = formatDateKey(lessonDate);
+    const rangeStartKey = formatDateKey(addDays(lessonDate, -3));
+    const rangeEndKey = formatDateKey(addDays(lessonDate, 3));
+    setIsPlanSaving(true);
+    setPlanError(null);
+
+    try {
+      const response = await fetch('/api/lesson-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: {
+            studentId: selectedStudent.id,
+            studentName: selectedStudent.name,
+            teacher: selectedStudent.teacher,
+            lessonDate: lessonDateKey,
+            rangeStart: rangeStartKey,
+            rangeEnd: rangeEndKey,
+            items: lessonPlanItems,
+            notes: assignForm.notes.trim(),
+            focus: assignForm.focus,
+            resources: assignForm.resources,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Request failed');
+      }
+
+      setPlanWindow({
+        lessonDate: lessonDateKey,
+        rangeStart: rangeStartKey,
+        rangeEnd: rangeEndKey,
+      });
+      setAssignToast('Lesson plan saved.');
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+      toastTimeoutRef.current = window.setTimeout(() => {
+        setAssignToast(null);
+      }, 2500);
+    } catch {
+      setPlanError('Unable to save the lesson plan. Please try again.');
+    } finally {
+      setIsPlanSaving(false);
     }
   };
 
@@ -855,6 +968,54 @@ export default function TeacherStudentsPage() {
       )
       .slice(0, 3);
   }, [recentSelectedIds, showArchived, students]);
+
+  const selectedStudent = recentSelectedStudents[0] ?? null;
+
+  useEffect(() => {
+    if (!isAssignModalOpen || !selectedStudent) return;
+    const lessonDate = getLessonDateForPlan(selectedStudent.lessonDay);
+    const lessonDateKey = formatDateKey(lessonDate);
+    const rangeStartKey = formatDateKey(addDays(lessonDate, -3));
+    const rangeEndKey = formatDateKey(addDays(lessonDate, 3));
+    setPlanWindow({
+      lessonDate: lessonDateKey,
+      rangeStart: rangeStartKey,
+      rangeEnd: rangeEndKey,
+    });
+    setPlanError(null);
+    setIsPlanLoading(true);
+
+    fetch(
+      `/api/lesson-plans?studentId=${encodeURIComponent(
+        selectedStudent.id,
+      )}&lessonDate=${encodeURIComponent(lessonDateKey)}`,
+    )
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (data?.plan) {
+          setLessonPlanItems(data.plan.items ?? []);
+          setAssignForm(current => ({
+            ...current,
+            notes: data.plan.notes ?? '',
+            focus: data.plan.focus ?? current.focus,
+            resources: data.plan.resources ?? '',
+          }));
+        } else {
+          setLessonPlanItems([]);
+          setAssignForm(current => ({
+            ...current,
+            notes: '',
+            resources: '',
+          }));
+        }
+      })
+      .catch(() => {
+        setPlanError('Unable to load the lesson plan right now.');
+      })
+      .finally(() => {
+        setIsPlanLoading(false);
+      });
+  }, [isAssignModalOpen, selectedStudent]);
 
   const lessonOverlapSummary = useMemo(() => {
     const parseMinutes = (value: string) => {
@@ -1218,12 +1379,12 @@ export default function TeacherStudentsPage() {
                         >
                           Assign Lesson
                         </button>
-                        <button
+                        <Link
+                          href="/teachers/practice-log"
                           className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
-                          type="button"
                         >
                           Practice Log
-                        </button>
+                        </Link>
                       </div>
                     ) : null}
                   </div>
@@ -2193,11 +2354,17 @@ export default function TeacherStudentsPage() {
                   Assign Lesson
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-                  {recentSelectedStudents[0]?.name ?? 'Selected Student'}
+                  {selectedStudent?.name ?? 'Selected Student'}
                 </h2>
                 <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
                   Draft a lesson plan and attach resources for this student.
                 </p>
+                {planWindow ? (
+                  <div className="mt-2 space-y-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    <p>{`Lesson Date ${planWindow.lessonDate}`}</p>
+                    <p>{`Applies ${planWindow.rangeStart} → ${planWindow.rangeEnd}`}</p>
+                  </div>
+                ) : null}
               </div>
               <button
                 onClick={closeAssignModal}
@@ -2206,8 +2373,23 @@ export default function TeacherStudentsPage() {
                 Close
               </button>
             </div>
+            {assignToast ? (
+              <div className="absolute right-6 top-20 rounded-full border border-[var(--c-e6f4ff)] bg-[var(--c-f5f9ff)] px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-28527a)] shadow-sm">
+                {assignToast}
+              </div>
+            ) : null}
 
             <form className="mt-6 space-y-4">
+              {isPlanLoading ? (
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Loading saved lesson plan...
+                </p>
+              ) : null}
+              {planError ? (
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  {planError}
+                </p>
+              ) : null}
               <div className="space-y-4">
                 <label className="text-xs font-semibold tracking-[0.04em] text-[var(--c-6f6c65)]">
                   Choose Lesson Type
@@ -2375,10 +2557,10 @@ export default function TeacherStudentsPage() {
                       <button
                         type="button"
                         onClick={handleAddToLessonPlan}
-                        className="w-full rounded-2xl bg-[var(--c-3a3935)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+                        className="w-full rounded-2xl border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
                       >
                         {`Add to Lesson Plan for ${
-                          recentSelectedStudents[0]?.name ?? 'Student'
+                          selectedStudent?.name ?? 'Student'
                         }`}
                       </button>
                     </div>
@@ -2473,9 +2655,11 @@ export default function TeacherStudentsPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+                  onClick={handleAssignLessonSave}
+                  disabled={isPlanSaving}
+                  className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Assign Lesson
+                  {isPlanSaving ? 'Saving...' : 'Assign Lesson'}
                 </button>
               </div>
             </form>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -27,6 +27,7 @@ type PersonalEvent = {
   color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
   recurring: boolean;
   startWeek: string;
+  dateKey?: string;
 };
 
 const WEEK_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -170,7 +171,7 @@ export default function TeacherSchedulePage() {
     };
   }, [teacherName]);
 
-  useEffect(() => {
+  const loadPersonalEvents = useCallback(() => {
     if (!teacherName) return;
     const key = `sm_personal_events:${teacherName}`;
     const stored = window.localStorage.getItem(key);
@@ -187,6 +188,20 @@ export default function TeacherSchedulePage() {
       setPersonalEvents([]);
     }
   }, [teacherName]);
+
+  useEffect(() => {
+    loadPersonalEvents();
+  }, [loadPersonalEvents]);
+
+  useEffect(() => {
+    const handleSync = () => loadPersonalEvents();
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('sm-personal-events-updated', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('sm-personal-events-updated', handleSync);
+    };
+  }, [loadPersonalEvents]);
 
   const needsTeacherSelection =
     role === 'company' && viewRole === 'teacher' && !teacherName;
@@ -274,15 +289,18 @@ export default function TeacherSchedulePage() {
           }
         });
       } else {
-        const startWeek = new Date(event.startWeek);
-        const startIndex = startWeek.getDay();
-        const targetIndex = WEEK_DAYS.findIndex(
-          day => day.toLowerCase() === event.day.toLowerCase(),
-        );
-        if (targetIndex < 0) return;
-        const offset = (targetIndex - startIndex + 7) % 7;
-        const date = new Date(startWeek);
-        date.setDate(startWeek.getDate() + offset);
+        const date = event.dateKey
+          ? new Date(`${event.dateKey}T00:00:00`)
+          : new Date(event.startWeek);
+        if (!event.dateKey) {
+          const startIndex = date.getDay();
+          const targetIndex = WEEK_DAYS.findIndex(
+            day => day.toLowerCase() === event.day.toLowerCase(),
+          );
+          if (targetIndex < 0) return;
+          const offset = (targetIndex - startIndex + 7) % 7;
+          date.setDate(date.getDate() + offset);
+        }
         addItem(date, {
           label: event.label,
           time: event.time,
