@@ -32,6 +32,7 @@ type Message = {
   sender: "student" | "teacher";
   text: string;
   timestamp: string;
+  subject?: string;
 };
 
 const getInitials = (name: string) =>
@@ -82,6 +83,9 @@ export default function StudentMessagesPage() {
   const [selectedTeacherId] = useState(teachers[0]?.id ?? "");
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
+  const [threadSubjects, setThreadSubjects] = useState<Record<string, string>>(
+    {}
+  );
   const [threadReads, setThreadReads] = useState<Record<string, string>>({});
   const [teacherOnline, setTeacherOnline] = useState(false);
   const [studentOnline, setStudentOnline] = useState(false);
@@ -94,12 +98,18 @@ export default function StudentMessagesPage() {
       const response = await fetch("/api/messages");
       if (!response.ok) {
         setMessagesByThread({});
+        setThreadSubjects({});
         return;
       }
-      const data = (await response.json()) as { threads?: ThreadStore };
+      const data = (await response.json()) as {
+        threads?: ThreadStore;
+        subjects?: Record<string, string>;
+      };
       setMessagesByThread(data.threads ?? {});
+      setThreadSubjects(data.subjects ?? {});
     } catch {
       setMessagesByThread({});
+      setThreadSubjects({});
     }
   }, []);
 
@@ -319,6 +329,7 @@ export default function StudentMessagesPage() {
       ? buildThreadId(activeStudent.id, activeTeacher.id)
       : "unassigned";
   const messages = messagesByThread[activeThreadId] ?? [];
+  const activeSubject = threadSubjects[activeThreadId];
   const threadEntries = Object.entries(messagesByThread).filter(
     ([, threadMessages]) => threadMessages.length > 0
   );
@@ -511,6 +522,7 @@ export default function StudentMessagesPage() {
                     );
                     const lastMessage =
                       threadMessages[threadMessages.length - 1];
+                    const threadSubject = threadSubjects[threadId];
                     const unreadCount = getUnreadCount(
                       threadId,
                       threadMessages
@@ -540,6 +552,11 @@ export default function StudentMessagesPage() {
                             </span>
                           ) : null}
                         </div>
+                        {threadSubject ? (
+                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                            {threadSubject}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                           {lastMessage?.text ?? "New conversation"}
                         </p>
@@ -567,6 +584,11 @@ export default function StudentMessagesPage() {
                 <h3 className="mt-1 text-lg font-semibold text-[var(--c-1f1f1d)]">
                   {teacherDisplayName}
                 </h3>
+                {activeSubject ? (
+                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    {activeSubject}
+                  </p>
+                ) : null}
                 {activeTeacher ? null : (
                   <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
                     Your teacher will appear here
@@ -595,8 +617,8 @@ export default function StudentMessagesPage() {
                 messages.map((message) => {
                   const isStudent = message.sender === "student";
                   const bubbleStyles = isStudent
-                    ? "max-w-[70%] rounded-2xl bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)] px-4 py-3 text-right"
-                    : "max-w-[70%] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3";
+                    ? "max-w-[85%] rounded-2xl bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)] px-5 py-4 text-right"
+                    : "max-w-[85%] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-5 py-4";
 
                   return (
                     <div
@@ -613,11 +635,22 @@ export default function StudentMessagesPage() {
                         </div>
                       )}
                       <div className={bubbleStyles}>
+                        {message.subject ? (
+                          <p
+                            className={
+                              isStudent
+                                ? "text-[12px] font-semibold uppercase tracking-[0.25em] text-[var(--c-ffffff)] pb-1 border-b border-[color:rgba(255,255,255,0.35)]"
+                                : "text-[12px] font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)] pb-1 border-b border-[var(--c-ecebe7)]"
+                            }
+                          >
+                            {message.subject}
+                          </p>
+                        ) : null}
                         <p
                           className={
                             isStudent
-                              ? "text-sm text-[var(--c-ffffff)]"
-                              : "text-sm text-[var(--c-1f1f1d)]"
+                              ? "text-sm text-[var(--c-ffffff)] mt-2"
+                              : "text-sm text-[var(--c-1f1f1d)] mt-2"
                           }
                         >
                           {message.text}

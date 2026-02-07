@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
 import lessonTypes from './students/lesson-data/lesson-types.json';
 import lessonSections from './students/lesson-data/lesson-sections.json';
+import LockedSectionCard from '../components/locked-section-card';
+import LessonCartPurchaseButton from '../components/lesson-cart-actions';
 
 type TeacherRecord = {
   id: string;
@@ -312,7 +314,7 @@ export default function TeachersPage() {
         </header>
 
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                 Curriculum
@@ -324,21 +326,32 @@ export default function TeachersPage() {
                 Browse each program and open a section to see materials.
               </p>
             </div>
-            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-              Updated weekly
-            </span>
+            <div className="md:pt-4">
+              <LessonCartPurchaseButton />
+            </div>
           </div>
           <div className="mt-6 space-y-6">
-            {lessonTypes.map(type => {
-              const sections =
-                lessonSections[type as keyof typeof lessonSections] ?? [];
+            {lessonTypes
+              .filter(
+                type =>
+                  type !== 'Learn-at-Home' && type !== 'Simply Music Gateway',
+              )
+              .map(type => {
+              const sectionData =
+                lessonSections[type as keyof typeof lessonSections];
+              const sections = Array.isArray(sectionData)
+                ? sectionData
+                : sectionData
+                  ? Object.values(sectionData).flat()
+                  : [];
               return (
-                <div
-                  key={type}
-                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+              <div
+                key={type}
+                id={type === 'Development Program' ? 'development-program' : undefined}
+                className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
+              >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="w-full">
                       <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                         {type}
                       </p>
@@ -347,35 +360,142 @@ export default function TeachersPage() {
                           ? 'Choose a section to view materials.'
                           : 'No sections available yet.'}
                       </p>
+                      {type === 'Extensions Program' ? (
+                        <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                          The Extensions Program is a further collection of
+                          pieces that provide additional source material for
+                          both beginning or more advanced students. It consists
+                          of new or re-purposed compositions and arrangements,
+                          many of which have two or three presentation versions
+                          provided, each pertaining to students who may be at
+                          different stages of their learning.
+                        </p>
+                      ) : null}
                     </div>
-                    <Link
-                      href={`/teachers/programs/${toProgramSlug(type)}`}
-                      className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] hover:text-[var(--c-c8102e)]"
-                    >
-                      View all
-                    </Link>
+                    <div className="sm:pt-1">
+                      <Link
+                        href={`/teachers/programs/${toProgramSlug(type)}?mode=${hubMode}`}
+                        className="inline-flex items-center whitespace-nowrap rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                      >
+                        View all
+                      </Link>
+                    </div>
                   </div>
                   {sections.length > 0 ? (
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {sections.map(section => (
-                        <Link
-                          key={section}
-                          href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}`}
-                          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-fcfcfb)]"
-                        >
-                          <p className="text-sm font-medium text-[var(--c-1f1f1d)]">
-                            {section}
-                          </p>
-                          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                            View materials
-                          </p>
-                        </Link>
-                      ))}
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+                      {Array.isArray(sectionData) ? (
+                        <>
+                          <div className="min-w-0 space-y-4">
+                            {sections
+                              .slice(0, Math.ceil(sections.length / 2))
+                              .map(section => (
+                                <LockedSectionCard
+                                  key={section}
+                                  programName={type}
+                                  sectionName={section}
+                                  href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                />
+                              ))}
+                          </div>
+                          <div className="min-w-0 space-y-4">
+                            {sections
+                              .slice(Math.ceil(sections.length / 2))
+                              .map(section => (
+                                <LockedSectionCard
+                                  key={section}
+                                  programName={type}
+                                  sectionName={section}
+                                  href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                />
+                              ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="col-span-full space-y-10">
+                          {Object.entries(sectionData ?? {}).map(
+                            ([group, groupSections]) => (
+                              <div key={group} className="space-y-4">
+                                <p className="text-sm font-semibold tracking-[0.2em] text-white">
+                                  {group}
+                                </p>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                  {groupSections.map(section => (
+                                    <LockedSectionCard
+                                      key={section}
+                                      programName={type}
+                                      sectionName={section}
+                                      href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </div>
               );
             })}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Special Needs Program
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                Simply Music Gateway
+              </p>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                The Simply Music Gateway Program is a playing-based piano
+                method designed for anybody with special needs and learning
+                differences, including those on the Autism spectrum, as well
+                as those with learning disabilities, neurological
+                dysfunction, developmental delays, and ADHD.
+              </p>
+              <div className="mt-4">
+                <LockedSectionCard
+                  programName="Simply Music Gateway"
+                  sectionName="Materials"
+                  href={`/teachers/programs/${toProgramSlug('Simply Music Gateway')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
+                />
+              </div>
+            </div>
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Self-Study Programs
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]">
+                    Music &amp; Creativity
+                  </button>
+                  <Link
+                    href={`/teachers/programs/${toProgramSlug('Learn-at-Home')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
+                    className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  >
+                    Learn-at-Home
+                  </Link>
+                </div>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  Many students who complete our self-study programs continue
+                  into lessons with a Simply Music Teacher. So you are aware of
+                  the content provided, you may access these programs for
+                  reference in case you acquire a self-study student.
+                </p>
+                <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                  We highly recommend that you create your own free Music &amp;
+                  Creativity Program (MAC) account and familiarize yourself
+                  with the contents. MAC replaces a prior self-study course,
+                  the Learn-at-Home Program (LAH), that was produced and
+                  released in 1999.
+                </p>
+                <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                  For more information on self-study programs please review the
+                  Extras portion of Module 10 of the Initial Teacher Training
+                  Program (ITTP).
+                </p>
+              </div>
+            </div>
           </div>
         </section>
       </div>

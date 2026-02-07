@@ -1,5 +1,5 @@
-import lessonTypes from '../../students/lesson-data/lesson-types.json';
-import lessonSections from '../../students/lesson-data/lesson-sections.json';
+import lessonTypes from '../../../teachers/students/lesson-data/lesson-types.json';
+import lessonSections from '../../../teachers/students/lesson-data/lesson-sections.json';
 import LockedSectionCard from '../../../components/locked-section-card';
 
 const toProgramSlug = (value: string) =>
@@ -8,17 +8,12 @@ const toProgramSlug = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
-export default async function TeacherProgramPage({
+export default async function StudentProgramPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ program: string }>;
-  searchParams?: Promise<{ mode?: string }>;
 }) {
   const { program } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const modeQuery =
-    resolvedSearchParams?.mode === 'teaching' ? 'teaching' : 'training';
   const programName =
     lessonTypes.find(type => toProgramSlug(type) === program) ?? null;
   const sectionData =
@@ -36,7 +31,7 @@ export default async function TeacherProgramPage({
     <div className="space-y-8">
       <header className="flex flex-col gap-3">
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-          Program Library
+          Curriculum
         </p>
         <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)]">
           {programName ?? 'Program'}
@@ -59,7 +54,7 @@ export default async function TeacherProgramPage({
                       key={section}
                       programName={programName}
                       sectionName={section}
-                      href={`/teachers/programs/${toProgramSlug(programName)}/${toProgramSlug(section)}?mode=${modeQuery}`}
+                      href={`/students/lesson-library/${toProgramSlug(programName)}/${toProgramSlug(section)}`}
                       className="rounded-xl px-4 py-3"
                     />
                   ))}
@@ -70,7 +65,7 @@ export default async function TeacherProgramPage({
                       key={section}
                       programName={programName}
                       sectionName={section}
-                      href={`/teachers/programs/${toProgramSlug(programName)}/${toProgramSlug(section)}?mode=${modeQuery}`}
+                      href={`/students/lesson-library/${toProgramSlug(programName)}/${toProgramSlug(section)}`}
                       className="rounded-xl px-4 py-3"
                     />
                   ))}
@@ -83,17 +78,17 @@ export default async function TeacherProgramPage({
                     <p className="text-sm font-semibold tracking-[0.2em] text-white">
                       {group}
                     </p>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-6">
-                      {groupSections.map(section => (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-6">
+                        {groupSections.map(section => (
                         <LockedSectionCard
                           key={section}
                           programName={programName}
                           sectionName={section}
-                          href={`/teachers/programs/${toProgramSlug(programName)}/${toProgramSlug(section)}?mode=${modeQuery}`}
+                          href={`/students/lesson-library/${toProgramSlug(programName)}/${toProgramSlug(section)}`}
                           className="rounded-xl px-4 py-3"
                         />
-                      ))}
-                    </div>
+                        ))}
+                      </div>
                   </div>
                 ))}
               </div>

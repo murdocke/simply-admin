@@ -1251,9 +1251,13 @@ export default function TeacherStudentsPage() {
     );
   };
 
-  const lessonSectionOptions = useMemo(() => {
+  const lessonSectionData = useMemo(() => {
     if (!assignForm.title) return [];
-    return (lessonSections as Record<string, string[]>)[assignForm.title] ?? [];
+    return (
+      (lessonSections as Record<string, string[] | Record<string, string[]>>)[
+        assignForm.title
+      ] ?? []
+    );
   }, [assignForm.title]);
 
   const lessonMaterialOptions = useMemo(() => {
@@ -1380,10 +1384,10 @@ export default function TeacherStudentsPage() {
                           Assign Lesson
                         </button>
                         <Link
-                          href="/teachers/practice-log"
+                          href="/teachers/practice-hub"
                           className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
                         >
-                          Practice Log
+                          Practice Hub
                         </Link>
                       </div>
                     ) : null}
@@ -2366,12 +2370,6 @@ export default function TeacherStudentsPage() {
                   </div>
                 ) : null}
               </div>
-              <button
-                onClick={closeAssignModal}
-                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
-              >
-                Close
-              </button>
             </div>
             {assignToast ? (
               <div className="absolute right-6 top-20 rounded-full border border-[var(--c-e6f4ff)] bg-[var(--c-f5f9ff)] px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-28527a)] shadow-sm">
@@ -2446,11 +2444,23 @@ export default function TeacherStudentsPage() {
                         className="mt-2 w-full appearance-none rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 pr-10 text-sm text-[var(--c-1f1f1d)]"
                       >
                         <option value="">{`Select Section - ${assignForm.title}`}</option>
-                        {lessonSectionOptions.map(section => (
-                          <option key={section} value={section}>
-                            {section}
-                          </option>
-                        ))}
+                      {Array.isArray(lessonSectionData)
+                        ? lessonSectionData.map(section => (
+                            <option key={section} value={section}>
+                              {section}
+                            </option>
+                          ))
+                        : Object.entries(lessonSectionData).map(
+                            ([group, sections]) => (
+                              <optgroup key={group} label={group}>
+                                {sections.map(section => (
+                                  <option key={section} value={section}>
+                                    {section}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ),
+                          )}
                       </select>
                       <svg
                         aria-hidden="true"
@@ -2645,11 +2655,11 @@ export default function TeacherStudentsPage() {
                 />
               </label>
 
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
                   onClick={closeAssignModal}
-                  className="rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                  className="w-full rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
                 >
                   Cancel
                 </button>
@@ -2657,7 +2667,7 @@ export default function TeacherStudentsPage() {
                   type="button"
                   onClick={handleAssignLessonSave}
                   disabled={isPlanSaving}
-                  className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isPlanSaving ? 'Saving...' : 'Assign Lesson'}
                 </button>

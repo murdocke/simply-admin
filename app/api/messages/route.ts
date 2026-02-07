@@ -7,10 +7,12 @@ type Message = {
   sender: 'teacher' | 'student' | 'corporate';
   text: string;
   timestamp: string;
+  subject?: string;
 };
 
 type MessageStore = {
   threads: Record<string, Message[]>;
+  subjects?: Record<string, string>;
 };
 
 const messagesFile = path.join(process.cwd(), 'data', 'messages.json');
@@ -35,13 +37,17 @@ async function writeStore(data: MessageStore) {
 
 export async function GET() {
   const store = await readStore();
-  return NextResponse.json({ threads: store.threads ?? {} });
+  return NextResponse.json({
+    threads: store.threads ?? {},
+    subjects: store.subjects ?? {},
+  });
 }
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     threadId?: string;
     message?: Message;
+    subject?: string;
   };
 
   if (!body.threadId || !body.message) {
@@ -54,6 +60,12 @@ export async function POST(request: Request) {
   const store = await readStore();
   const current = store.threads[body.threadId] ?? [];
   store.threads[body.threadId] = [...current, body.message];
+  if (body.subject) {
+    store.subjects = store.subjects ?? {};
+    if (!store.subjects[body.threadId]) {
+      store.subjects[body.threadId] = body.subject;
+    }
+  }
   await writeStore(store);
 
   return NextResponse.json({ ok: true });

@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import teachersData from '@/data/teachers.json';
+import studentsData from '@/data/students.json';
 import {
   AUTH_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -18,6 +20,7 @@ import {
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from '../../components/theme';
+import lessonParts from '../teachers/students/lesson-data/lesson-parts.json';
 
 type TeacherRecord = {
   id: string;
@@ -56,8 +59,19 @@ type SelectedStudent = {
   email?: string;
 };
 
+type NotificationMessage = {
+  id: string;
+  sender: string;
+  text: string;
+  subject?: string;
+  threadId: string;
+  timestamp: string;
+  leaving?: boolean;
+};
+
 const RECENT_TEACHERS_KEY = 'sm_recent_teachers';
 const RECENT_STUDENTS_KEY = 'sm_recent_students';
+const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
 const normalizeTeacherStatus = (
   status:
     | 'Licensed'
@@ -105,6 +119,20 @@ export default function AdminShell({ children }: AdminShellProps) {
     status: string;
     lastLogin: string | null;
   } | null>(null);
+  const [pipState, setPipState] = useState<{
+    open: boolean;
+    playing: boolean;
+    material: string | null;
+    part: string | null;
+    materials: string[];
+  }>({
+    open: false,
+    playing: false,
+    material: null,
+    part: null,
+    materials: [],
+  });
+  const [isPipExpanded, setIsPipExpanded] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [accountForm, setAccountForm] = useState({
     name: '',
@@ -114,6 +142,11 @@ export default function AdminShell({ children }: AdminShellProps) {
   });
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
+  const [hoveredNotifications, setHoveredNotifications] = useState<
+    Record<string, boolean>
+  >({});
+  const notificationTimers = useRef<Record<string, number>>({});
   const recentTeachersKey = useMemo(() => {
     if (!user?.username) return RECENT_TEACHERS_KEY;
     return `${RECENT_TEACHERS_KEY}:${user.username}`;
@@ -134,6 +167,191 @@ export default function AdminShell({ children }: AdminShellProps) {
     if (!user?.username) return RECENT_STUDENTS_KEY;
     return `sm_recent_selected_students:${user.username}:${user.username}`;
   }, [user?.username]);
+
+  const resolveStudentFromUser = useCallback(
+    (username?: string) => {
+      if (!username) return null;
+      const normalized = username.toLowerCase();
+      const studentsList = studentsData.students as StudentRecord[];
+      return (
+        studentsList.find(student => student.email.toLowerCase() === normalized) ??
+        studentsList.find(
+          student => student.name.toLowerCase() === normalized,
+        ) ??
+        studentsList.find(student =>
+          student.name.toLowerCase().startsWith(normalized),
+        ) ??
+        null
+      );
+    },
+    [],
+  );
+
+  const resolveTeacherFromUser = useCallback((username?: string) => {
+    if (!username) return null;
+    const normalized = username.toLowerCase();
+    const teachersList = teachersData.teachers as TeacherRecord[];
+    return (
+      teachersList.find(
+        teacher => teacher.username?.toLowerCase() === normalized,
+      ) ?? null
+    );
+  }, []);
+
+  const scheduleNotificationDismiss = useCallback((id: string) => {
+    const timers = notificationTimers.current;
+    if (timers[id]) {
+      window.clearTimeout(timers[id]);
+      delete timers[id];
+    }
+    timers[id] = window.setTimeout(() => {
+      if (hoveredNotifications[id]) {
+        scheduleNotificationDismiss(id);
+        return;
+      }
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id ? { ...notification, leaving: true } : notification,
+        ),
+      );
+      window.setTimeout(() => {
+        setNotifications(prev => prev.filter(notification => notification.id !== id));
+        delete timers[id];
+      }, 350);
+    }, 10000);
+  }, [hoveredNotifications]);
+
+  const pauseNotificationDismiss = useCallback((id: string) => {
+    const timers = notificationTimers.current;
+    if (timers[id]) {
+      window.clearTimeout(timers[id]);
+      delete timers[id];
+    }
+  }, []);
+
+  const dismissNotification = useCallback((id: string) => {
+    const timers = notificationTimers.current;
+    if (timers[id]) {
+      window.clearTimeout(timers[id]);
+      delete timers[id];
+    }
+    setHoveredNotifications(prev => ({ ...prev, [id]: false }));
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+    window.setTimeout(() => {
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.username || !role) return;
+    const notificationKey = `${MESSAGE_NOTIFICATIONS_KEY}:${role}:${user.username}`;
+    let lastNotified: Record<string, string> = {};
+    try {
+      const stored = window.localStorage.getItem(notificationKey);
+      if (stored) lastNotified = JSON.parse(stored) as Record<string, string>;
+    } catch {
+      lastNotified = {};
+    }
+
+    const parseTeacherIdFromThread = (threadId: string) => {
+      const match = threadId.match(/teacher:([a-f0-9-]+)/i);
+      return match?.[1] ?? null;
+    };
+    const parseStudentIdFromThread = (threadId: string) => {
+      const match = threadId.match(/student:([a-f0-9-]+)/i);
+      return match?.[1] ?? null;
+    };
+
+    const getSenderName = (
+      threadId: string,
+      sender: 'student' | 'teacher' | 'corporate',
+    ) => {
+      if (sender === 'corporate') return 'Simply Music';
+      const teacherId = parseTeacherIdFromThread(threadId);
+      const studentId = parseStudentIdFromThread(threadId);
+      if (sender === 'teacher') {
+        return (
+          (teachersData.teachers as TeacherRecord[]).find(
+            teacher => teacher.id === teacherId,
+          )?.name ?? 'Teacher'
+        );
+      }
+      return (
+        (studentsData.students as StudentRecord[]).find(
+          student => student.id === studentId,
+        )?.name ?? 'Student'
+      );
+    };
+
+    const pollMessages = async () => {
+      try {
+        const response = await fetch('/api/messages');
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          threads?: Record<string, { id: string; sender: 'student' | 'teacher' | 'corporate'; text: string; timestamp: string; subject?: string }[]>;
+        };
+        const threads = data.threads ?? {};
+        const nextNotified = { ...lastNotified };
+        const notificationsToAdd: NotificationMessage[] = [];
+
+        const student = role === 'student' ? resolveStudentFromUser(user.username) : null;
+        const teacher = role === 'teacher' ? resolveTeacherFromUser(user.username) : null;
+
+        Object.entries(threads).forEach(([threadId, messages]) => {
+          if (messages.length === 0) return;
+          const lastMessage = messages[messages.length - 1];
+          const lastTimestamp = lastMessage.timestamp;
+
+          const isStudentThread =
+            student && threadId.startsWith(`student:${student.id}|teacher:`);
+          const isTeacherThread =
+            teacher && threadId.endsWith(`teacher:${teacher.id}`);
+          const isCorporateThread = role === 'company' && threadId.startsWith('corporate|teacher:');
+
+          if (!isStudentThread && !isTeacherThread && !isCorporateThread) return;
+
+          const isIncoming =
+            (role === 'student' && lastMessage.sender === 'teacher') ||
+            (role === 'teacher' &&
+              (lastMessage.sender === 'student' || lastMessage.sender === 'corporate')) ||
+            (role === 'company' && lastMessage.sender === 'teacher');
+
+          if (!isIncoming) return;
+
+          const lastSeen = lastNotified[threadId];
+          if (lastSeen && new Date(lastTimestamp) <= new Date(lastSeen)) return;
+
+          notificationsToAdd.push({
+            id: crypto.randomUUID(),
+            sender: getSenderName(threadId, lastMessage.sender),
+            text: lastMessage.text,
+            subject: lastMessage.subject,
+            threadId,
+            timestamp: lastTimestamp,
+          });
+          nextNotified[threadId] = lastTimestamp;
+        });
+
+        if (notificationsToAdd.length > 0) {
+          setNotifications(prev => {
+            const combined = [...notificationsToAdd, ...prev].slice(0, 3);
+            combined.forEach(note => scheduleNotificationDismiss(note.id));
+            return combined;
+          });
+          lastNotified = nextNotified;
+          window.localStorage.setItem(notificationKey, JSON.stringify(nextNotified));
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    pollMessages();
+    const interval = window.setInterval(pollMessages, 6000);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [role, user?.username, resolveStudentFromUser, resolveTeacherFromUser, scheduleNotificationDismiss]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
@@ -511,6 +729,74 @@ export default function AdminShell({ children }: AdminShellProps) {
     }
   }, [pathname, effectiveRole, router]);
 
+  useEffect(() => {
+    const syncPip = () => {
+      try {
+        const stored = window.localStorage.getItem('sm_pip_state');
+        if (!stored) return;
+        const parsed = JSON.parse(stored) as {
+          open?: boolean;
+          playing?: boolean;
+          material?: string;
+          part?: string;
+          materials?: string[];
+        };
+        setPipState(current => ({
+          open: Boolean(parsed?.open),
+          playing: Boolean(parsed?.playing),
+          material: parsed?.material ?? current.material,
+          part: parsed?.part ?? null,
+          materials: Array.isArray(parsed?.materials)
+            ? parsed.materials
+            : current.materials,
+        }));
+      } catch {
+        // ignore
+      }
+    };
+    syncPip();
+    window.addEventListener('sm-pip-update', syncPip);
+    return () => {
+      window.removeEventListener('sm-pip-update', syncPip);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const inMaterials = pathname?.includes('/materials');
+    try {
+      const stored = window.localStorage.getItem('sm_pip_state');
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as {
+        open?: boolean;
+        playing?: boolean;
+        material?: string;
+        part?: string;
+        materials?: string[];
+      };
+      if (!parsed?.material) return;
+      if (inMaterials) {
+        if (parsed?.open) {
+          window.localStorage.setItem(
+            'sm_pip_state',
+            JSON.stringify({ ...parsed, open: false }),
+          );
+          window.dispatchEvent(new Event('sm-pip-update'));
+        }
+        return;
+      }
+      if (parsed?.playing && !parsed?.open) {
+        window.localStorage.setItem(
+          'sm_pip_state',
+          JSON.stringify({ ...parsed, open: true }),
+        );
+        window.dispatchEvent(new Event('sm-pip-update'));
+      }
+    } catch {
+      // ignore
+    }
+  }, [pathname]);
+
   const items = useMemo(() => {
     if (!effectiveRole) return [];
     return navItems[effectiveRole];
@@ -534,6 +820,63 @@ export default function AdminShell({ children }: AdminShellProps) {
       border: 'border-[var(--c-ecebe7)]',
     };
   }, [effectiveRole]);
+
+  const pipParts = useMemo(() => {
+    if (!pipState.material) return [];
+    const partsMap = lessonParts as Record<string, string[]>;
+    const matchedKey = Object.keys(partsMap).find(prefix =>
+      pipState.material?.startsWith(prefix),
+    );
+    return matchedKey ? partsMap[matchedKey] ?? [] : [];
+  }, [pipState.material]);
+
+  const pipPartIndex = pipState.part
+    ? pipParts.indexOf(pipState.part)
+    : -1;
+  const pipHasParts = pipParts.length > 0;
+  const pipCanPrev = pipHasParts && pipPartIndex > 0;
+  const pipHasNextPart =
+    pipHasParts && pipPartIndex >= 0 && pipPartIndex < pipParts.length - 1;
+  const pipMaterialIndex = pipState.material
+    ? pipState.materials.indexOf(pipState.material)
+    : -1;
+  const pipHasNextMaterial =
+    pipState.material &&
+    pipMaterialIndex >= 0 &&
+    pipMaterialIndex < pipState.materials.length - 1;
+  const pipCanNext = pipHasNextPart || pipHasNextMaterial;
+
+  const updatePipState = (next: Partial<typeof pipState>) => {
+    setPipState(current => {
+      const merged = { ...current, ...next };
+      try {
+        window.localStorage.setItem('sm_pip_state', JSON.stringify(merged));
+        window.dispatchEvent(new Event('sm-pip-update'));
+      } catch {
+        window.dispatchEvent(new Event('sm-pip-update'));
+      }
+      return merged;
+    });
+  };
+
+  const handlePipPrev = () => {
+    if (!pipCanPrev) return;
+    updatePipState({ part: pipParts[pipPartIndex - 1] ?? null });
+  };
+
+  const handlePipNext = () => {
+    if (!pipCanNext) return;
+    if (pipHasNextPart) {
+      updatePipState({ part: pipParts[pipPartIndex + 1] ?? null });
+      return;
+    }
+    if (pipHasNextMaterial && pipState.materials[pipMaterialIndex + 1]) {
+      updatePipState({
+        material: pipState.materials[pipMaterialIndex + 1],
+        part: null,
+      });
+    }
+  };
 
   const openAccountModal = () => {
     if (!user) return;
@@ -837,6 +1180,296 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   return (
     <div className="app-shell-bg min-h-screen text-[var(--c-1f1f1d)]">
+      {notifications.length > 0 ? (
+        <div className="fixed right-6 top-6 z-[70] flex w-full max-w-sm flex-col gap-3">
+          {notifications.map(notification => (
+            <div
+              key={notification.id}
+              className={`relative cursor-pointer rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/95 px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] backdrop-blur ${
+                notification.leaving ? 'animate-toast-out pointer-events-none' : 'animate-toast-in'
+              }`}
+              onClick={() => {
+                if (role === 'teacher') {
+                  router.push(
+                    `/teachers/messages?thread=${encodeURIComponent(
+                      notification.threadId,
+                    )}`,
+                  );
+                } else if (role === 'company') {
+                  router.push('/company/messages');
+                } else {
+                  router.push('/students/messages');
+                }
+                dismissNotification(notification.id);
+              }}
+              onMouseEnter={() => {
+                setHoveredNotifications(prev => ({ ...prev, [notification.id]: true }));
+                pauseNotificationDismiss(notification.id);
+              }}
+              onMouseLeave={() => {
+                if (notification.leaving) return;
+                setHoveredNotifications(prev => ({ ...prev, [notification.id]: false }));
+                scheduleNotificationDismiss(notification.id);
+              }}
+            >
+              <button
+                type="button"
+                onClick={event => {
+                  event.stopPropagation();
+                  dismissNotification(notification.id);
+                }}
+                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                >
+                  <path
+                    d="M6 6l12 12M18 6l-12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+                New Message
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--c-1f1f1d)]">
+                {notification.sender}
+              </p>
+              {notification.subject ? (
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)]">
+                  {notification.subject}
+                </p>
+              ) : null}
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                {notification.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {pipState.open && pipState.material ? (
+        <div className="fixed bottom-6 right-6 z-[70] w-[360px] rounded-2xl border border-white/10 bg-white/3 p-4 text-white shadow-2xl backdrop-blur-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">
+                {pipState.playing ? 'Now Playing' : 'Viewing'}
+              </p>
+              <p className="mt-2 text-lg font-semibold">
+                {pipState.material}
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/50">
+                {pipState.part || 'Select a lesson part to begin.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => updatePipState({ open: false, playing: false })}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
+              aria-label="Close"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                className="h-4 w-4"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+            <div className="relative flex aspect-video items-center justify-center">
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.25),rgba(3,3,3,0.6))]" />
+              <div className="relative z-10 w-full -translate-y-4 px-4 text-center">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-white/70">
+                  {pipState.playing ? 'Now Playing' : 'Viewing'}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white text-center">
+                  {pipState.material}
+                </p>
+                <p className="mt-1 text-xs text-white/70">
+                  {pipState.part || 'Select a lesson part to begin.'}
+                </p>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between gap-2 border-t border-white/10 bg-black/50 px-3 py-2 text-white">
+                <button
+                  type="button"
+                  onClick={() => updatePipState({ playing: !pipState.playing })}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/15 text-white transition hover:border-white/40 hover:bg-white/25"
+                  aria-label={pipState.playing ? 'Pause' : 'Play'}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 translate-x-[1px] fill-current"
+                  >
+                    {pipState.playing ? (
+                      <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                    ) : (
+                      <path d="M8 5v14l11-7z" />
+                    )}
+                  </svg>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePipPrev}
+                    disabled={!pipCanPrev}
+                    className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                      pipCanPrev
+                        ? 'border-white/40 text-white hover:border-white'
+                        : 'border-white/10 text-white/40'
+                    }`}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePipNext}
+                    disabled={!pipCanNext}
+                    className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                      pipCanNext
+                        ? 'border-white/40 text-white hover:border-white'
+                        : 'border-white/10 text-white/40'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPipExpanded(true)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
+                  aria-label="Expand"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isPipExpanded && pipState.material ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsPipExpanded(false)}
+          />
+          <div className="relative w-full max-w-6xl rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 shadow-2xl text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">
+                  {pipState.playing ? 'Now Playing' : 'Viewing'}
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold">
+                  {pipState.material}
+                </h2>
+                <p className="mt-2 text-sm text-white/70">
+                  {pipState.part || 'Select a lesson part to begin.'}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsPipExpanded(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
+                aria-label="Close"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  className="h-4 w-4"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
+              <div className="relative flex aspect-video items-center justify-center overflow-hidden">
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
+                <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updatePipState({ playing: !pipState.playing })
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/15 text-sm text-white shadow-[0_8px_20px_rgba(0,0,0,0.35)] transition hover:border-white/40 hover:bg-white/25"
+                    aria-label={pipState.playing ? 'Pause' : 'Play'}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4 translate-x-[1px] fill-current"
+                    >
+                      {pipState.playing ? (
+                        <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                      ) : (
+                        <path d="M8 5v14l11-7z" />
+                      )}
+                    </svg>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePipPrev}
+                      disabled={!pipCanPrev}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                        pipCanPrev
+                          ? 'border-white/40 text-white hover:border-white'
+                          : 'border-white/10 text-white/40'
+                      }`}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePipNext}
+                      disabled={!pipCanNext}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                        pipCanNext
+                          ? 'border-white/40 text-white hover:border-white'
+                          : 'border-white/10 text-white/40'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="flex min-h-screen">
         <aside
           className={`hidden w-72 border-r px-6 py-8 lg:block ${sidebarStyles.bg} ${sidebarStyles.border}`}

@@ -1,0 +1,80 @@
+{
+  "plans": [
+    {
+      "id": "88036240-9852-43ef-94da-4f275d25ccd7-2026-02-09",
+      "studentId": "88036240-9852-43ef-94da-4f275d25ccd7",
+      "studentName": "Quinn",
+      "teacher": "brian",
+      "lessonDate": "2026-02-09",
+      "rangeStart": "2026-02-06",
+      "rangeEnd": "2026-02-12",
+      "items": [
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.1 – The Pipes",
+          "part": "3.1.3 – RH A Section & Rhythm"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.1 – The Pipes",
+          "part": "3.1.4 – BH & Rhythm"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.1 – The Pipes",
+          "part": "3.1.5 – BH B Section"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.1 – The Pipes",
+          "part": "3.1.6 – Reference Book & Order"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.2 – Light Blue – 3rd Section",
+          "part": "3.2.2 – RH Melody"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.2 – Light Blue – 3rd Section",
+          "part": "3.2.3 – BH & Order"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.5 – Fluff Pie",
+          "part": "3.5.2 – RH Pattern"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.5 – Fluff Pie",
+          "part": "3.5.3 – LH Pattern"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.5 – Fluff Pie",
+          "part": "3.5.4 – BH Pattern"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.5 – Fluff Pie",
+          "part": "3.5.5 – Tailpiece"
+        }
+      ],
+      "notes": "20 minutes of practice every other day",
+      "focus": "Technique",
+      "resources": "",
+      "createdAt": "2026-02-07T02:15:34.322Z",
+      "updatedAt": "2026-02-07T05:04:37.465Z"
+    }
+  ]
+}

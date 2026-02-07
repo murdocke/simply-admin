@@ -36,5 +36,63 @@
     "Reading Rhythm",
     "Time for More Music"
   ],
-  "Extensions Program": []
+  "Supplemental Programs": {
+    "Teacher Created Programs": [
+      "Playlist Management",
+      "Songs for Children",
+      "Songs for Everyone",
+      "Songs for Christmas",
+      "Foundation Duets & Variations Vol. 1",
+      "Foundation Duets & Variations Vol. 2",
+      "Read 'n' Play Vol. 1 – Rhythm",
+      "Read 'n' Play Vol. 2 – Pitch",
+      "Tune Toolkit – Comp & Improv Vol. 1",
+      "Tune Toolkit – Comp & Improv Vol. 2",
+      "The Chord Drill",
+      "Teacher Collection Vol. 1",
+      "Blues Infusion Program",
+      "Curriculum Guide",
+      "Understanding Scale & Key"
+    ],
+    "Simply Music Created Programs": [
+      "Music for Christmas & the New Year",
+      "A White & Blue Christmas"
+    ],
+    "Teacher Workshop Series": [
+      "Developing Studio Policies",
+      "Managing Shared Lessons",
+      "Using the Pedal",
+      "Teaching Jazz Clues",
+      "Dealing with Parents",
+      "Teaching Arrangements 1",
+      "Teaching Arrangements 2",
+      "Getting the Most Out of Accompaniment",
+      "Managing Practice Time",
+      "Teaching Time for More Music",
+      "Teaching Foundation Level 4"
+    ],
+    "Creative Coaching Series": [
+      "Playing in the Moment",
+      "Practice for the Busy Person"
+    ]
+  },
+  "Learn-at-Home": ["Materials"],
+  "Simply Music Gateway": ["Materials"],
+  "Extensions Program": [
+    "Tiny",
+    "Melody",
+    "'57 12/8 Blues",
+    "Ah, Shall I Tell You, Mama",
+    "The Creeps",
+    "The Mystery",
+    "Annie's Black Dog",
+    "Mickey at the Window",
+    "On My Way Back",
+    "Waltzing Matilda",
+    "The Traveller",
+    "Festival",
+    "Butterfly",
+    "Danny Boy",
+    "Johnny Sydney"
+  ]
 }

@@ -7,6 +7,7 @@ import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
 } from '../../components/auth';
+import LastViewedVideoCard from '../../components/last-viewed-video-card';
 
 type StudentRecord = {
   id: string;
@@ -40,6 +41,13 @@ type Message = {
   sender: 'teacher' | 'student' | 'corporate';
   text: string;
   timestamp: string;
+};
+
+type LastViewedVideo = {
+  material: string;
+  part?: string;
+  materials?: string[];
+  viewedAt?: string;
 };
 
 const parseTimeToMinutes = (value?: string) => {
@@ -97,6 +105,9 @@ export default function TeacherDashboardPage() {
   const [recentSenders, setRecentSenders] = useState<
     { id: string; label: string; threadId: string; unreadCount: number }[]
   >([]);
+  const [lastViewedVideo, setLastViewedVideo] = useState<LastViewedVideo | null>(
+    null,
+  );
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -160,6 +171,25 @@ export default function TeacherDashboardPage() {
       setViewingAs(null);
       setIsCompanyViewer(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const loadLastViewed = () => {
+      try {
+        const stored = window.localStorage.getItem('sm_last_viewed_video');
+        if (!stored) {
+          setLastViewedVideo(null);
+          return;
+        }
+        setLastViewedVideo(JSON.parse(stored) as LastViewedVideo);
+      } catch {
+        setLastViewedVideo(null);
+      }
+    };
+    loadLastViewed();
+    window.addEventListener('sm-last-viewed-video', loadLastViewed);
+    return () =>
+      window.removeEventListener('sm-last-viewed-video', loadLastViewed);
   }, []);
 
   const selectedDayLabel = useMemo(
@@ -537,13 +567,26 @@ export default function TeacherDashboardPage() {
                     >
                       <div className="flex items-center gap-3">
                         <span
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold shadow-sm ${
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm ${
                             isPrepared
-                              ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                              ? 'border-[color:rgba(31,41,55,0.2)] bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)]'
                               : 'border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)] text-[var(--c-9a9892)]'
                           }`}
                         >
-                          ✓
+                          <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            className="h-4 w-4"
+                          >
+                            <path
+                              d="M20 6L9 17l-5-5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
                         </span>
                         <div className="flex flex-col">
                           <span className="font-medium text-[var(--c-1f1f1d)]">
@@ -695,6 +738,9 @@ export default function TeacherDashboardPage() {
               </div>
             </div>
           </div>
+          {lastViewedVideo ? (
+            <LastViewedVideoCard data={lastViewedVideo} />
+          ) : null}
         </div>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
