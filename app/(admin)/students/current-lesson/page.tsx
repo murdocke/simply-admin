@@ -108,7 +108,13 @@ export default function StudentCurrentLessonPage() {
   const [practiceChecks, setPracticeChecks] = useState<
     Record<string, boolean[]>
   >({});
+  const [serverPracticeChecks, setServerPracticeChecks] = useState<
+    Record<string, boolean[]>
+  >({});
   const [videoWatched, setVideoWatched] = useState<Record<string, boolean>>({});
+  const [serverWatched, setServerWatched] = useState<Record<string, boolean>>(
+    {},
+  );
   const [questionDrafts, setQuestionDrafts] = useState<Record<string, string>>(
     {},
   );
@@ -133,7 +139,7 @@ export default function StudentCurrentLessonPage() {
     }
     try {
       const parsed = JSON.parse(stored) as { username?: string; role?: string };
-      if (parsed?.role === 'teacher') {
+      if (parsed?.role === 'teacher' || parsed?.role === 'company') {
         const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
         const isStudentView = storedView === 'student';
         if (!isStudentView) {
@@ -214,6 +220,10 @@ export default function StudentCurrentLessonPage() {
   }, [planWindow, activeStudent]);
 
   const watchedStorageKey = useMemo(() => {
+    if (!activeStudent) return null;
+    return `sm-video-watched:${activeStudent.id}`;
+  }, [activeStudent]);
+  const legacyWatchedStorageKey = useMemo(() => {
     if (!activeStudent || !planWindow) return null;
     return `sm-video-watched:${activeStudent.id}:${planWindow.lessonDate}`;
   }, [planWindow, activeStudent]);
@@ -262,10 +272,20 @@ export default function StudentCurrentLessonPage() {
       const normalized: Record<string, boolean[]> = {};
       groups.forEach(groupKey => {
         const existing = stored[groupKey];
-        normalized[groupKey] =
+        const serverRow = serverPracticeChecks[groupKey];
+        const baseRow =
           Array.isArray(existing) && existing.length === 7
             ? existing
             : Array.from({ length: 7 }, () => false);
+        const nextRow = Array.from({ length: 7 }, (_, index) => {
+          const localValue = Boolean(baseRow[index]);
+          const serverValue =
+            Array.isArray(serverRow) && serverRow.length === 7
+              ? Boolean(serverRow[index])
+              : false;
+          return localValue || serverValue;
+        });
+        normalized[groupKey] = nextRow;
       });
       setPracticeChecks(normalized);
     } catch {
@@ -278,7 +298,35 @@ export default function StudentCurrentLessonPage() {
         ),
       );
     }
-  }, [checklistStorageKey, lessonPlan]);
+  }, [checklistStorageKey, lessonPlan, serverPracticeChecks]);
+
+  useEffect(() => {
+    if (!activeStudent?.id) {
+      setServerPracticeChecks({});
+      return;
+    }
+    let isActive = true;
+    const loadServerChecks = async () => {
+      try {
+        const response = await fetch(
+          `/api/practice-checks?studentId=${encodeURIComponent(activeStudent.id)}`,
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          items?: Record<string, boolean[]>;
+        };
+        if (isActive) {
+          setServerPracticeChecks(data.items ?? {});
+        }
+      } catch {
+        if (isActive) setServerPracticeChecks({});
+      }
+    };
+    loadServerChecks();
+    return () => {
+      isActive = false;
+    };
+  }, [activeStudent?.id]);
 
   useEffect(() => {
     if (!lessonPlan || !watchedStorageKey) {
@@ -287,24 +335,58 @@ export default function StudentCurrentLessonPage() {
     }
     try {
       const raw = window.localStorage.getItem(watchedStorageKey);
-      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      let stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      if (!Object.keys(stored).length && legacyWatchedStorageKey) {
+        const legacyRaw = window.localStorage.getItem(legacyWatchedStorageKey);
+        if (legacyRaw) {
+          stored = JSON.parse(legacyRaw) as Record<string, boolean>;
+        }
+      }
       const normalized: Record<string, boolean> = {};
       lessonPlan.items.forEach((item, index) => {
-        const itemKey = `${item.section}|${item.material}|${item.part ?? ''}|${index}`;
+        const itemKey = `${item.section}|${item.material}|${item.part ?? ''}`;
         normalized[itemKey] = Boolean(stored[itemKey]);
       });
       setVideoWatched(normalized);
     } catch {
       setVideoWatched(
         Object.fromEntries(
-          lessonPlan.items.map((item, index) => [
-            `${item.section}|${item.material}|${item.part ?? ''}|${index}`,
+          lessonPlan.items.map(item => [
+            `${item.section}|${item.material}|${item.part ?? ''}`,
             false,
           ]),
         ),
       );
     }
-  }, [lessonPlan, watchedStorageKey]);
+  }, [lessonPlan, legacyWatchedStorageKey, watchedStorageKey]);
+
+  useEffect(() => {
+    if (!activeStudent?.id) {
+      setServerWatched({});
+      return;
+    }
+    let isActive = true;
+    const loadServerWatched = async () => {
+      try {
+        const response = await fetch(
+          `/api/video-watched?studentId=${encodeURIComponent(activeStudent.id)}`,
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          items?: Record<string, boolean>;
+        };
+        if (isActive) {
+          setServerWatched(data.items ?? {});
+        }
+      } catch {
+        if (isActive) setServerWatched({});
+      }
+    };
+    loadServerWatched();
+    return () => {
+      isActive = false;
+    };
+  }, [activeStudent?.id]);
 
   useEffect(() => {
     const loadPlayed = () => {
@@ -334,6 +416,17 @@ export default function StudentCurrentLessonPage() {
       }
       return next;
     });
+    if (activeStudent?.id) {
+      fetch('/api/practice-checks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: activeStudent.id,
+          itemKey,
+          dayIndex,
+        }),
+      }).catch(() => undefined);
+    }
   };
 
   const markVideoWatched = (itemKey: string) => {
@@ -344,6 +437,13 @@ export default function StudentCurrentLessonPage() {
       }
       return next;
     });
+    if (activeStudent?.id) {
+      fetch('/api/video-watched', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: activeStudent.id, itemKey }),
+      }).catch(() => undefined);
+    }
   };
 
   const markPlayedGlobal = (material?: string, part?: string) => {
@@ -479,17 +579,18 @@ export default function StudentCurrentLessonPage() {
                           </p>
                           <div className="space-y-2">
                             {group.items.map(item => {
-                              const itemKey = `${item.section}|${item.material}|${item.part ?? ''}|${item.index}`;
+                              const itemKey = `${item.section}|${item.material}|${item.part ?? ''}`;
                               const playedKey = buildPlayedKey(
                                 item.material,
                                 item.part,
                               );
                               const isWatched =
                                 Boolean(videoWatched[itemKey]) ||
+                                Boolean(serverWatched[itemKey]) ||
                                 Boolean(playedVideos[playedKey]);
                               return (
                                 <div
-                                  key={itemKey}
+                                  key={`${itemKey}|${item.index}`}
                                   className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-faf9f6)] px-4 py-3"
                                 >
                                   <div className="flex flex-col text-sm font-semibold uppercase tracking-[0.2em] text-[var(--c-1f1f1d)]">

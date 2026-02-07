@@ -53,46 +53,26 @@ export const useLessonCartScope = () => {
   const [teacherUsername, setTeacherUsername] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem('sm_user');
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as { role?: string; username?: string };
-      const baseRole = parsed?.role ?? null;
-      const baseUsername = parsed?.username ?? null;
-      setRole(baseRole);
-      setUsername(baseUsername);
+    const loadScope = () => {
+      try {
+        const stored = window.localStorage.getItem('sm_user');
+        if (!stored) return;
+        const parsed = JSON.parse(stored) as { role?: string; username?: string };
+        const baseRole = parsed?.role ?? null;
+        const baseUsername = parsed?.username ?? null;
+        setRole(baseRole);
+        setUsername(baseUsername);
 
-    if (baseRole === 'student') {
-        const resolved = resolveStudentIdFromUser(baseUsername);
-        if (resolved) {
-          setStudentId(resolved);
-          return;
-        }
-        const storedStudent =
-          window.localStorage.getItem(
-            `${VIEW_STUDENT_STORAGE_KEY}:${baseUsername}`,
-          ) ?? window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY);
-        if (storedStudent) {
-          const parsedStudent = JSON.parse(storedStudent) as { id?: string };
-          if (parsedStudent?.id) {
-            setStudentId(parsedStudent.id);
+        if (baseRole === 'student') {
+          const resolved = resolveStudentIdFromUser(baseUsername);
+          if (resolved) {
+            setStudentId(resolved);
             return;
           }
-        }
-        setStudentId(null);
-        return;
-      }
-
-      if (baseRole === 'teacher') {
-        setTeacherUsername(resolveTeacherUsernameFromUser(baseUsername));
-        return;
-      }
-
-      if (baseRole === 'company') {
-        const viewRole = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
-        if (viewRole === 'student') {
           const storedStudent =
-            window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY) ?? null;
+            window.localStorage.getItem(
+              `${VIEW_STUDENT_STORAGE_KEY}:${baseUsername}`,
+            ) ?? window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY);
           if (storedStudent) {
             const parsedStudent = JSON.parse(storedStudent) as { id?: string };
             if (parsedStudent?.id) {
@@ -100,31 +80,64 @@ export const useLessonCartScope = () => {
               return;
             }
           }
-          setStudentId(resolveStudentIdFromUser(baseUsername));
+          setStudentId(null);
           return;
         }
-        if (viewRole === 'teacher') {
-          const storedTeacher =
-            window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY) ?? null;
-          if (storedTeacher) {
-            const parsedTeacher = JSON.parse(storedTeacher) as {
-              username?: string;
-            };
-            if (parsedTeacher?.username) {
-              setTeacherUsername(parsedTeacher.username);
-              return;
-            }
-          }
+
+        if (baseRole === 'teacher') {
           setTeacherUsername(resolveTeacherUsernameFromUser(baseUsername));
           return;
         }
+
+        if (baseRole === 'company') {
+          const viewRole = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
+          if (viewRole === 'student') {
+            const storedStudent =
+              window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY) ?? null;
+            if (storedStudent) {
+              const parsedStudent = JSON.parse(storedStudent) as { id?: string };
+              if (parsedStudent?.id) {
+                setStudentId(parsedStudent.id);
+                return;
+              }
+            }
+            setStudentId(resolveStudentIdFromUser(baseUsername));
+            return;
+          }
+          if (viewRole === 'teacher') {
+            const storedTeacher =
+              window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY) ?? null;
+            if (storedTeacher) {
+              const parsedTeacher = JSON.parse(storedTeacher) as {
+                username?: string;
+              };
+              if (parsedTeacher?.username) {
+                setTeacherUsername(parsedTeacher.username);
+                return;
+              }
+            }
+            setTeacherUsername(resolveTeacherUsernameFromUser(baseUsername));
+            return;
+          }
+        }
+      } catch {
+        setRole(null);
+        setUsername(null);
+        setStudentId(null);
+        setTeacherUsername(null);
       }
-    } catch {
-      setRole(null);
-      setUsername(null);
-      setStudentId(null);
-      setTeacherUsername(null);
-    }
+    };
+
+    loadScope();
+    const handleStorage = () => loadScope();
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('sm-view-teacher-updated', handleStorage);
+    window.addEventListener('sm-view-student-updated', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('sm-view-teacher-updated', handleStorage);
+      window.removeEventListener('sm-view-student-updated', handleStorage);
+    };
   }, []);
 
   const scope = useMemo(() => {

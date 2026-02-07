@@ -66,7 +66,7 @@ export default function StudentDashboardPage() {
       }
       try {
         const parsed = JSON.parse(stored) as { username?: string; role?: string };
-        if (parsed?.role === 'teacher') {
+        if (parsed?.role === 'teacher' || parsed?.role === 'company') {
           const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
           const isStudentView = storedView === 'student';
           setIsTeacherView(isStudentView);

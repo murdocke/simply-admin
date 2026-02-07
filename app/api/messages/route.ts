@@ -60,10 +60,12 @@ export async function POST(request: Request) {
   const store = await readStore();
   const current = store.threads[body.threadId] ?? [];
   store.threads[body.threadId] = [...current, body.message];
-  if (body.subject) {
+  if (body.subject !== undefined) {
     store.subjects = store.subjects ?? {};
-    if (!store.subjects[body.threadId]) {
+    if (body.subject && body.subject.trim()) {
       store.subjects[body.threadId] = body.subject;
+    } else {
+      delete store.subjects[body.threadId];
     }
   }
   await writeStore(store);

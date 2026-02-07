@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import studentsData from "@/data/students.json";
 import teachersData from "@/data/teachers.json";
-import { AUTH_STORAGE_KEY, type AuthUser } from "../../components/auth";
+import {
+  AUTH_STORAGE_KEY,
+  VIEW_ROLE_STORAGE_KEY,
+  VIEW_TEACHER_STORAGE_KEY,
+  type AuthUser,
+} from "../../components/auth";
 
 type RecipientType = "student" | "corporate";
 
@@ -84,15 +89,44 @@ export default function TeacherMessagesPage() {
     try {
       const parsed = JSON.parse(stored) as AuthUser;
       setViewerRole(parsed?.role ?? null);
-      if (parsed?.role !== "teacher") {
+      if (parsed?.role === "teacher") {
+        const match =
+          teachers.find(
+            (teacher) => teacher.username === parsed.username
+          ) ?? teachers[0] ?? null;
+        setActiveTeacher(match);
+        return;
+      }
+      if (parsed?.role === "company") {
+        const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
+        if (storedView !== "teacher") {
+          setActiveTeacher(teachers[0] ?? null);
+          return;
+        }
+        const viewTeacherKey = parsed?.username
+          ? `${VIEW_TEACHER_STORAGE_KEY}:${parsed.username}`
+          : VIEW_TEACHER_STORAGE_KEY;
+        const storedTeacher =
+          window.localStorage.getItem(viewTeacherKey) ??
+          window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+        if (storedTeacher) {
+          try {
+            const selected = JSON.parse(storedTeacher) as { username?: string };
+            const match =
+              teachers.find(
+                (teacher) => teacher.username === selected?.username
+              ) ?? teachers[0] ?? null;
+            setActiveTeacher(match);
+            return;
+          } catch {
+            setActiveTeacher(teachers[0] ?? null);
+            return;
+          }
+        }
         setActiveTeacher(teachers[0] ?? null);
         return;
       }
-      const match =
-        teachers.find(
-          (teacher) => teacher.username === parsed.username
-        ) ?? teachers[0] ?? null;
-      setActiveTeacher(match);
+      setActiveTeacher(teachers[0] ?? null);
     } catch {
       setActiveTeacher(teachers[0] ?? null);
       setViewerRole(null);
@@ -112,6 +146,7 @@ export default function TeacherMessagesPage() {
   const [selectedStudentId, setSelectedStudentId] = useState(
     students[0]?.id ?? ""
   );
+  const [isRecipientModalOpen, setIsRecipientModalOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
   const [threadSubjects, setThreadSubjects] = useState<Record<string, string>>(
@@ -163,11 +198,11 @@ export default function TeacherMessagesPage() {
   }, [teacherId]);
 
   const persistMessage = useCallback(
-    async (threadId: string, message: Message) => {
+    async (threadId: string, message: Message, subject?: string | null) => {
       await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, message }),
+        body: JSON.stringify({ threadId, message, subject }),
       });
     },
     []
@@ -358,7 +393,9 @@ export default function TeacherMessagesPage() {
     return () => window.clearInterval(interval);
   }, [activeStudent]);
 
+  const isViewOnly = viewerRole === "company";
   const canSend =
+    !isViewOnly &&
     draft.trim().length > 0 &&
     Boolean(activeTeacher) &&
     (recipientType === "corporate" || Boolean(activeStudent));
@@ -375,7 +412,7 @@ export default function TeacherMessagesPage() {
       ...prev,
       [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
     }));
-    void persistMessage(activeThreadId, message).then(() => {
+    void persistMessage(activeThreadId, message, null).then(() => {
       void loadThreads();
     });
     setDraft("");
@@ -412,106 +449,44 @@ export default function TeacherMessagesPage() {
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-6">
-            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 p-4 pt-1 backdrop-blur">
-              <div className="mt-1 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Send To
-                  </label>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      className={
-                        recipientType === "student"
-                          ? "flex-1 rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
-                          : "flex-1 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
-                      }
-                      onClick={() => setRecipientType("student")}
-                    >
-                      Student
-                    </button>
-                    <button
-                      className={
-                        recipientType === "corporate"
-                          ? "flex-1 rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
-                          : "flex-1 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
-                      }
-                      onClick={() => setRecipientType("corporate")}
-                    >
-                      Corporate
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Student Lookup
-                  </label>
-                  <input
-                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                    placeholder="Search by name, email, or level"
-                    value={studentQuery}
-                    onChange={(event) => setStudentQuery(event.target.value)}
-                    disabled={recipientType === "corporate"}
-                  />
-                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
-                    {filteredStudents.map((student) => (
-                      <button
-                        key={student.id}
-                        className={
-                          selectedStudentId === student.id && recipientType === "student"
-                            ? "w-full rounded-xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-2 text-left"
-                            : "w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
-                        }
-                        onClick={() => {
-                          setRecipientType("student");
-                          setSelectedStudentId(student.id);
-                        }}
-                      >
-                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {student.name}
-                        </p>
-                        <p className="text-xs text-[var(--c-6f6c65)]">
-                          {student.lessonDay ?? "Lesson"} · {student.lessonTime ?? "Time TBD"}
-                        </p>
-                      </button>
-                    ))}
-                    {filteredStudents.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-[var(--c-ecebe7)] px-3 py-3 text-xs text-[var(--c-6f6c65)]">
-                        No students found. Try a different search.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Selected Recipient
-                  </p>
-                  {recipientType === "corporate" ? (
-                    <div className="mt-2">
-                      <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                        Corporate Inbox
-                      </p>
-                      <p className="text-xs text-[var(--c-6f6c65)]">
-                        Shared by studio leadership.
-                      </p>
-                    </div>
-                  ) : activeStudent ? (
-                    <div className="mt-2">
-                      <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                        {activeStudent.name}
-                      </p>
-                      <p className="text-xs text-[var(--c-6f6c65)]">
-                        {activeStudent.email}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
-                      Choose a student to start messaging.
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 p-4 backdrop-blur">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
+                Recipient
+              </p>
+              <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Current
+                </p>
+                {recipientType === "corporate" ? (
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      Corporate Inbox
                     </p>
-                  )}
-                </div>
+                    <p className="text-xs text-[var(--c-6f6c65)]">
+                      Shared by studio leadership.
+                    </p>
+                  </div>
+                ) : activeStudent ? (
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      {activeStudent.name}
+                    </p>
+                    <p className="text-xs text-[var(--c-6f6c65)]">
+                      {activeStudent.email}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
+                    Choose a student to start messaging.
+                  </p>
+                )}
               </div>
+              <button
+                onClick={() => setIsRecipientModalOpen(true)}
+                className="mt-4 w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-1f1f1d)] hover:text-[var(--c-1f1f1d)]"
+              >
+                Choose Recipient
+              </button>
             </div>
 
             <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/85 p-4 backdrop-blur">
@@ -604,8 +579,8 @@ export default function TeacherMessagesPage() {
             </div>
           </aside>
 
-          <div className="flex min-h-[calc(100vh-420px)] flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/90 backdrop-blur">
-            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-h-[calc(100vh-420px)] flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/90 backdrop-blur overflow-hidden">
+            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
                   Conversation
@@ -735,8 +710,8 @@ export default function TeacherMessagesPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-[var(--c-ecebe7)] px-5 py-4">
-              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-4 py-3">
+            <div className="border-t border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4">
+              <div className="rounded-2xl border border-[var(--c-d9e2ef)] bg-[var(--c-d9e2ef)] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
@@ -750,25 +725,174 @@ export default function TeacherMessagesPage() {
                     className={
                       canSend
                         ? "rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
-                        : "rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                        : "rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] opacity-60"
                     }
                     onClick={handleSend}
                     disabled={!canSend}
                   >
-                    Send
+                    {isViewOnly ? "View Only" : "Send"}
                   </button>
                 </div>
                 <textarea
-                  className="mt-3 min-h-[110px] w-full resize-none rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="Start typing here..."
+                  className="mt-3 min-h-[110px] w-full resize-none rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)] disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={
+                    isViewOnly
+                      ? "Viewing as company. Messaging is disabled."
+                      : "Start typing here..."
+                  }
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    if (isViewOnly) return;
+                    setDraft(event.target.value);
+                  }}
+                  disabled={isViewOnly}
+                  readOnly={isViewOnly}
                 />
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      <div
+        className={`fixed inset-0 z-[60] ${
+          isRecipientModalOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        } transition-opacity`}
+      >
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsRecipientModalOpen(false)}
+        />
+        <div className="absolute inset-x-4 top-16 mx-auto max-w-2xl rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                Send To
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                Choose Recipient
+              </h2>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                Pick a student or the corporate inbox.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsRecipientModalOpen(false)}
+              className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fafafa)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              Send To
+            </p>
+            <div className="mt-3 flex rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-1">
+              <button
+                className={
+                  recipientType === "student"
+                    ? "flex-1 rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
+                    : "flex-1 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                }
+                onClick={() => setRecipientType("student")}
+              >
+                Student
+              </button>
+              <button
+                className={
+                  recipientType === "corporate"
+                    ? "flex-1 rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
+                    : "flex-1 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                }
+                onClick={() => setRecipientType("corporate")}
+              >
+                Corporate
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Student Lookup
+              </label>
+              <input
+                className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                placeholder="Search by name, email, or level"
+                value={studentQuery}
+                onChange={(event) => setStudentQuery(event.target.value)}
+                disabled={recipientType === "corporate"}
+              />
+              <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                {filteredStudents.map((student) => (
+                  <button
+                    key={student.id}
+                    className={
+                      selectedStudentId === student.id &&
+                      recipientType === "student"
+                        ? "w-full rounded-xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-2 text-left"
+                        : "w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
+                    }
+                    onClick={() => {
+                      setRecipientType("student");
+                      setSelectedStudentId(student.id);
+                    }}
+                  >
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      {student.name}
+                    </p>
+                    <p className="text-xs text-[var(--c-6f6c65)]">
+                      {student.lessonDay ?? "Lesson"} ·{" "}
+                      {student.lessonTime ?? "Time TBD"}
+                    </p>
+                  </button>
+                ))}
+                {filteredStudents.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[var(--c-ecebe7)] px-3 py-3 text-xs text-[var(--c-6f6c65)]">
+                    No students found. Try a different search.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4 text-sm text-[var(--c-6f6c65)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Selected
+              </p>
+              {recipientType === "corporate" ? (
+                <div className="mt-2">
+                  <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                    Corporate Inbox
+                  </p>
+                  <p className="text-xs text-[var(--c-6f6c65)]">
+                    Shared by studio leadership.
+                  </p>
+                </div>
+              ) : activeStudent ? (
+                <div className="mt-2">
+                  <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                    {activeStudent.name}
+                  </p>
+                  <p className="text-xs text-[var(--c-6f6c65)]">
+                    {activeStudent.email}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
+                  Choose a student to start messaging.
+                </p>
+              )}
+              <button
+                onClick={() => setIsRecipientModalOpen(false)}
+                className="mt-4 w-full rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

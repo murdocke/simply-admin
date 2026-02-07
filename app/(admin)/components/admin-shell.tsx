@@ -95,6 +95,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [viewRole, setViewRole] = useState<UserRole | null>(null);
+  const [pendingViewRole, setPendingViewRole] = useState<UserRole | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
@@ -157,16 +158,25 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [user?.username]);
   const viewStudentKey = useMemo(() => {
     if (!user?.username) return VIEW_STUDENT_STORAGE_KEY;
+    if (role === 'company' && selectedTeacher?.username) {
+      return `${VIEW_STUDENT_STORAGE_KEY}:${user.username}:${selectedTeacher.username}`;
+    }
     return `${VIEW_STUDENT_STORAGE_KEY}:${user.username}`;
-  }, [user?.username]);
+  }, [role, selectedTeacher?.username, user?.username]);
   const selectedStudentKey = useMemo(() => {
     if (!user?.username) return null;
+    if (role === 'company' && selectedTeacher?.username) {
+      return `sm_selected_student:${user.username}:${selectedTeacher.username}`;
+    }
     return `sm_selected_student:${user.username}:${user.username}`;
-  }, [user?.username]);
+  }, [role, selectedTeacher?.username, user?.username]);
   const recentStudentsKey = useMemo(() => {
     if (!user?.username) return RECENT_STUDENTS_KEY;
+    if (role === 'company' && selectedTeacher?.username) {
+      return `sm_recent_selected_students:${user.username}:${selectedTeacher.username}`;
+    }
     return `sm_recent_selected_students:${user.username}:${user.username}`;
-  }, [user?.username]);
+  }, [role, selectedTeacher?.username, user?.username]);
 
   const resolveStudentFromUser = useCallback(
     (username?: string) => {
@@ -448,12 +458,22 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [role, user?.username]);
 
   useEffect(() => {
-    if (role !== 'teacher' || !user?.username) return;
+    let teacherUsername: string | null = null;
+    if (role === 'teacher') {
+      teacherUsername = user?.username ?? null;
+    }
+    if (role === 'company') {
+      teacherUsername = selectedTeacher?.username ?? null;
+    }
+    if (!teacherUsername) {
+      if (role === 'company') setStudents([]);
+      return;
+    }
     let isActive = true;
     const fetchStudents = async () => {
       try {
         const response = await fetch(
-          `/api/students?teacher=${encodeURIComponent(user.username)}`,
+          `/api/students?teacher=${encodeURIComponent(teacherUsername ?? '')}`,
         );
         if (!response.ok) return;
         const data = (await response.json()) as { students: StudentRecord[] };
@@ -468,7 +488,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     return () => {
       isActive = false;
     };
-  }, [role, user?.username]);
+  }, [role, selectedTeacher?.username, user?.username]);
 
   const refreshTeachers = useCallback(() => {
     if (role !== 'company' || !user?.username) return;
@@ -522,7 +542,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [role]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (role !== 'teacher' && role !== 'company') return;
     const handleOpenStudentLookup = () => setIsStudentModalOpen(true);
     window.addEventListener('sm-open-student-lookup', handleOpenStudentLookup);
     return () => {
@@ -577,7 +597,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [recentTeachersKey, role]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (role !== 'teacher' && role !== 'company') return;
     const stored = window.localStorage.getItem(recentStudentsKey);
     if (!stored) {
       setRecentStudentIds([]);
@@ -596,8 +616,12 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [recentStudentsKey, role]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (role !== 'teacher' && role !== 'company') return;
     if (!selectedStudentKey) return;
+    if (role === 'company' && !selectedTeacher?.username) {
+      setSelectedStudentId(null);
+      return;
+    }
     const storedId = window.localStorage.getItem(selectedStudentKey);
     if (storedId) {
       setSelectedStudentId(storedId);
@@ -637,7 +661,15 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [selectedStudentId, students]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (role !== 'company') return;
+    if (!selectedStudent?.id || !selectedStudentKey) return;
+    if (selectedStudentId === selectedStudent.id) return;
+    window.localStorage.setItem(selectedStudentKey, selectedStudent.id);
+    setSelectedStudentId(selectedStudent.id);
+  }, [role, selectedStudent?.id, selectedStudentId, selectedStudentKey]);
+
+  useEffect(() => {
+    if (role !== 'teacher' && role !== 'company') return;
     const handleStudentUpdate = (event?: Event) => {
       const detail =
         event && 'detail' in event
@@ -956,6 +988,25 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   const handleViewRoleChange = (nextRole: UserRole) => {
     if (role === 'company') {
+      if (nextRole === 'student') {
+        setPendingViewRole('student');
+        if (!selectedTeacher) {
+          setIsStudentModalOpen(false);
+          setIsTeacherModalOpen(true);
+          return;
+        }
+        if (!selectedStudent) {
+          setIsTeacherModalOpen(false);
+          setIsStudentModalOpen(true);
+          return;
+        }
+        setPendingViewRole(null);
+        setViewRole(nextRole);
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, nextRole);
+        router.replace(roleHome[nextRole]);
+        return;
+      }
+      setPendingViewRole(null);
       setViewRole(nextRole);
       window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, nextRole);
       router.replace(roleHome[nextRole]);
@@ -985,6 +1036,15 @@ export default function AdminShell({ children }: AdminShellProps) {
   };
 
   const handleTeacherChoice = (selection: SelectedTeacher) => {
+    if (role === 'company') {
+      setSelectedStudent(null);
+      setSelectedStudentId(null);
+      if (selectedStudentKey) {
+        window.localStorage.removeItem(selectedStudentKey);
+      }
+      window.localStorage.removeItem(VIEW_STUDENT_STORAGE_KEY);
+      window.dispatchEvent(new Event('sm-view-student-updated'));
+    }
     setSelectedTeacher(selection);
     window.localStorage.setItem(viewTeacherKey, JSON.stringify(selection));
     window.dispatchEvent(new Event('sm-view-teacher-updated'));
@@ -998,6 +1058,9 @@ export default function AdminShell({ children }: AdminShellProps) {
     });
     setIsTeacherModalOpen(false);
     setTeacherSearch('');
+    if (role === 'company' && pendingViewRole === 'student') {
+      setIsStudentModalOpen(true);
+    }
   };
 
   const handleTeacherClear = () => {
@@ -1005,6 +1068,13 @@ export default function AdminShell({ children }: AdminShellProps) {
     window.localStorage.removeItem(viewTeacherKey);
     window.localStorage.removeItem(VIEW_TEACHER_STORAGE_KEY);
     window.dispatchEvent(new Event('sm-view-teacher-updated'));
+    if (role === 'company') {
+      handleStudentClear();
+      if (viewRole === 'student') {
+        setPendingViewRole('student');
+        setIsTeacherModalOpen(true);
+      }
+    }
   };
 
   const handleStudentSelect = (student: StudentRecord) => {
@@ -1019,6 +1089,18 @@ export default function AdminShell({ children }: AdminShellProps) {
   const handleStudentChoice = (selection: SelectedStudent) => {
     setSelectedStudent(selection);
     window.localStorage.setItem(viewStudentKey, JSON.stringify(selection));
+    if (role === 'company') {
+      if (user?.username) {
+        window.localStorage.setItem(
+          `${VIEW_STUDENT_STORAGE_KEY}:${user.username}`,
+          JSON.stringify(selection),
+        );
+      }
+      window.localStorage.setItem(
+        VIEW_STUDENT_STORAGE_KEY,
+        JSON.stringify(selection),
+      );
+    }
     window.dispatchEvent(new Event('sm-view-student-updated'));
     window.dispatchEvent(new Event('sm-selected-student-updated'));
     const nextRecent = [selection.id, ...recentStudentIds.filter(id => id !== selection.id)].slice(
@@ -1027,9 +1109,8 @@ export default function AdminShell({ children }: AdminShellProps) {
     );
     window.localStorage.setItem(recentStudentsKey, JSON.stringify(nextRecent));
     setRecentStudentIds(nextRecent);
-    if (user?.username) {
-      const selectedKey = `sm_selected_student:${user.username}:${user.username}`;
-      window.localStorage.setItem(selectedKey, selection.id);
+    if (selectedStudentKey) {
+      window.localStorage.setItem(selectedStudentKey, selection.id);
       setSelectedStudentId(selection.id);
     }
     setIsStudentModalOpen(false);
@@ -1040,15 +1121,21 @@ export default function AdminShell({ children }: AdminShellProps) {
         detail: { selectedId: selection.id, recentIds: nextRecent },
       }),
     );
+
+    if (role === 'company' && pendingViewRole === 'student') {
+      setPendingViewRole(null);
+      setViewRole('student');
+      window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'student');
+      router.replace(roleHome.student);
+    }
   };
 
   const handleStudentClear = () => {
     setSelectedStudent(null);
     window.localStorage.removeItem(viewStudentKey);
     window.localStorage.removeItem(VIEW_STUDENT_STORAGE_KEY);
-    if (user?.username) {
-      const selectedKey = `sm_selected_student:${user.username}:${user.username}`;
-      window.localStorage.removeItem(selectedKey);
+    if (selectedStudentKey) {
+      window.localStorage.removeItem(selectedStudentKey);
     }
     window.dispatchEvent(new Event('sm-view-student-updated'));
     window.dispatchEvent(new Event('sm-selected-student-updated'));
@@ -1058,6 +1145,14 @@ export default function AdminShell({ children }: AdminShellProps) {
         detail: { selectedId: null, recentIds: recentStudentIds },
       }),
     );
+    if (role === 'company' && viewRole === 'student') {
+      setPendingViewRole('student');
+      if (selectedTeacher) {
+        setIsStudentModalOpen(true);
+      } else {
+        setIsTeacherModalOpen(true);
+      }
+    }
   };
 
   const handleThemeChange = (nextTheme: ThemeMode) => {
@@ -1117,6 +1212,28 @@ export default function AdminShell({ children }: AdminShellProps) {
     () => recentStudents.slice(0, 3),
     [recentStudents],
   );
+
+  useEffect(() => {
+    if (role !== 'company' || !isReady) return;
+    if (pendingViewRole !== 'student') return;
+    if (!selectedTeacher) {
+      setIsStudentModalOpen(false);
+      setIsTeacherModalOpen(true);
+      return;
+    }
+    const hasStudentSelection = Boolean(selectedStudentId || selectedStudent?.id);
+    if (!hasStudentSelection) {
+      setIsTeacherModalOpen(false);
+      setIsStudentModalOpen(true);
+    }
+  }, [
+    isReady,
+    pendingViewRole,
+    role,
+    selectedStudent?.id,
+    selectedStudentId,
+    selectedTeacher,
+  ]);
 
   const modalTeachers = useMemo(() => {
     const query = teacherSearch.trim().toLowerCase();
@@ -2236,7 +2353,9 @@ export default function AdminShell({ children }: AdminShellProps) {
                   Choose A Teacher
                 </h2>
                 <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                  Search by name, region, status, or email to switch context.
+                  {pendingViewRole === 'student'
+                    ? 'Select the teacher you want to use before choosing a student.'
+                    : 'Search by name, region, status, or email to switch context.'}
                 </p>
               </div>
               <button
@@ -2326,7 +2445,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         </div>
       ) : null}
 
-      {role === 'teacher' ? (
+      {role === 'teacher' || role === 'company' ? (
         <div
           className={`fixed inset-0 z-[60] ${
             isStudentModalOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -2346,7 +2465,9 @@ export default function AdminShell({ children }: AdminShellProps) {
                   Choose A Student
                 </h2>
                 <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                  Search by name or email to set the student for view-as.
+                  {role === 'company' && selectedTeacher?.name
+                    ? `Showing students for ${selectedTeacher.name}.`
+                    : 'Search by name or email to set the student for view-as.'}
                 </p>
               </div>
               <button

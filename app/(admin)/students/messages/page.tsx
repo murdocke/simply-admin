@@ -92,6 +92,7 @@ export default function StudentMessagesPage() {
   const [teacherTyping, setTeacherTyping] = useState(false);
   const lastTypingPing = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const isViewOnly = viewerRole === "company";
 
   const loadThreads = useCallback(async () => {
     try {
@@ -114,11 +115,11 @@ export default function StudentMessagesPage() {
   }, []);
 
   const persistMessage = useCallback(
-    async (threadId: string, message: Message) => {
+    async (threadId: string, message: Message, subject?: string | null) => {
       await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, message }),
+        body: JSON.stringify({ threadId, message, subject }),
       });
     },
     []
@@ -153,7 +154,7 @@ export default function StudentMessagesPage() {
     try {
       const parsed = JSON.parse(stored) as AuthUser;
       setViewerRole(parsed?.role ?? null);
-      if (parsed?.role === "teacher") {
+      if (parsed?.role === "teacher" || parsed?.role === "company") {
         const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
         const isStudentView = storedView === "student";
         if (!isStudentView) {
@@ -345,7 +346,8 @@ export default function StudentMessagesPage() {
     }).length;
   };
 
-  const canSend = draft.trim().length > 0 && Boolean(activeTeacher);
+  const canSend =
+    !isViewOnly && draft.trim().length > 0 && Boolean(activeTeacher);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -410,7 +412,7 @@ export default function StudentMessagesPage() {
   }, [messages.length, activeThreadId]);
 
   const handleSend = () => {
-    if (!canSend) return;
+    if (!canSend || isViewOnly) return;
     const message: Message = {
       id: crypto.randomUUID(),
       sender: "student",
@@ -421,7 +423,7 @@ export default function StudentMessagesPage() {
       ...prev,
       [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
     }));
-    void persistMessage(activeThreadId, message).then(() => {
+    void persistMessage(activeThreadId, message, null).then(() => {
       void loadThreads();
     });
     setDraft("");
@@ -608,7 +610,7 @@ export default function StudentMessagesPage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-4 px-5 py-6 min-h-[320px] max-h-[560px] overflow-y-auto">
+            <div className="flex-1 space-y-4 px-5 py-6 min-h-0 overflow-y-auto">
               {messages.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fdfbf7)] px-4 py-6 text-center text-sm text-[var(--c-6f6c65)]">
                   No messages yet. Send a note to start the conversation.
@@ -703,19 +705,28 @@ export default function StudentMessagesPage() {
                     className={
                       canSend
                         ? "rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-1f1f1d)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-ffffff)]"
-                        : "rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                        : "rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] opacity-60"
                     }
                     onClick={handleSend}
                     disabled={!canSend}
                   >
-                    Send
+                    {isViewOnly ? "View Only" : "Send"}
                   </button>
                 </div>
                 <textarea
-                  className="mt-3 min-h-[110px] w-full resize-none rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="Start typing here..."
+                  className="mt-3 min-h-[110px] w-full resize-none rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)] disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={
+                    isViewOnly
+                      ? "Viewing as company. Messaging is disabled."
+                      : "Start typing here..."
+                  }
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    if (isViewOnly) return;
+                    setDraft(event.target.value);
+                  }}
+                  disabled={isViewOnly}
+                  readOnly={isViewOnly}
                 />
               </div>
             </div>

@@ -723,6 +723,42 @@ export default function TeacherThisWeekPage() {
                       );
                     })
                   )}
+                  {(() => {
+                    const lessonItems = lessons.filter(
+                      entry => entry.kind === 'lesson',
+                    ) as Array<
+                      StudentRecord & {
+                        kind: 'lesson';
+                        time?: string;
+                      }
+                    >;
+                    if (lessonItems.length === 0) return null;
+                    const sorted = [...lessonItems].sort((a, b) => {
+                      return (
+                        parseMinutes(a.lessonTime) -
+                        parseMinutes(b.lessonTime)
+                      );
+                    });
+                    const lastLesson = sorted[sorted.length - 1];
+                    const endMinutes =
+                      parseMinutes(lastLesson.lessonTime) +
+                      durationMinutes(lastLesson.lessonDuration);
+                    const hours24 = Math.floor(endMinutes / 60) % 24;
+                    const minutes = endMinutes % 60;
+                    const period = hours24 >= 12 ? 'PM' : 'AM';
+                    const displayHour = hours24 % 12 || 12;
+                    const displayTime = `${displayHour}:${String(
+                      minutes,
+                    ).padStart(2, '0')} ${period}`;
+                    return (
+                      <div
+                        className="rounded-2xl border border-dashed border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]"
+                        style={{ height: '30px' }}
+                      >
+                        Finished At {displayTime}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

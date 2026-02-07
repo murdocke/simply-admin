@@ -13,9 +13,15 @@
         "text": "Good.  Can't wait to show you!",
         "timestamp": "2026-02-07T02:10:24.599Z"
       }
+    ],
+    "student:88036240-9852-43ef-94da-4f275d25ccd7|teacher:23119e0d-2d21-4f17-99a4-c56e3aac4d8a": [
+      {
+        "id": "19313dec-78e4-482a-8132-e226b95b0d04",
+        "sender": "student",
+        "text": "Hello... I have been working on Light Blue... Added my own part on the 2nd pass through it.. I will show you on the next lesson.",
+        "timestamp": "2026-02-07T20:38:23.089Z"
+      }
     ]
   },
-  "subjects": {
-    "student:88036240-9852-43ef-94da-4f275d25ccd7|teacher:23119e0d-2d21-4f17-99a4-c56e3aac4d8a": "The Pipes"
-  }
+  "subjects": {}
 }

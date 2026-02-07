@@ -82,11 +82,11 @@ export default function CompanyMessagesPage() {
   }, []);
 
   const persistMessage = useCallback(
-    async (threadId: string, message: Message) => {
+    async (threadId: string, message: Message, subject?: string | null) => {
       await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, message }),
+        body: JSON.stringify({ threadId, message, subject }),
       });
     },
     []
@@ -167,7 +167,7 @@ export default function CompanyMessagesPage() {
       ...prev,
       [activeThreadId]: [...(prev[activeThreadId] ?? []), message],
     }));
-    void persistMessage(activeThreadId, message).then(() => {
+    void persistMessage(activeThreadId, message, null).then(() => {
       void loadThreads();
     });
     setDraft("");
