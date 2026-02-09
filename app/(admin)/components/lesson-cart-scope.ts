@@ -64,6 +64,7 @@ export const useLessonCartScope = () => {
         setUsername(baseUsername);
 
         if (baseRole === 'student') {
+          setTeacherUsername(null);
           const resolved = resolveStudentIdFromUser(baseUsername);
           if (resolved) {
             setStudentId(resolved);
@@ -85,6 +86,7 @@ export const useLessonCartScope = () => {
         }
 
         if (baseRole === 'teacher') {
+          setStudentId(null);
           setTeacherUsername(resolveTeacherUsernameFromUser(baseUsername));
           return;
         }
@@ -92,6 +94,7 @@ export const useLessonCartScope = () => {
         if (baseRole === 'company') {
           const viewRole = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
           if (viewRole === 'student') {
+            setTeacherUsername(null);
             const storedStudent =
               window.localStorage.getItem(VIEW_STUDENT_STORAGE_KEY) ?? null;
             if (storedStudent) {
@@ -105,8 +108,14 @@ export const useLessonCartScope = () => {
             return;
           }
           if (viewRole === 'teacher') {
+            setStudentId(null);
+            const scopedTeacherKey = baseUsername
+              ? `${VIEW_TEACHER_STORAGE_KEY}:${baseUsername}`
+              : VIEW_TEACHER_STORAGE_KEY;
             const storedTeacher =
-              window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY) ?? null;
+              window.localStorage.getItem(scopedTeacherKey) ??
+              window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY) ??
+              null;
             if (storedTeacher) {
               const parsedTeacher = JSON.parse(storedTeacher) as {
                 username?: string;

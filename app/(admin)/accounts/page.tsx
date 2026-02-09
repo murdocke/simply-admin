@@ -86,6 +86,10 @@ export default function AccountsPage() {
     useState<SelectedTeacher | null>(null);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [teacherPage, setTeacherPage] = useState(1);
+  const [studentPage, setStudentPage] = useState(1);
+  const teacherPageSize = 20;
+  const studentPageSize = 10;
   const viewTeacherKey = useMemo(() => {
     if (!companyName) return VIEW_TEACHER_STORAGE_KEY;
     return `${VIEW_TEACHER_STORAGE_KEY}:${companyName}`;
@@ -234,18 +238,71 @@ export default function AccountsPage() {
   }, [selectedTeacher?.username]);
 
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
+  const statusCounts = useMemo(() => {
+    return teachers.reduce(
+      (acc, teacher) => {
+        const status = normalizeTeacherStatus(teacher.status);
+        acc.total += 1;
+        if (status === 'Licensed') acc.licensed += 1;
+        if (status === 'Certified') acc.certified += 1;
+        if (status === 'Advanced') acc.advanced += 1;
+        if (status === 'Master') acc.master += 1;
+        return acc;
+      },
+      {
+        total: 0,
+        licensed: 0,
+        certified: 0,
+        advanced: 0,
+        master: 0,
+      },
+    );
+  }, [teachers]);
+  const teacherTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(teachers.length / teacherPageSize)),
+    [teachers.length],
+  );
+  const pagedTeachers = useMemo(() => {
+    const start = (teacherPage - 1) * teacherPageSize;
+    return teachers.slice(start, start + teacherPageSize);
+  }, [teacherPage, teacherPageSize, teachers]);
   const selectedTeacherInfo = useMemo(() => {
     if (!selectedTeacher) return null;
     return (
       teachers.find(teacher => teacher.id === selectedTeacher.id) ?? null
     );
   }, [selectedTeacher, teachers]);
+  const studentTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(students.length / studentPageSize)),
+    [students.length],
+  );
+  const pagedStudents = useMemo(() => {
+    const start = (studentPage - 1) * studentPageSize;
+    return students.slice(start, start + studentPageSize);
+  }, [studentPage, studentPageSize, students]);
 
   const openCreateModal = () => {
     setEditing(null);
     setFormState(defaultForm);
     setError(null);
     setIsModalOpen(true);
+  };
+
+  const handleSelectTeacher = (teacher: TeacherRecord) => {
+    if (!teacher.username) return;
+    const nextSelection: SelectedTeacher = {
+      id: teacher.id,
+      name: teacher.name,
+      username: teacher.username,
+    };
+    setSelectedTeacher(nextSelection);
+    window.localStorage.setItem(viewTeacherKey, JSON.stringify(nextSelection));
+    window.localStorage.setItem(
+      VIEW_TEACHER_STORAGE_KEY,
+      JSON.stringify(nextSelection),
+    );
+    window.dispatchEvent(new Event('sm-view-teacher-updated'));
+    setStudentPage(1);
   };
 
   const openEditModal = (teacher: TeacherRecord) => {
@@ -422,6 +479,94 @@ export default function AccountsPage() {
         </button>
       </header>
 
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Active Teachers
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {statusCounts.total.toLocaleString('en-US')}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Licensed + Certified + Advanced + Master
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Licensed
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {statusCounts.licensed.toLocaleString('en-US')}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Active baseline teachers
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Certified
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {statusCounts.certified.toLocaleString('en-US')}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Fully certified studios
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Advanced + Master
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {(statusCounts.advanced + statusCounts.master).toLocaleString(
+              'en-US',
+            )}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Senior-level instructors
+          </p>
+        </div>
+      </div>
+
+      {selectedTeacher ? (
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Selected Teacher
+              </p>
+              <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+                {selectedTeacher.name}
+              </h2>
+              <p className="text-sm text-[var(--c-6f6c65)] mt-1">
+                {selectedTeacherInfo?.email ?? 'Email on file'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              {selectedTeacherInfo?.region ? (
+                <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                  {selectedTeacherInfo.region}
+                </span>
+              ) : null}
+              {selectedTeacherInfo?.status ? (
+                <span
+                  className={`rounded-full px-3 py-1 ${
+                    statusStyles[
+                      normalizeTeacherStatus(selectedTeacherInfo.status)
+                    ] ?? statusStyles.Inactive
+                  }`}
+                >
+                  {normalizeTeacherStatus(selectedTeacherInfo.status)}
+                </span>
+              ) : null}
+              <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
+                {students.length} students
+              </span>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -457,10 +602,15 @@ export default function AccountsPage() {
                 No teachers yet. Add your first teacher to get started.
               </div>
             ) : (
-              teachers.map(teacher => (
+              pagedTeachers.map(teacher => (
                 <div
                   key={teacher.id}
-                  className="grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm"
+                  className={`grid cursor-pointer grid-cols-12 items-center gap-2 px-4 py-4 text-sm transition hover:bg-[var(--c-fcfcfb)] ${
+                    selectedTeacher?.id === teacher.id
+                      ? 'bg-[var(--c-f7f7f5)]'
+                      : ''
+                  }`}
+                  onClick={() => handleSelectTeacher(teacher)}
                 >
                   <div className="col-span-4">
                     <p className="font-medium text-[var(--c-1f1f1d)]">
@@ -491,13 +641,19 @@ export default function AccountsPage() {
                   <div className="col-span-1 flex justify-end gap-2">
                     <button
                       className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                      onClick={() => openEditModal(teacher)}
+                      onClick={event => {
+                        event.stopPropagation();
+                        openEditModal(teacher);
+                      }}
                     >
                       Edit
                     </button>
                     <button
                       className="rounded-full border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-8f2f3b)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                      onClick={() => handleDelete(teacher)}
+                      onClick={event => {
+                        event.stopPropagation();
+                        handleDelete(teacher);
+                      }}
                     >
                       Delete
                     </button>
@@ -507,48 +663,60 @@ export default function AccountsPage() {
             )}
           </div>
         </div>
+        {teachers.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
+            <span>
+              Showing {(teacherPage - 1) * teacherPageSize + 1}-
+              {Math.min(teacherPage * teacherPageSize, teachers.length)} of{' '}
+              {teachers.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTeacherPage(1)}
+                disabled={teacherPage === 1}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeacherPage(prev => Math.max(1, prev - 1))}
+                disabled={teacherPage === 1}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Page {teacherPage} of {teacherTotalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setTeacherPage(prev =>
+                    Math.min(teacherTotalPages, prev + 1),
+                  )
+                }
+                disabled={teacherPage === teacherTotalPages}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeacherPage(teacherTotalPages)}
+                disabled={teacherPage === teacherTotalPages}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {selectedTeacher ? (
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                  Selected Teacher
-                </p>
-                <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-                  {selectedTeacher.name}
-                </h2>
-                <p className="text-sm text-[var(--c-6f6c65)] mt-1">
-                  {selectedTeacherInfo?.email ?? 'Email on file'}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                {selectedTeacherInfo?.region ? (
-                  <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
-                    {selectedTeacherInfo.region}
-                  </span>
-                ) : null}
-                {selectedTeacherInfo?.status ? (
-                  <span
-                    className={`rounded-full px-3 py-1 ${
-                      statusStyles[
-                        normalizeTeacherStatus(selectedTeacherInfo.status)
-                      ] ?? statusStyles.Inactive
-                    }`}
-                  >
-                    {normalizeTeacherStatus(selectedTeacherInfo.status)}
-                  </span>
-                ) : null}
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
-                  {students.length} students
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
@@ -577,7 +745,7 @@ export default function AccountsPage() {
                     No students yet for this teacher.
                   </div>
                 ) : (
-                  students.map(student => (
+                  pagedStudents.map(student => (
                     <div
                       key={student.id}
                       className="grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm"
@@ -587,7 +755,8 @@ export default function AccountsPage() {
                           {student.name}
                         </p>
                         <p className="text-xs text-[var(--c-9a9892)]">
-                          Added {new Date(student.createdAt).toLocaleDateString()}
+                          Added{' '}
+                          {new Date(student.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                       <div className="col-span-4 text-[var(--c-6f6c65)]">
@@ -608,7 +777,58 @@ export default function AccountsPage() {
                 )}
               </div>
             </div>
-          </div>
+            {students.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
+                <span>
+                  Showing {(studentPage - 1) * studentPageSize + 1}-
+                  {Math.min(studentPage * studentPageSize, students.length)} of{' '}
+                  {students.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStudentPage(1)}
+                    disabled={studentPage === 1}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    First
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStudentPage(prev => Math.max(1, prev - 1))
+                    }
+                    disabled={studentPage === 1}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    Page {studentPage} of {studentTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStudentPage(prev =>
+                        Math.min(studentTotalPages, prev + 1),
+                      )
+                    }
+                    disabled={studentPage === studentTotalPages}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentPage(studentTotalPages)}
+                    disabled={studentPage === studentTotalPages}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            ) : null}
         </section>
       ) : null}
 

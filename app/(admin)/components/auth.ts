@@ -20,7 +20,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
   {
     company: [
       { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Curriculum', href: '/curriculum' },
+      { label: 'Curriculum', href: '/company/lesson-library' },
       { label: 'Subscriptions', href: '/subscriptions' },
       { label: 'Royalties', href: '/royalties' },
       { label: 'Accounts', href: '/accounts' },

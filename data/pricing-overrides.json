@@ -1,0 +1,8 @@
+{
+  "overrides": {
+    "foundation-program::level-4": {
+      "student": 29,
+      "teacher": 125
+    }
+  }
+}

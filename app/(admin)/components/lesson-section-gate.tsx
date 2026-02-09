@@ -1,12 +1,12 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
+import { createLessonCartItem, useLessonCart } from './lesson-cart';
 import {
-  createLessonCartItem,
   formatCurrency,
   getSectionPriceForRole,
-  useLessonCart,
-} from './lesson-cart';
+  isTeacherAutoUnlocked,
+} from './lesson-pricing';
 import { makeLessonId, slugifyLessonValue } from './lesson-utils';
 import { VIEW_ROLE_STORAGE_KEY } from './auth';
 import { useLessonCartScope } from './lesson-cart-scope';
@@ -30,7 +30,10 @@ export default function LessonSectionGate({
   const isExtensionsProgram =
     slugifyLessonValue(programName) ===
     slugifyLessonValue('Extensions Program');
-  const purchased = isPurchased(id) || (isExtensionsProgram && hasDevelopmentUnlock);
+  const autoUnlocked =
+    role === 'teacher' && isTeacherAutoUnlocked(programName, sectionName);
+  const purchased =
+    isPurchased(id) || autoUnlocked || (isExtensionsProgram && hasDevelopmentUnlock);
   const inCart = isInCart(id);
   const price = getSectionPriceForRole(role, programName, sectionName);
 

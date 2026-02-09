@@ -2,99 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { makeLessonId, slugifyLessonValue } from './lesson-utils';
+import {
+  formatCurrency,
+  getSectionPriceForRole,
+  STUDENT_SECTION_PRICE,
+  TEACHER_SECTION_PRICE,
+} from './lesson-pricing';
 
-export const STUDENT_SECTION_PRICE = 29;
-export const TEACHER_SECTION_PRICE = 79;
-const TEACHER_SECTION_PRICE_OVERRIDES = new Map(
-  [
-    ['Level 2', 125],
-    ['Level 3', 125],
-    ['Level 4', 125],
-    ['Level 5', 125],
-    ['Level 6', 125],
-    ['Level 7', 125],
-    ['Level 8', 125],
-    ['Level 9', 125],
-    ['Level 10', 50],
-    ['Level 11', 50],
-    ['Level 12', 50],
-    ['Level 13', 50],
-    ['Level 14', 50],
-    ['Level 15', 50],
-    ['Level 16', 50],
-    ['Level 17', 50],
-    ['Level 18', 50],
-    ['Understanding Scale & Key', 45],
-    ['Curriculum Guide', 45],
-    ['Blues Infusion Program', 50],
-    ['Teacher Collection Vol. 1 - Compositions by Simply Music Teachers', 30],
-    ['Playing in the Moment', 12.5],
-    ['Practice for the Busy Person', 12.5],
-    ['Playlist Management', 15],
-    ['Tune Toolkit - Comp & Improv Vol. 1', 50],
-    ['Tune Toolkit - Comp & Improv Vol. 2', 50],
-    ['Foundation Duets & Variations Vol. 1', 30],
-    ['The Chord Drill', 15],
-    ['Songs for Children', 30],
-    ['Songs for Christmas', 30],
-    ['Songs for Everyone', 30],
-    ['Music for Christmas & New Year', 30],
-    ['Foundation Duets & Variations Vol. 2', 30],
-    ["Read 'n' Play Vol. 1 - Rhythm", 15],
-    ['A White & Blue Christmas', 5],
-    ["Read 'n' Play Vol. 2 - Pitch", 15],
-    ['Developing Studio Policies', 9],
-    ['Dealing with Parents', 9],
-    ['Managing Shared Lessons', 9],
-    ['Managing Practice Time', 9],
-    ['Teaching Arrangements 1', 9],
-    ['Teaching Arrangements 2', 9],
-    ['Getting the Most out of Accompaniments', 9],
-    ['Using the Pedal', 9],
-    ['Teaching Foundation Level 4', 9],
-    ['Teaching Time for More Music', 9],
-    ['Teaching Jazz Clues', 9],
-    ['Arrangements 1', 35],
-    ['Arrangements 2', 35],
-    ['Arrangements 3', 35],
-    ['Accompaniment 1', 85],
-    ['Accompaniment 2', 85],
-    ['Accompaniment Variations', 35],
-    ['Blues & Improvisation', 40],
-    ['Reading Rhythm', 85],
-    ['Reading Notes', 85],
-    ['Time for More Music', 85],
-    ['Jazz Clues', 85],
-  ].map(([name, price]) => [slugifyLessonValue(name), price]),
-);
-
-const normalizeSectionName = (value?: string | null) => {
-  if (!value) return '';
-  return value
-    .replace(/\s*[-–—]\s*License$/i, '')
-    .replace(/\s+License$/i, '')
-    .replace(/^TWS:\s*/i, '')
-    .replace(/\s*&\s*the\s+/i, ' & ')
-    .trim();
-};
-
-export const getSectionPriceForRole = (
-  role?: string | null,
-  program?: string,
-  section?: string,
-) => {
-  const programSlug = program ? slugifyLessonValue(program) : '';
-  const sectionSlug = section ? slugifyLessonValue(normalizeSectionName(section)) : '';
-  if (programSlug === slugifyLessonValue('Simply Music Gateway')) {
-    return 125;
-  }
-  if (role === 'teacher') {
-    const override = TEACHER_SECTION_PRICE_OVERRIDES.get(sectionSlug);
-    if (override) return override;
-    return TEACHER_SECTION_PRICE;
-  }
-  return STUDENT_SECTION_PRICE;
-};
 const LESSON_CART_KEY = 'sm_lesson_section_cart_v1';
 const LESSON_PURCHASED_KEY = 'sm_lesson_section_purchased_v1';
 const LESSON_PURCHASED_ITEMS_KEY = 'sm_lesson_section_purchased_items_v1';
@@ -262,12 +176,6 @@ const getServerSnapshot = (): LessonCartState => ({
   purchasedItems: [],
 });
 
-export const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
 
 export const createLessonCartItem = (
   program: string,

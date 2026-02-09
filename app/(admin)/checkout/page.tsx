@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, useLessonCart } from '../components/lesson-cart';
+import { useLessonCart } from '../components/lesson-cart';
+import { formatCurrency } from '../components/lesson-pricing';
 import { useLessonCartScope } from '../components/lesson-cart-scope';
 import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
 

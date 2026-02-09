@@ -1,6 +1,6 @@
 import LessonLibrarySection from '../../../../components/lesson-library-section';
 
-export default async function StudentProgramSectionPage({
+export default async function CompanyProgramSectionPage({
   params,
   searchParams,
 }: {
@@ -9,12 +9,13 @@ export default async function StudentProgramSectionPage({
 }) {
   const { program, section } = await params;
   const { material, part } = (await searchParams) ?? {};
+
   return (
     <LessonLibrarySection
-      basePath="/students/lesson-library"
+      basePath="/company/lesson-library"
       programSlug={program}
       sectionSlug={section}
-      showLocks
+      showLocks={false}
       backToRoot
       material={material}
       part={part}

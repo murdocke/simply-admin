@@ -276,9 +276,9 @@ export default function TeachersPage() {
 
   if (effectiveRole !== 'company') {
     return (
-      <div className="space-y-8">
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+      <div className="space-y-6">
+        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="md:max-w-[50%]">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               Teachers
             </p>
@@ -289,7 +289,7 @@ export default function TeachersPage() {
               One place for curriculum, coaching, and studio resources.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button
               className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
                 hubMode === 'training'

@@ -577,6 +577,46 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   useEffect(() => {
     if (role !== 'company') return;
+    const handleViewTeacherUpdated = () => {
+      const stored =
+        window.localStorage.getItem(viewTeacherKey) ??
+        window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+      if (!stored) {
+        setSelectedTeacher(null);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(stored) as SelectedTeacher;
+        if (parsed?.id && parsed?.username) {
+          setSelectedTeacher(parsed);
+          window.localStorage.setItem(viewTeacherKey, stored);
+          setRecentTeachers(current => {
+            const next = [
+              parsed,
+              ...current.filter(item => item.id !== parsed.id),
+            ].slice(0, 6);
+            window.localStorage.setItem(recentTeachersKey, JSON.stringify(next));
+            return next;
+          });
+        } else {
+          setSelectedTeacher(null);
+        }
+      } catch {
+        setSelectedTeacher(null);
+      }
+    };
+
+    window.addEventListener('sm-view-teacher-updated', handleViewTeacherUpdated);
+    return () => {
+      window.removeEventListener(
+        'sm-view-teacher-updated',
+        handleViewTeacherUpdated,
+      );
+    };
+  }, [recentTeachersKey, role, viewTeacherKey]);
+
+  useEffect(() => {
+    if (role !== 'company') return;
     const stored = window.localStorage.getItem(recentTeachersKey);
     if (!stored) {
       setRecentTeachers([]);
@@ -1602,6 +1642,14 @@ export default function AdminShell({ children }: AdminShellProps) {
               <h2 className="text-xl font-semibold">Simply Music</h2>
             </div>
           </div>
+          {effectiveRole === 'company' ? (
+            <a
+              href="/company/whats-next"
+              className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-lg font-semibold text-[var(--sidebar-accent-text)] shadow-sm transition hover:brightness-110"
+            >
+              What&#39;s Next
+            </a>
+          ) : null}
           <nav className="space-y-2 text-sm">
             {items.map(item => {
               if (effectiveRole === 'teacher' && item.label === 'Dashboard') {
@@ -2106,6 +2154,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             Close
           </button>
         </div>
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/whats-next"
+            className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-lg font-semibold text-[var(--sidebar-accent-text)] shadow-sm transition hover:brightness-110"
+            onClick={() => setIsOpen(false)}
+          >
+            What&#39;s Next
+          </a>
+        ) : null}
         <nav className="space-y-2 text-sm">
           {items.map(item => {
             if (effectiveRole === 'teacher' && item.label === 'Dashboard') {

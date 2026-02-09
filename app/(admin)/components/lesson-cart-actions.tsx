@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { formatCurrency, useLessonCart } from './lesson-cart';
+import { useLessonCart } from './lesson-cart';
+import { formatCurrency } from './lesson-pricing';
 import { useLessonCartScope } from './lesson-cart-scope';
 
 type LessonCartPurchaseButtonProps = {
