@@ -1004,7 +1004,7 @@ export default function MaterialsGrid({
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden">
                 <img
-                  src="/reference/StudentVideo-2.png"
+                  src="/reference/dreams-come-true.png"
                   alt="Lesson video preview"
                   className="absolute inset-0 h-full w-full object-cover"
                 />

@@ -50,6 +50,13 @@ export default function StudentDashboardPage() {
   const [isFeePaid, setIsFeePaid] = useState<boolean | null>(null);
   const [isCongratsToastVisible, setIsCongratsToastVisible] = useState(false);
   const [isCongratsCardVisible, setIsCongratsCardVisible] = useState(false);
+  const defaultFullPlayerCover = '/reference/StudentVideo.png';
+  const neilFullPlayerCover = '/reference/NeilMooreVideo.png';
+  const [fullPlayerCover, setFullPlayerCover] = useState(
+    defaultFullPlayerCover,
+  );
+  const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [isCongratsPlayer, setIsCongratsPlayer] = useState(false);
   const { scope, studentId } = useLessonCartScope();
   const studentScope = studentId ? makeStudentScope(studentId) : scope;
   const { purchasedItems } = useLessonCart(studentScope);
@@ -58,6 +65,20 @@ export default function StudentDashboardPage() {
   const [studentServerUnlocks, setStudentServerUnlocks] = useState<
     typeof purchasedItems
   >([]);
+
+  const handleFullPlayerChange = (next: boolean) => {
+    setIsFullPlayerOpen(next);
+    if (!next) {
+      setFullPlayerCover(defaultFullPlayerCover);
+      setIsCongratsPlayer(false);
+    }
+  };
+
+  const handlePlayCongratsMessage = () => {
+    setFullPlayerCover(neilFullPlayerCover);
+    setIsFullPlayerOpen(true);
+    setIsCongratsPlayer(true);
+  };
 
   useEffect(() => {
     const loadStudentSelection = () => {
@@ -541,7 +562,17 @@ export default function StudentDashboardPage() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
         <div className="space-y-4">
           {lastViewedVideo ? (
-            <LastViewedVideoCard data={lastViewedVideo} />
+            <LastViewedVideoCard
+              data={lastViewedVideo}
+              expandedCoverImage={fullPlayerCover}
+              expandedOpen={isFullPlayerOpen}
+              onExpandedChange={handleFullPlayerChange}
+              expandedLabel={isCongratsPlayer ? 'Congratulations' : undefined}
+              expandedTitle={isCongratsPlayer ? 'Neil Moore' : undefined}
+              expandedSubtitle={isCongratsPlayer ? congratsMessage : undefined}
+              expandedShowCenterText={!isCongratsPlayer}
+              expandedShowOverlay={!isCongratsPlayer}
+            />
           ) : null}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <section className="flex h-full flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f1ef)] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.35)] ring-1 ring-[var(--c-ecebe7)]">
@@ -673,9 +704,13 @@ export default function StudentDashboardPage() {
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.55))]" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white">
+                    <button
+                      type="button"
+                      onClick={handlePlayCongratsMessage}
+                      className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white transition hover:border-white hover:bg-white/20"
+                    >
                       Play Message
-                    </span>
+                    </button>
                   </div>
                 </div>
               </div>

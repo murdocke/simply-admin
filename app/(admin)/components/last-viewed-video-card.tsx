@@ -13,6 +13,14 @@ type LastViewedVideo = {
 type LastViewedVideoCardProps = {
   data: LastViewedVideo;
   className?: string;
+  expandedCoverImage?: string;
+  expandedOpen?: boolean;
+  onExpandedChange?: (next: boolean) => void;
+  expandedLabel?: string;
+  expandedTitle?: string;
+  expandedSubtitle?: string;
+  expandedShowCenterText?: boolean;
+  expandedShowOverlay?: boolean;
 };
 
 const LAST_VIEWED_KEY = 'sm_last_viewed_video';
@@ -23,6 +31,14 @@ const sectionTitleFor = (material: string) =>
 export default function LastViewedVideoCard({
   data,
   className,
+  expandedCoverImage = '/reference/StudentVideo.png',
+  expandedOpen,
+  onExpandedChange,
+  expandedLabel,
+  expandedTitle,
+  expandedSubtitle,
+  expandedShowCenterText = true,
+  expandedShowOverlay = true,
 }: LastViewedVideoCardProps) {
   const [material, setMaterial] = useState(data.material);
   const [part, setPart] = useState<string | null>(data.part ?? null);
@@ -33,6 +49,11 @@ export default function LastViewedVideoCard({
     setMaterial(data.material);
     setPart(data.part ?? null);
   }, [data.material, data.part]);
+
+  useEffect(() => {
+    if (expandedOpen === undefined) return;
+    setIsExpanded(expandedOpen);
+  }, [expandedOpen]);
 
   const lessonPartItems = useMemo(() => {
     const partsMap = lessonParts as Record<string, string[]>;
@@ -117,6 +138,9 @@ export default function LastViewedVideoCard({
   const lessonTitle = sectionTitleFor(material) || material;
   const canGoPrev = hasPrevPart || hasPrevMaterial;
   const canGoNext = hasNextPart || hasNextMaterial;
+  const headerLabel = expandedLabel ?? (isPlaying ? 'Now Playing' : 'Viewing');
+  const headerTitle = expandedTitle ?? lessonTitle;
+  const headerSubtitle = expandedSubtitle ?? (part ?? 'Select a lesson part to begin.');
 
   return (
     <section
@@ -185,7 +209,10 @@ export default function LastViewedVideoCard({
             </div>
             <button
               type="button"
-              onClick={() => setIsExpanded(true)}
+              onClick={() => {
+                setIsExpanded(true);
+                onExpandedChange?.(true);
+              }}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-white/80 transition hover:border-white/40 hover:text-white"
               aria-label="Expand video"
             >
@@ -244,21 +271,27 @@ export default function LastViewedVideoCard({
         <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setIsExpanded(false)}
+            onClick={() => {
+              setIsExpanded(false);
+              onExpandedChange?.(false);
+            }}
           />
           <div className="relative w-full max-w-5xl rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">
-                  {isPlaying ? 'Now Playing' : 'Viewing'}
+                  {headerLabel}
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold">{lessonTitle}</h2>
+                <h2 className="mt-2 text-2xl font-semibold">{headerTitle}</h2>
                 <p className="mt-2 text-sm text-white/70">
-                  {part ?? 'Select a lesson part to begin.'}
+                  {headerSubtitle}
                 </p>
               </div>
               <button
-                onClick={() => setIsExpanded(false)}
+                onClick={() => {
+                  setIsExpanded(false);
+                  onExpandedChange?.(false);
+                }}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
                 aria-label="Close"
               >
@@ -279,7 +312,14 @@ export default function LastViewedVideoCard({
 
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
+                <img
+                  src={expandedCoverImage}
+                  alt="Lesson video preview"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                {expandedShowOverlay ? (
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
+                ) : null}
                 <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
                   <button
                     type="button"
@@ -338,15 +378,17 @@ export default function LastViewedVideoCard({
                     </button>
                   </div>
                 </div>
-                <div className="relative z-10 px-6 text-center">
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/70">
-                    {isPlaying ? 'Now Playing' : 'Viewing'}
-                  </p>
-                  <h3 className="mt-3 text-2xl font-semibold">{lessonTitle}</h3>
-                  <p className="mt-2 text-sm text-white/70">
-                    {part ?? 'Select a lesson part to begin.'}
-                  </p>
-                </div>
+                {expandedShowCenterText ? (
+                  <div className="relative z-10 px-6 text-center">
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/70">
+                      {headerLabel}
+                    </p>
+                    <h3 className="mt-3 text-2xl font-semibold">{headerTitle}</h3>
+                    <p className="mt-2 text-sm text-white/70">
+                      {headerSubtitle}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
