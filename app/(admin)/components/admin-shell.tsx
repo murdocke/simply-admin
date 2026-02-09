@@ -1219,17 +1219,14 @@ export default function AdminShell({ children }: AdminShellProps) {
     setIsOpen(false);
   };
 
-  const { displayName, roleBadge } = useMemo(() => {
+  const displayName = useMemo(() => {
     const fallback = user?.username ?? 'Account';
     const name = accountInfo?.name ?? fallback;
     const match = name.match(/\s*\(([^)]+)\)\s*$/);
     if (match) {
-      return {
-        displayName: name.replace(match[0], '').trim() || fallback,
-        roleBadge: match[1],
-      };
+      return name.replace(match[0], '').trim() || fallback;
     }
-    return { displayName: name, roleBadge: null as string | null };
+    return name;
   }, [accountInfo?.name, user?.username]);
 
   const recentThree = useMemo(
@@ -1447,6 +1444,11 @@ export default function AdminShell({ children }: AdminShellProps) {
 
           <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
             <div className="relative flex aspect-video items-center justify-center">
+              <img
+                src="/reference/StudentVideo-2.png"
+                alt="Lesson video preview"
+                className="absolute inset-0 h-full w-full object-cover"
+              />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.25),rgba(3,3,3,0.6))]" />
               <div className="relative z-10 w-full -translate-y-4 px-4 text-center">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-white/70">
@@ -1573,6 +1575,11 @@ export default function AdminShell({ children }: AdminShellProps) {
 
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden">
+                <img
+                  src="/reference/StudentVideo-2.png"
+                  alt="Lesson video preview"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
                 <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
                   <button
@@ -1642,14 +1649,6 @@ export default function AdminShell({ children }: AdminShellProps) {
               <h2 className="text-xl font-semibold">Simply Music</h2>
             </div>
           </div>
-          {effectiveRole === 'company' ? (
-            <a
-              href="/company/whats-next"
-              className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-lg font-semibold text-[var(--sidebar-accent-text)] shadow-sm transition hover:brightness-110"
-            >
-              What&#39;s Next
-            </a>
-          ) : null}
           <nav className="space-y-2 text-sm">
             {items.map(item => {
               if (effectiveRole === 'teacher' && item.label === 'Dashboard') {
@@ -1662,10 +1661,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                       {item.label}
                     </a>
                     <a
-                      href="/teachers?mode=training"
+                      href="/teachers/this-week"
                       className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
                     >
-                      Training
+                      This Week
                     </a>
                     <a
                       href="/teachers?mode=teaching"
@@ -1673,8 +1672,17 @@ export default function AdminShell({ children }: AdminShellProps) {
                     >
                       Teaching
                     </a>
+                    <a
+                      href="/teachers?mode=training"
+                      className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
+                    >
+                      Training
+                    </a>
                   </div>
                 );
+              }
+              if (effectiveRole === 'teacher' && item.label === 'This Week') {
+                return null;
               }
               return (
                 <a
@@ -1689,28 +1697,12 @@ export default function AdminShell({ children }: AdminShellProps) {
           </nav>
           {user ? (
             <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
-              <p className="mt-2 text-sm font-semibold text-[var(--c-1f1f1d)]">
+              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
                 {displayName}
               </p>
-              <p className="mt-1 text-xs text-[var(--c-9a9892)]">
+              <p className="mt-1 text-sm text-[var(--c-9a9892)]">
                 {accountInfo?.email ?? `${user.username}@simplymusic.com`}
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                {roleBadge ? (
-                  <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                    {roleBadge}
-                  </span>
-                ) : null}
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                  {accountInfo?.status ?? 'Active'}
-                </span>
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                  Last login:{' '}
-                  {accountInfo?.lastLogin
-                    ? new Date(accountInfo.lastLogin).toLocaleDateString()
-                    : 'Today'}
-                </span>
-              </div>
               <button
                 onClick={openAccountModal}
                 className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
@@ -1942,6 +1934,14 @@ export default function AdminShell({ children }: AdminShellProps) {
         >
           Log Out
         </button>
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/whats-next"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+          >
+            What&#39;s Next
+          </a>
+        ) : null}
       </aside>
 
         <div className="flex-1">
@@ -2206,28 +2206,12 @@ export default function AdminShell({ children }: AdminShellProps) {
         </nav>
         {user ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
-            <p className="mt-2 text-sm font-semibold text-[var(--c-1f1f1d)]">
+            <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
               {displayName}
             </p>
-            <p className="mt-1 text-xs text-[var(--c-9a9892)]">
+            <p className="mt-1 text-sm text-[var(--c-9a9892)]">
               {accountInfo?.email ?? `${user.username}@simplymusic.com`}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              {roleBadge ? (
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                  {roleBadge}
-                </span>
-              ) : null}
-              <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                {accountInfo?.status ?? 'Active'}
-              </span>
-              <span className="rounded-full border border-[var(--c-e5e3dd)] px-2 py-1">
-                Last login:{' '}
-                {accountInfo?.lastLogin
-                  ? new Date(accountInfo.lastLogin).toLocaleDateString()
-                  : 'Today'}
-              </span>
-            </div>
             <button
               onClick={openAccountModal}
               className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import studentsData from '@/data/students.json';
 import LastViewedVideoCard from '../../components/last-viewed-video-card';
+import StudentPromoCard from '../../components/student-promo-card';
 import {
   AUTH_STORAGE_KEY,
   VIEW_ROLE_STORAGE_KEY,
@@ -47,6 +48,8 @@ export default function StudentDashboardPage() {
     null,
   );
   const [isFeePaid, setIsFeePaid] = useState<boolean | null>(null);
+  const [isCongratsToastVisible, setIsCongratsToastVisible] = useState(false);
+  const [isCongratsCardVisible, setIsCongratsCardVisible] = useState(false);
   const { scope, studentId } = useLessonCartScope();
   const studentScope = studentId ? makeStudentScope(studentId) : scope;
   const { purchasedItems } = useLessonCart(studentScope);
@@ -162,6 +165,15 @@ export default function StudentDashboardPage() {
       setIsFeePaid(false);
     }
   }, [selectedStudent?.teacher, selectedStudent?.id]);
+
+  useEffect(() => {
+    if (selectedStudent?.name === 'Quinn') {
+      setIsCongratsCardVisible(false);
+      return;
+    }
+    setIsCongratsToastVisible(false);
+    setIsCongratsCardVisible(false);
+  }, [selectedStudent?.name]);
 
   useEffect(() => {
     const loadLastViewed = () => {
@@ -428,9 +440,46 @@ export default function StudentDashboardPage() {
   const secondarySongHref = secondarySong
     ? `/students/lesson-library/${slugifyLessonValue(secondarySong.program)}/${slugifyLessonValue(secondarySong.section)}?material=${encodeURIComponent(secondarySong.material)}`
     : null;
+  const isCongratsEligible = selectedStudent?.name === 'Quinn';
+  const congratsMessage = isCongratsEligible
+    ? "Quinn, I'm so proud of you for completing Level 3!"
+    : "I'm so proud of you for completing your latest level!";
+  const showCongratsToast = () => {
+    if (!isCongratsEligible) return;
+    setIsCongratsToastVisible(true);
+    setIsCongratsCardVisible(false);
+  };
+  const openCongratsCard = () => {
+    setIsCongratsToastVisible(false);
+    setIsCongratsCardVisible(true);
+  };
+  const dismissCongratsCard = () => {
+    setIsCongratsToastVisible(false);
+    setIsCongratsCardVisible(false);
+  };
 
   return (
     <div className="space-y-6">
+      {isCongratsToastVisible && isCongratsEligible ? (
+        <div className="fixed right-6 top-6 z-50 flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={openCongratsCard}
+            className="w-[min(320px,90vw)] rounded-2xl border border-white/30 bg-white/5 p-4 text-left text-[var(--c-ffffff)] shadow-[0_8px_20px_-18px_rgba(0,0,0,0.25)] backdrop-blur-md backdrop-saturate-150 transition hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-18px_rgba(0,0,0,0.35)]"
+          >
+            <p className="text-[10px] uppercase tracking-[0.4em] text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+              New Message
+            </p>
+            <p className="mt-2 text-sm font-semibold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
+              Neil Moore
+            </p>
+            <p className="mt-2 text-base text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+              {congratsMessage} Tap to watch a video message I sent you!
+            </p>
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <header>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
@@ -439,7 +488,7 @@ export default function StudentDashboardPage() {
           <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
             Dashboard
           </h1>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+          <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
             Your practice snapshot will live here.
           </p>
         </header>
@@ -453,7 +502,7 @@ export default function StudentDashboardPage() {
               <h2 className="text-xl font-semibold text-[var(--c-1f1f1d)]">
                 {selectedStudent?.name ?? 'No student selected'}
               </h2>
-              <p className="text-sm text-[var(--c-6f6c65)]">
+              <p className="text-[15px] text-[var(--c-6f6c65)]">
                 {selectedStudent?.name
                   ? 'You are viewing the student dashboard for this learner.'
                   : 'Choose a student in the sidebar to view their dashboard.'}
@@ -463,15 +512,27 @@ export default function StudentDashboardPage() {
         ) : null}
       </div>
 
+      {isCongratsEligible && !isCongratsToastVisible && !isCongratsCardVisible ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={showCongratsToast}
+            className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            Show Neil Message
+          </button>
+        </div>
+      ) : null}
+
       {isFeePaid === false ? (
-        <div className="rounded-2xl border border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] px-5 py-4 text-sm text-[var(--c-7a4a17)] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)]">
+        <div className="rounded-2xl border border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] px-5 py-4 text-[15px] text-[var(--c-7a4a17)] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)]">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-7a4a17)]">
             Lesson Fees Due
           </p>
           <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
             This month’s lesson fees are not marked paid yet.
           </p>
-          <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+          <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
             Please check in with your teacher and get this taken care of.
           </p>
         </div>
@@ -490,7 +551,7 @@ export default function StudentDashboardPage() {
               <h2 className="mt-3 text-lg font-semibold text-[var(--c-1f1f1d)]">
                 Make &quot;{focusPrimary?.display ?? 'a focus song'}&quot; your weekly win.
               </h2>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+              <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
                 {focusPrimary
                   ? 'Play it daily so your teacher can hear the growth next lesson.'
                   : 'Focus song will appear here once setup by your teacher.'}
@@ -514,7 +575,7 @@ export default function StudentDashboardPage() {
               <h2 className="mt-3 text-lg font-semibold text-[var(--c-1f1f1d)]">
                 Keep &quot;{focusSecondary?.display ?? 'your focus song'}&quot; polished.
               </h2>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+              <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
                 {focusSecondary
                   ? 'A short daily run keeps it strong for your next lesson.'
                   : 'Focus song will appear here once setup by your teacher.'}
@@ -541,7 +602,7 @@ export default function StudentDashboardPage() {
                   primarySong?.display ?? 'a new song',
                 )}
               </h2>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+              <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
                 {primarySong
                   ? pickTemplate(primarySubtitleTemplates, 1)
                   : 'Unlock a lesson to get started.'}
@@ -568,7 +629,7 @@ export default function StudentDashboardPage() {
                   secondarySong?.display ?? 'this song',
                 )}
               </h2>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+              <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
                 {secondarySong
                   ? pickTemplate(secondarySubtitleTemplates, 3)
                   : 'Unlock a lesson to see your check-in prompt.'}
@@ -587,6 +648,58 @@ export default function StudentDashboardPage() {
           </div>
         </div>
         <aside className="space-y-4">
+          {isCongratsCardVisible && isCongratsEligible ? (
+            <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f1ef)] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                    Video Message
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-[var(--c-1f1f1d)]">
+                    Neil Moore
+                  </h2>
+                </div>
+                <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Congratulations
+                </span>
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] shadow-sm">
+                <div className="relative aspect-video w-full">
+                  <img
+                    src="/reference/NeilMooreVideo.png"
+                    alt="Video placeholder"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.55))]" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white">
+                      Play Message
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-4 text-[15px] leading-relaxed text-[var(--c-6f6c65)]">
+                {congratsMessage}
+              </p>
+              <p className="mt-3 text-[15px] leading-relaxed text-[var(--c-6f6c65)]">
+                I've watched your consistency and focus grow every week, and it
+                shows.
+              </p>
+              <p className="mt-3 text-[15px] leading-relaxed text-[var(--c-6f6c65)]">
+                Keep leaning into the details — you're doing something special.
+              </p>
+
+              <button
+                type="button"
+                onClick={dismissCongratsCard}
+                className="mt-4 inline-flex items-center justify-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              >
+                Dismiss This Message
+              </button>
+            </section>
+          ) : null}
           <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f1ef)] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)]">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               This Week
@@ -594,7 +707,7 @@ export default function StudentDashboardPage() {
             <h2 className="mt-3 text-xl font-semibold text-[var(--c-1f1f1d)]">
               Lesson Plan Ready
             </h2>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+            <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
               Jump into your current lesson plan to review parts, videos, and
               practice goals.
             </p>
@@ -606,6 +719,8 @@ export default function StudentDashboardPage() {
             </Link>
           </section>
 
+          <StudentPromoCard />
+
           <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f1ef)] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)]">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               Playlist
@@ -613,11 +728,12 @@ export default function StudentDashboardPage() {
             <h2 className="mt-3 text-xl font-semibold text-[var(--c-1f1f1d)]">
               Keep Your Playlist Repertoire Alive!
             </h2>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              Your teacher&apos;s selected songs appear here for quick access.
+            <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
+              This is your personal playlist, curated by your teacher so you can
+              sit down, play through, and keep these songs fresh anytime.
             </p>
             {visibleSections.length === 0 ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-sm text-[var(--c-6f6c65)]">
+              <div className="mt-4 rounded-2xl border border-dashed border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-[15px] text-[var(--c-6f6c65)]">
                 No playlist items have been set yet.
               </div>
             ) : (

@@ -218,6 +218,10 @@ export default function TeacherDashboardPage() {
       }).format(selectedDay),
     [selectedDay],
   );
+  const isSelectedDayToday = useMemo(
+    () => selectedDay.toDateString() === new Date().toDateString(),
+    [selectedDay],
+  );
   const nextDay = useMemo(() => {
     const next = new Date(selectedDay);
     next.setDate(selectedDay.getDate() + 1);
@@ -306,9 +310,7 @@ export default function TeacherDashboardPage() {
   }, [selectedDayLessons]);
   const nextStudent = useMemo(() => {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const isToday =
-      selectedDay.toDateString() === new Date().toDateString();
-    if (!isToday) {
+    if (!isSelectedDayToday) {
       return sortedSelectedLessons[0] ?? null;
     }
     const upcoming = sortedSelectedLessons.find(student => {
@@ -316,7 +318,7 @@ export default function TeacherDashboardPage() {
       return minutes !== null && minutes >= nowMinutes;
     });
     return upcoming ?? sortedSelectedLessons[0] ?? null;
-  }, [now, selectedDay, sortedSelectedLessons]);
+  }, [isSelectedDayToday, now, sortedSelectedLessons]);
 
   const selectedDayKey = useMemo(
     () => selectedDay.toISOString().slice(0, 10),
@@ -556,6 +558,7 @@ export default function TeacherDashboardPage() {
                 sortedSelectedLessons.map(student => {
                   const prepRecord = prepByStudent[student.id];
                   const isPrepared = prepRecord?.dateKey === selectedDayKey;
+                  const isUnpaidForMonth = !paymentStatus[student.id];
                   return (
                     <div
                       key={student.id}
@@ -647,6 +650,11 @@ export default function TeacherDashboardPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
+                        {isUnpaidForMonth ? (
+                          <span className="rounded-full bg-[var(--c-fce8d6)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-8a5b2b)]">
+                            Unpaid
+                          </span>
+                        ) : null}
                         <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
                           {student.lessonTime ?? 'TBD'}
                         </span>

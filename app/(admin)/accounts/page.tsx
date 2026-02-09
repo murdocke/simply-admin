@@ -459,7 +459,7 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Company
@@ -471,12 +471,30 @@ export default function AccountsPage() {
             Manage teacher accounts and view roster details.
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
-        >
-          Add Teacher
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={openCreateModal}
+            className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+          >
+            Add Teacher
+          </button>
+          <button
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            Comany Accounts
+          </button>
+          <button
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            My Acount
+          </button>
+          <button
+            onClick={() => router.push('/account-permissions')}
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            Account Permissions
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
@@ -530,7 +548,7 @@ export default function AccountsPage() {
 
       {selectedTeacher ? (
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                 Selected Teacher
@@ -568,7 +586,7 @@ export default function AccountsPage() {
       ) : null}
 
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-6">
           <div>
             <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
               Teacher Directory

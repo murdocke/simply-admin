@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { VIEW_ROLE_STORAGE_KEY } from '../components/auth';
+import {
+  VIEW_ROLE_STORAGE_KEY,
+  VIEW_TEACHER_STORAGE_KEY,
+} from '../components/auth';
 import lessonTypes from './students/lesson-data/lesson-types.json';
 import lessonSections from './students/lesson-data/lesson-sections.json';
 import LockedSectionCard from '../components/locked-section-card';
 import LessonCartPurchaseButton from '../components/lesson-cart-actions';
+import StudentPromoCard from '../components/student-promo-card';
+import studentsData from '@/data/students.json';
 
 type TeacherRecord = {
   id: string;
@@ -25,6 +30,16 @@ type TeacherRecord = {
     | 'Active';
   createdAt: string;
   updatedAt: string;
+};
+
+type StudentRecord = {
+  id: string;
+  teacher: string;
+  name: string;
+  status: 'Active' | 'Paused' | 'Archived';
+  lessonDay?: string;
+  lessonTime?: string;
+  lessonDuration?: '30M' | '45M' | '1HR';
 };
 
 const defaultForm = {
@@ -60,6 +75,25 @@ const toProgramSlug = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
+const parseTimeToMinutes = (value?: string) => {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3].toUpperCase();
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  const normalizedHours = hours % 12;
+  const offset = period === 'PM' ? 12 * 60 : 0;
+  return normalizedHours * 60 + minutes + offset;
+};
+
+const durationToMinutes = (value?: StudentRecord['lessonDuration']) => {
+  if (value === '45M') return 45;
+  if (value === '1HR') return 60;
+  return 30;
+};
+
 export default function TeachersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,6 +101,22 @@ export default function TeachersPage() {
   const [role, setRole] = useState<string | null>(null);
   const [viewRole, setViewRole] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
+  const [teacherName, setTeacherName] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const [quickNote, setQuickNote] = useState('');
+  const [prepByStudent, setPrepByStudent] = useState<
+    Record<
+      string,
+      {
+        dateKey: string;
+        focus: string;
+        materials: string;
+        goal: string;
+        warmup: string;
+        notes: string;
+      }
+    >
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<TeacherRecord | null>(null);
@@ -103,10 +153,37 @@ export default function TeachersPage() {
           setViewRole(storedView);
         }
       }
+      if (parsed?.role === 'teacher' && parsed?.username) {
+        setTeacherName(parsed.username);
+      }
+      if (parsed?.role === 'company') {
+        const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
+        if (storedView === 'teacher') {
+          const viewTeacherKey = parsed?.username
+            ? `${VIEW_TEACHER_STORAGE_KEY}:${parsed.username}`
+            : VIEW_TEACHER_STORAGE_KEY;
+          const storedTeacher =
+            window.localStorage.getItem(viewTeacherKey) ??
+            window.localStorage.getItem(VIEW_TEACHER_STORAGE_KEY);
+          if (storedTeacher) {
+            try {
+              const selected = JSON.parse(storedTeacher) as {
+                username?: string;
+              };
+              if (selected?.username) {
+                setTeacherName(selected.username);
+              }
+            } catch {
+              setTeacherName(null);
+            }
+          }
+        }
+      }
     } catch {
       setCompanyName(null);
       setRole(null);
       setViewRole(null);
+      setTeacherName(null);
     }
   }, []);
 
@@ -115,6 +192,147 @@ export default function TeachersPage() {
     () => (searchParams.get('mode') === 'teaching' ? 'teaching' : 'training'),
     [searchParams],
   );
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem('sm_lesson_prep');
+    if (!stored) {
+      setPrepByStudent({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as typeof prepByStudent;
+      setPrepByStudent(parsed ?? {});
+    } catch {
+      setPrepByStudent({});
+    }
+  }, []);
+
+  const offsetNow = useMemo(() => new Date(now.getTime() + 70_000), [now]);
+  const todayLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now),
+    [now],
+  );
+  const todayKey = useMemo(
+    () => now.toISOString().slice(0, 10),
+    [now],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `sm_teacher_quick_note:${teacherName ?? 'default'}:${todayKey}`;
+    try {
+      const stored = window.localStorage.getItem(key);
+      setQuickNote(stored ?? '');
+    } catch {
+      setQuickNote('');
+    }
+  }, [teacherName, todayKey]);
+
+  const activeStudents = useMemo(() => {
+    const students = studentsData.students as StudentRecord[];
+    return students.filter(
+      student =>
+        student.status === 'Active' &&
+        (!teacherName || student.teacher === teacherName),
+    );
+  }, [teacherName]);
+
+  const todayLessons = useMemo(() => {
+    return activeStudents
+      .filter(
+        student =>
+          student.lessonDay?.toLowerCase() === todayLabel.toLowerCase(),
+      )
+      .slice()
+      .sort((a, b) => {
+        const aMinutes = parseTimeToMinutes(a.lessonTime) ?? 0;
+        const bMinutes = parseTimeToMinutes(b.lessonTime) ?? 0;
+        return aMinutes - bMinutes;
+      });
+  }, [activeStudents, todayLabel]);
+
+  const currentLessonIndex = useMemo(() => {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return todayLessons.findIndex(lesson => {
+      const start = parseTimeToMinutes(lesson.lessonTime);
+      if (start === null) return false;
+      const duration = durationToMinutes(lesson.lessonDuration);
+      return nowMinutes >= start && nowMinutes < start + duration;
+    });
+  }, [now, todayLessons]);
+
+  const nextLessonIndex = useMemo(() => {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return todayLessons.findIndex(lesson => {
+      const start = parseTimeToMinutes(lesson.lessonTime);
+      return start !== null && start >= nowMinutes;
+    });
+  }, [now, todayLessons]);
+
+  const currentLesson =
+    currentLessonIndex >= 0 ? todayLessons[currentLessonIndex] : null;
+  const upcomingLesson =
+    nextLessonIndex >= 0 ? todayLessons[nextLessonIndex] : null;
+  const nextLesson =
+    currentLessonIndex >= 0
+      ? todayLessons[currentLessonIndex + 1] ?? null
+      : upcomingLesson;
+  const upcomingLessons = useMemo(() => {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return todayLessons.filter(lesson => {
+      const start = parseTimeToMinutes(lesson.lessonTime);
+      if (start === null) return false;
+      const duration = durationToMinutes(lesson.lessonDuration);
+      return start + duration > nowMinutes;
+    });
+  }, [now, todayLessons]);
+  const scheduleStartIndex =
+    currentLessonIndex >= 0
+      ? currentLessonIndex
+      : nextLessonIndex >= 0
+        ? nextLessonIndex
+        : todayLessons.length;
+  const schedulePreview = todayLessons.slice(
+    scheduleStartIndex,
+    scheduleStartIndex + 3,
+  );
+
+  const getPrepSummary = (student?: StudentRecord | null) => {
+    if (!student) return [];
+    const record = prepByStudent[student.id];
+    if (!record || record.dateKey !== todayKey) return [];
+    return [
+      record.focus ? { label: 'Focus', value: record.focus } : null,
+      record.materials ? { label: 'Materials', value: record.materials } : null,
+      record.goal ? { label: 'Goal', value: record.goal } : null,
+      record.warmup ? { label: 'Warm-up', value: record.warmup } : null,
+      record.notes ? { label: 'Notes', value: record.notes } : null,
+    ].filter(Boolean) as { label: string; value: string }[];
+  };
+  const getPrepNotes = (student?: StudentRecord | null) => {
+    if (!student) return null;
+    const record = prepByStudent[student.id];
+    if (!record || record.dateKey !== todayKey) return null;
+    return record.notes?.trim() ? record.notes.trim() : null;
+  };
+
+  const handleQuickNoteSave = () => {
+    if (typeof window === 'undefined') return;
+    const key = `sm_teacher_quick_note:${teacherName ?? 'default'}:${todayKey}`;
+    try {
+      window.localStorage.setItem(key, quickNote.trim());
+    } catch {
+      // ignore storage failures
+    }
+  };
 
   useEffect(() => {
     if (effectiveRole === 'company') {
@@ -283,13 +501,33 @@ export default function TeachersPage() {
               Teachers
             </p>
             <h1 className="text-3xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-              Training + Teaching Hub
+              {hubMode === 'teaching' ? 'Teaching Hub' : 'Training Hub'}
             </h1>
             <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              One place for curriculum, coaching, and studio resources.
+              {hubMode === 'teaching'
+                ? 'Lesson delivery resources, coaching tools, and studio support.'
+                : 'Curriculum paths, practice coaching, and studio readiness tools.'}
             </p>
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {hubMode === 'teaching' ? (
+              <div className="text-right">
+                <span className="text-sm font-semibold uppercase tracking-[0.25em] text-[var(--c-1f1f1d)]">
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  }).format(offsetNow)}{' '}
+                  ·{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(offsetNow)}
+                </span>
+                <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Fast clock
+                </p>
+              </div>
+            ) : null}
             <button
               className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
                 hubMode === 'training'
@@ -312,6 +550,256 @@ export default function TeachersPage() {
             </button>
           </div>
         </header>
+
+        {hubMode === 'training' ? (
+          <>
+            <div className="rounded-2xl border border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] px-5 py-4 text-sm text-[var(--c-7a4a17)] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)]">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-7a4a17)]">
+                Training Mode
+              </p>
+              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
+                If you&apos;re about to teach, switch to the Teaching Hub.
+              </p>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                Teaching mode shows today&apos;s schedule, prep notes, and next-student
+                details at a glance.
+              </p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => handleHubModeChange('teaching')}
+                  className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                >
+                  Switch to Teaching
+                </button>
+              </div>
+            </div>
+
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <StudentPromoCard
+                title="Jazz Colors: Teacher Edition"
+                body="Quick coaching ideas, voicing tips, and a groove-first approach to keep students smiling."
+                ctaLabel="View Lesson Pack Details"
+                ctaHref="/teachers?mode=training"
+              />
+              <StudentPromoCard
+                title="Studio Warm-Ups Pack"
+                body="Five-minute warmups, rhythm resets, and confidence builders you can drop into any lesson."
+                imageSrc="/reference/SIGHT-READING.png"
+                ctaLabel="View Lesson Pack Details"
+                ctaHref="/teachers?mode=training"
+              />
+              <StudentPromoCard
+                title="Sight-Reading Sprint"
+                body="Fast drills and pacing notes to help students read with ease (and less hesitation)."
+                imageSrc="/reference/WARM-UPS.png"
+                ctaLabel="View Lesson Pack Details"
+                ctaHref="/teachers?mode=training"
+              />
+            </section>
+
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <StudentPromoCard
+                title="Ivory League Coaching"
+                eyebrowLabel="Coach Spotlight"
+                pillLabel="Approved Coaching"
+                body="Laurie Richards offers personalized coaching to sharpen teaching flow and studio leadership."
+                imageSrc="/reference/SMDT-Coaching-Ivory-League.webp"
+                imageFit="contain"
+                imageFrame="white"
+                ctaLabel="View Coaching Program"
+                ctaHref="/teachers?mode=training"
+              />
+              <StudentPromoCard
+                title="Music Teacher's Coach"
+                eyebrowLabel="Coach Spotlight"
+                pillLabel="Approved Coaching"
+                body="Robin Quinn Keehn shares a mastermind approach to build sustainable studio habits."
+                imageSrc="/reference/SMDT-Coaching-Quitting-Culture.webp"
+                imageFit="contain"
+                imageFrame="white"
+                ctaLabel="View Coaching Program"
+                ctaHref="/teachers?mode=training"
+              />
+              <StudentPromoCard
+                title="Inspired Teacher Coaching"
+                eyebrowLabel="Coach Spotlight"
+                pillLabel="Approved Coaching"
+                body="Bernadette Ashby delivers tailored coaching to re‑ignite your teaching energy."
+                imageSrc="/reference/SMDT-Coaching-Inspired-Teacher.webp"
+                imageFit="contain"
+                imageFrame="white"
+                ctaLabel="View Coaching Program"
+                ctaHref="/teachers?mode=training"
+              />
+            </section>
+          </>
+        ) : null}
+
+        {hubMode === 'teaching' ? (
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.6fr] lg:items-stretch">
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Teaching Flow
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                {currentLesson ? 'Current Lesson' : 'Next Lesson'}
+              </h2>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                {currentLesson
+                  ? `In progress right now.`
+                  : `Up next for ${todayLabel}.`}
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] p-4">
+                {currentLesson || nextLesson ? (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div>
+                          <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
+                            {(currentLesson ?? nextLesson)?.name}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                            {(currentLesson ?? nextLesson)?.lessonTime ?? 'Time TBD'}
+                          </p>
+                        </div>
+                        {getPrepNotes(currentLesson ?? nextLesson) ? (
+                          <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[13px] text-[var(--c-6f6c65)]">
+                            <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
+                              Notes
+                            </span>
+                            <span className="text-[var(--c-1f1f1d)]">
+                              {getPrepNotes(currentLesson ?? nextLesson)}
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                        {currentLesson ? 'Now' : 'Next'}
+                      </span>
+                    </div>
+                    {!getPrepNotes(currentLesson ?? nextLesson) ? (
+                      <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                        No prep notes yet for this lesson.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-[var(--c-6f6c65)]">
+                    No lessons scheduled for today.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    ({upcomingLessons.length}) Lessons Upcoming Today
+                  </p>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {schedulePreview.length > 0 ? (
+                    schedulePreview.map(lesson => (
+                      <div
+                        key={lesson.id}
+                        className="rounded-xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] px-3 py-2 text-sm text-[var(--c-6f6c65)] shadow-[0_10px_24px_-20px_rgba(15,15,15,0.35)]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="font-medium text-[var(--c-1f1f1d)]">
+                              {lesson.name}
+                            </span>
+                            {getPrepNotes(lesson) ? (
+                              <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[13px] text-[var(--c-6f6c65)]">
+                                <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
+                                  Notes
+                                </span>
+                                <span className="text-[var(--c-1f1f1d)]">
+                                  {getPrepNotes(lesson)}
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className="uppercase tracking-[0.2em] text-[10px] text-[var(--c-9a9892)]">
+                            {lesson.lessonTime ?? 'TBD'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[var(--c-6f6c65)]">
+                      You&apos;re clear for the rest of today.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Next Student
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-[var(--c-1f1f1d)]">
+                  {nextLesson?.name ?? 'No one up next'}
+                </h2>
+                <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
+                  {nextLesson
+                    ? `Lesson at ${nextLesson.lessonTime ?? 'TBD'}`
+                    : 'No upcoming lessons scheduled for today.'}
+                </p>
+                {nextLesson ? (
+                  <div className="mt-3">
+                    {getPrepNotes(nextLesson) ? (
+                      <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[14px] text-[var(--c-6f6c65)]">
+                        <span className="uppercase tracking-[0.2em] text-[12px] text-[var(--c-9a9892)]">
+                          Notes
+                        </span>
+                        <span className="text-[var(--c-1f1f1d)]">
+                          {getPrepNotes(nextLesson)}
+                        </span>
+                      </span>
+                    ) : (
+                      <p className="text-[15px] text-[var(--c-6f6c65)]">
+                        No prep notes yet for this student.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Quick Note
+                </p>
+                <h3 className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                  {currentLesson?.name
+                    ? `${currentLesson.name} (Current Lesson)`
+                    : nextLesson?.name
+                      ? `${nextLesson.name} (Next Lesson)`
+                      : 'Current Lesson'}
+                </h3>
+                <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
+                  Capture a quick reminder while the lesson is fresh.
+                </p>
+                <textarea
+                  value={quickNote}
+                  onChange={event => setQuickNote(event.target.value)}
+                  placeholder="Add a quick note..."
+                  className="mt-3 min-h-[90px] w-full resize-none rounded-xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                />
+                <button
+                  type="button"
+                  onClick={handleQuickNoteSave}
+                  className="mt-3 inline-flex items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                >
+                  Save Note
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

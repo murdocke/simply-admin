@@ -337,7 +337,7 @@ export default function CompanyWhatsNextPage() {
       </div>
 
       {nextTodayItems.length > 0 ? (
-        <section className="rounded-[28px] border border-[var(--c-e0dfd9)] bg-[var(--c-f7f6f2)] p-8 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.25)]">
+        <section className="rounded-[28px] border border-white/50 bg-[var(--c-f7f6f2)] p-8 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.25)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--c-6f6c65)]">
@@ -354,14 +354,14 @@ export default function CompanyWhatsNextPage() {
               Next Up
             </span>
           </div>
-          <ul className="mt-6 space-y-3 text-base text-[var(--c-1f1f1d)]">
+          <ul className="mt-6 space-y-4 text-base text-[var(--c-1f1f1d)]">
             {nextTodayItems.map(item => (
               <li
                 key={item.id}
-                className={`flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.2)] ${
+                className={`flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-4 shadow-[0_10px_26px_-24px_rgba(15,23,42,0.18)] ${
                   item.liked
-                    ? 'border-emerald-200 bg-[var(--c-ffffff)] ring-1 ring-emerald-200/40'
-                    : 'border-[var(--c-e0dfd9)] bg-[var(--c-ffffff)]'
+                    ? 'border-white/40 bg-[var(--c-ffffff)] ring-1 ring-emerald-100/12'
+                    : 'border-white/50 bg-[var(--c-ffffff)]'
                 }`}
               >
                 {item.liked ? (
@@ -372,20 +372,21 @@ export default function CompanyWhatsNextPage() {
                   onClick={() => handleToggle(item.id, 'done')}
                   className={`flex h-8 w-8 items-center justify-center rounded-full border bg-[var(--c-ffffff)] text-sm font-semibold transition focus:outline-none focus-visible:ring-2 ${
                     item.liked
-                      ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-emerald-300'
-                      : 'border-[var(--c-dad7d0)] text-[var(--c-6f6c65)] hover:bg-[var(--c-f1f1ef)] focus-visible:ring-[var(--c-c8102e)]'
+                      ? 'border-white/40 text-emerald-700 hover:bg-emerald-50/30 focus-visible:ring-emerald-100/50'
+                      : 'border-white/50 text-[var(--c-6f6c65)] hover:bg-[var(--c-f8f7f4)] focus-visible:ring-[var(--c-c8102e)]'
                   }`}
                   aria-label="Mark done"
                 >
                   ✓
                 </button>
-                <span className="flex-1 text-[15px]">
-                  <span className="font-semibold text-[var(--c-1f1f1d)]">
+                <div className="flex-1">
+                  <p className="text-[11px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]">
                     {item.sectionTitle}
-                  </span>
-                  <span className="mx-2 text-[var(--c-9a9892)]">-</span>
-                  <span className="text-[var(--c-6f6c65)]">{item.label}</span>
-                </span>
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-[var(--c-1f1f1d)]">
+                    {item.label}
+                  </p>
+                </div>
               </li>
             ))}
           </ul>

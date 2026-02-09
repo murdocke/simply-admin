@@ -1,11 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  OpenStudentRequestsTable,
-  OpenTeacherRequestsTable,
-  UnpaidRoyaltiesTable,
-} from '../components/dashboard-tables';
 
 function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
   const [now, setNow] = useState(() => new Date());
@@ -39,7 +34,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Overview
@@ -57,227 +52,209 @@ export default function DashboardPage() {
         </div>
       </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Active Teachers
-            </p>
-            <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {activeTeachers.toLocaleString('en-US')}
-            </p>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Nationwide instructor coverage
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Active Students
-            </p>
-            <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <a
+          href="/company/lesson-library"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+        >
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Lesson Library
+          </p>
+          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            128 Packs
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Refresh content, uploads, and releases.
+          </p>
+        </a>
+        <a
+          href="/subscriptions"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+        >
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Subscriptions
+          </p>
+          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
             {activeStudents.toLocaleString('en-US')}
-            </p>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Healthy teacher-to-student mix
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Monthly Royalties Due
-            </p>
-            <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {monthlyRoyaltiesDue.toLocaleString('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0,
-            })}
-            </p>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Projected from active student count
-            </p>
-          </div>
-        </div>
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Students billed at $9 per month.
+          </p>
+        </a>
+        <a
+          href="/accounts"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+        >
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Accounts
+          </p>
+          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {activeTeachers.toLocaleString('en-US')}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Active teachers across the network.
+          </p>
+        </a>
+        <a
+          href="/company/messages"
+          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+        >
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Messages
+          </p>
+          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            24 Threads
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Active teacher conversations.
+          </p>
+        </a>
+      </div>
 
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Curriculum
+              Company Workstreams
             </p>
             <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-              Program Library
+              Jump Back Into Key Areas
             </h2>
             <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Jump into a specific pathway or program set.
+              Prioritize the next action across content, billing, accounts, and messaging.
             </p>
           </div>
           <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-            Updated weekly
+            Updated today
           </span>
         </div>
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <a
-            href="/curriculum/foundation"
-            className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Foundation Program
-            </p>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              Levels 1-9
-            </p>
-          </a>
-          <a
-            href="/curriculum/development"
-            className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Development Program
-            </p>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              Levels 10-18
-            </p>
-          </a>
-          <a
-            href="/curriculum/special"
-            className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Special Programs
-            </p>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              Masterclasses + Intensives
-            </p>
-          </a>
-          <a
-            href="/curriculum/supplemental"
-            className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Supplemental Programs
-            </p>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              Teacher Created Programs
-            </p>
-          </a>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              label: 'Lesson Library',
+              note: 'Review new uploads and release dates.',
+              href: '/company/lesson-library',
+            },
+            {
+              label: 'Subscriptions',
+              note: 'Monitor student counts and next billing.',
+              href: '/subscriptions',
+            },
+            {
+              label: 'Accounts',
+              note: 'Teacher roster, statuses, and student lists.',
+              href: '/accounts',
+            },
+            {
+              label: 'Messages',
+              note: 'Respond to teacher outreach.',
+              href: '/company/messages',
+            },
+            {
+              label: 'Message Review',
+              note: 'Audit sentiment and response times.',
+              href: '/company/messages',
+            },
+          ].map(card => (
+            <a
+              key={card.label}
+              href={card.href}
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {card.label}
+              </p>
+              <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                {card.note}
+              </p>
+            </a>
+          ))}
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <a
-          href="/teachers"
-          className="group overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/30 hover:shadow-md"
-        >
-          <div
-            className="h-64 w-full bg-[var(--c-f1f1ef)] bg-cover bg-center"
-            style={{
-              backgroundImage:
-                'url(https://simplymusic.com/wp-content/uploads/2024/02/Teach_Simply_Music.png)',
-            }}
-          />
-          <div className="p-6">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Teachers
-            </p>
-            <h2 className="text-xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-              Training + Teaching
-            </h2>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Curriculum, coaching, and studio resources for instructors.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[var(--c-6f6c65)]">
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Curriculum
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Training &amp; Coaching
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Library
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Store
-              </span>
-            </div>
-          </div>
-        </a>
-
-        <a
-          href="/students"
-          className="group overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/30 hover:shadow-md"
-        >
-          <div
-            className="h-64 w-full bg-[var(--c-f1f1ef)] bg-cover bg-center"
-            style={{
-              backgroundImage:
-                'url(https://simplymusic.com/wp-content/uploads/2024/02/Learn-Piano-with-a-Simply-Music-Teacher.png)',
-              backgroundPosition: 'center 30%',
-            }}
-          />
-          <div className="p-6">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Students
-            </p>
-            <h2 className="text-xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-              Learning + Practicing
-            </h2>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Guided progression and practice flow across levels.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[var(--c-6f6c65)]">
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Curriculum
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Practice Mode
-              </span>
-            </div>
-          </div>
-        </a>
-
-        <a
-          href="/company"
-          className="group overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/30 hover:shadow-md"
-        >
-          <div
-            className="h-64 w-full bg-[var(--c-f1f1ef)] bg-cover bg-center"
-            style={{
-              backgroundImage:
-                'url(https://simplymusic.com/wp-content/uploads/2024/02/Learn-with-Simply-Music-Self-Study-Program.png)',
-              backgroundPosition: 'center 40%',
-            }}
-          />
-          <div className="p-6">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Company
-            </p>
-            <h2 className="text-xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-              Internal Operations
-            </h2>
-            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Teachers, students, commerce, royalties, and support tools.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-[var(--c-6f6c65)]">
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Orders
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Royalty Hub
-              </span>
-              <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-                Lesson Packs
-              </span>
-            </div>
-          </div>
-        </a>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <OpenTeacherRequestsTable />
-        <OpenStudentRequestsTable />
-      </div>
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Billing Outlook
+          </p>
+          <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+            Monthly Royalties Snapshot
+          </h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Estimated from current student counts under the new subscription model.
+          </p>
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Total Due
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                {monthlyRoyaltiesDue.toLocaleString('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  maximumFractionDigits: 0,
+                })}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Billing Date
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                Mar 1, 2026
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Active Students
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                {activeStudents.toLocaleString('en-US')}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                At-Risk Accounts
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                14
+              </p>
+            </div>
+          </div>
+        </section>
 
-      <div>
-        <UnpaidRoyaltiesTable />
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Communications
+          </p>
+          <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+            Teacher Messaging Focus
+          </h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Keep tabs on response times and outbound reminders.
+          </p>
+          <div className="mt-6 space-y-3">
+            {[
+              '12 unresolved billing questions',
+              '8 onboarding follow-ups needed',
+              '6 lesson library updates to announce',
+              '4 VIP teachers awaiting response',
+            ].map(item => (
+              <div
+                key={item}
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+          <a
+            href="/company/messages"
+            className="mt-4 inline-flex rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            Open Message Center
+          </a>
+        </section>
       </div>
     </div>
   );

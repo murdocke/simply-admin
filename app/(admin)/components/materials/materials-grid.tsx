@@ -460,6 +460,11 @@ export default function MaterialsGrid({
             <div className="space-y-4">
               <div className="overflow-hidden rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
                 <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-[#070707]">
+                  <img
+                    src="/reference/StudentVideo-2.png"
+                    alt="Lesson video preview"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
                   <div className="relative z-10 px-6 text-center">
                     <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
@@ -998,6 +1003,11 @@ export default function MaterialsGrid({
 
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden">
+                <img
+                  src="/reference/StudentVideo-2.png"
+                  alt="Lesson video preview"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
                 <div className="relative z-10 px-6 text-center">
                   <p className="text-xs uppercase tracking-[0.3em] text-white/60">
