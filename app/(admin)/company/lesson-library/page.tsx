@@ -15,6 +15,14 @@ export default function CompanyLessonLibraryPage() {
             A complete view of everything available to teachers and students.
           </p>
         </div>
+        <div className="md:pb-1">
+          <a
+            href="/lesson-pack-builder"
+            className="inline-flex items-center justify-center rounded-full border border-[var(--c-1f1f1d)] bg-[var(--c-ffffff)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-1f1f1d)] transition hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+          >
+            Build Lesson Pack
+          </a>
+        </div>
       </header>
 
       <LessonLibraryView

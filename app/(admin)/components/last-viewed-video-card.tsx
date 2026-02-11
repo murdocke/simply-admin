@@ -105,6 +105,22 @@ export default function LastViewedVideoCard({
     }
   };
 
+  const closePip = () => {
+    try {
+      const stored = window.localStorage.getItem('sm_pip_state');
+      const parsed = stored ? (JSON.parse(stored) as Record<string, unknown>) : {};
+      if (parsed?.open || parsed?.playing) {
+        window.localStorage.setItem(
+          'sm_pip_state',
+          JSON.stringify({ ...parsed, open: false, playing: false }),
+        );
+        window.dispatchEvent(new Event('sm-pip-update'));
+      }
+    } catch {
+      window.dispatchEvent(new Event('sm-pip-update'));
+    }
+  };
+
   const handlePrev = () => {
     if (hasPrevPart) {
       const nextPart = lessonPartItems[partIndex - 1];
@@ -181,7 +197,10 @@ export default function LastViewedVideoCard({
               type="button"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/15 text-sm text-white shadow-[0_8px_20px_rgba(0,0,0,0.35)] transition hover:border-white/40 hover:bg-white/25"
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              onClick={() => setIsPlaying(current => !current)}
+              onClick={() => {
+                closePip();
+                setIsPlaying(current => !current);
+              }}
             >
               <svg
                 aria-hidden="true"
@@ -210,6 +229,7 @@ export default function LastViewedVideoCard({
             <button
               type="button"
               onClick={() => {
+                closePip();
                 setIsExpanded(true);
                 onExpandedChange?.(true);
               }}

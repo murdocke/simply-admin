@@ -68,13 +68,25 @@
           "section": "Level 3",
           "material": "3.5 – Fluff Pie",
           "part": "3.5.5 – Tailpiece"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.7 – Greensleeves",
+          "part": "3.7.2 – RH 3 Positions"
+        },
+        {
+          "title": "Foundation Program",
+          "section": "Level 3",
+          "material": "3.7 – Greensleeves",
+          "part": "3.7.3 – RH Melody"
         }
       ],
       "notes": "20 minutes of practice every other day",
       "focus": "Technique",
       "resources": "",
       "createdAt": "2026-02-07T02:15:34.322Z",
-      "updatedAt": "2026-02-07T05:04:37.465Z"
+      "updatedAt": "2026-02-10T03:55:25.143Z"
     }
   ]
 }

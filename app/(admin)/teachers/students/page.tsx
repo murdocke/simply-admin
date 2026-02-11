@@ -1377,7 +1377,7 @@ export default function TeacherStudentsPage() {
                     {index === 0 ? (
                       <div className="flex items-center gap-2">
                         <button
-                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
+                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20 text-center"
                           type="button"
                           onClick={openAssignModal}
                         >
@@ -1385,7 +1385,7 @@ export default function TeacherStudentsPage() {
                         </button>
                         <Link
                           href="/teachers/practice-hub"
-                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20"
+                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20 text-center"
                         >
                           Practice Hub
                         </Link>

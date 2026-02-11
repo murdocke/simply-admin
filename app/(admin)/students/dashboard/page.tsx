@@ -486,15 +486,16 @@ export default function StudentDashboardPage() {
           <button
             type="button"
             onClick={openCongratsCard}
-            className="w-[min(320px,90vw)] rounded-2xl border border-white/30 bg-white/5 p-4 text-left text-[var(--c-ffffff)] shadow-[0_8px_20px_-18px_rgba(0,0,0,0.25)] backdrop-blur-md backdrop-saturate-150 transition hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-18px_rgba(0,0,0,0.35)]"
+            className="w-[min(320px,90vw)] rounded-2xl border bg-[color:var(--toast-bg)] p-4 text-left text-[color:var(--toast-title)] shadow-[var(--toast-shadow)] backdrop-blur-md backdrop-saturate-150 transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_-22px_rgba(0,0,0,0.35)]"
+            style={{ borderColor: 'var(--toast-border)' }}
           >
-            <p className="text-[10px] uppercase tracking-[0.4em] text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-[color:var(--toast-kicker)] drop-shadow-[0_1px_1px_var(--toast-text-shadow)]">
               New Message
             </p>
-            <p className="mt-2 text-sm font-semibold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
+            <p className="mt-2 text-sm font-semibold text-[color:var(--toast-title)] drop-shadow-[0_1px_1px_var(--toast-text-shadow)]">
               Neil Moore
             </p>
-            <p className="mt-2 text-base text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+            <p className="mt-2 text-base text-[color:var(--toast-body)] drop-shadow-[0_1px_1px_var(--toast-text-shadow)]">
               {congratsMessage} Tap to watch a video message I sent you!
             </p>
           </button>

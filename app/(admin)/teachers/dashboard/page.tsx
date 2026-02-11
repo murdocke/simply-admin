@@ -8,6 +8,7 @@ import {
   VIEW_TEACHER_STORAGE_KEY,
 } from '../../components/auth';
 import LastViewedVideoCard from '../../components/last-viewed-video-card';
+import StudentPromoCard from '../../components/student-promo-card';
 
 type StudentRecord = {
   id: string;
@@ -839,6 +840,12 @@ export default function TeacherDashboardPage() {
               </>
             )}
           </div>
+          <StudentPromoCard
+            title="Jazz Colors: Teacher Edition"
+            body="Quick coaching ideas, voicing tips, and a groove-first approach to keep students smiling."
+            ctaLabel="View Lesson Pack Details"
+            ctaHref="/teachers?mode=training"
+          />
           <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">

@@ -230,10 +230,9 @@ export default function StudentCurrentLessonPage() {
 
   const weekDates = useMemo(() => {
     if (!planWindow) return [];
-    const lessonDate = new Date(`${planWindow.lessonDate}T00:00:00`);
-    return Array.from({ length: 7 }, (_, index) =>
-      addDays(lessonDate, index - 3),
-    );
+    const today = startOfDay(new Date());
+    const weekStart = addDays(today, -today.getDay());
+    return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   }, [planWindow]);
 
   const groupedLessonItems = useMemo(() => {

@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import teacherRows from '../../../data/teachers-subscriptions.json';
+import AssumptionsBar, { type Assumptions } from '../components/assumptions-bar';
 
 type TeacherRow = {
   id: string;
@@ -15,29 +16,77 @@ type TeacherRow = {
 export default function SubscriptionsPage() {
   const lastBillingDate = 'Jan 1, 2026';
   const rows = teacherRows as TeacherRow[];
+  const baseAvgStudents = useMemo(() => {
+    if (rows.length === 0) return 0;
+    const total = rows.reduce((sum, row) => sum + row.currentStudents, 0);
+    return total / rows.length;
+  }, [rows]);
   const pageSize = 20;
   const [page, setPage] = useState(1);
   const watchlistPageSize = 8;
   const [downPage, setDownPage] = useState(1);
   const [upPage, setUpPage] = useState(1);
+  const [assumptions, setAssumptions] = useState<Assumptions>(() => ({
+    teacherCount: rows.length,
+    avgStudentsPerTeacher: Number(baseAvgStudents.toFixed(1)),
+    lessonsPerStudent: 4,
+    teacherFee: 9,
+    studentFee: 4,
+  }));
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('sm_assumptions');
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<Assumptions>;
+        setAssumptions(current => ({
+          teacherCount: parsed.teacherCount ?? current.teacherCount,
+          avgStudentsPerTeacher:
+            parsed.avgStudentsPerTeacher ?? current.avgStudentsPerTeacher,
+          lessonsPerStudent: parsed.lessonsPerStudent ?? current.lessonsPerStudent,
+          teacherFee: parsed.teacherFee ?? current.teacherFee,
+          studentFee: parsed.studentFee ?? current.studentFee,
+        }));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const combinedScale =
+    baseAvgStudents > 0 && rows.length > 0
+      ? (assumptions.avgStudentsPerTeacher / baseAvgStudents) *
+        (assumptions.teacherCount / rows.length)
+      : 1;
+  const scaledRows = useMemo(
+    () =>
+      rows.map(row => ({
+        ...row,
+        lastStudents: Math.max(0, Math.round(row.lastStudents * combinedScale)),
+        currentStudents: Math.max(0, Math.round(row.currentStudents * combinedScale)),
+      })),
+    [rows, combinedScale],
+  );
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [page, rows]);
+    return scaledRows.slice(start, start + pageSize);
+  }, [page, scaledRows]);
 
-  const flatRate = 9;
-  const totalTeachers = rows.length;
-  const totalCurrentStudents = rows.reduce(
-    (sum, row) => sum + row.currentStudents,
-    0,
+  const totalTeachers = assumptions.teacherCount;
+  const totalCurrentStudents = Math.round(
+    assumptions.teacherCount * assumptions.avgStudentsPerTeacher,
   );
-  const totalNextBilling = totalCurrentStudents * flatRate;
-  const spikeUpRows = rows.filter(
-    row => (row.currentStudents - row.lastStudents) / row.lastStudents >= 0.2,
+  const totalNextBilling = totalCurrentStudents * assumptions.teacherFee;
+  const totalStudentAccess = totalCurrentStudents * assumptions.studentFee;
+  const totalCombined = totalNextBilling + totalStudentAccess;
+  const spikeUpRows = scaledRows.filter(
+    row =>
+      row.lastStudents > 0 &&
+      (row.currentStudents - row.lastStudents) / row.lastStudents >= 0.2,
   );
-  const spikeDownRows = rows.filter(
-    row => (row.currentStudents - row.lastStudents) / row.lastStudents <= -0.2,
+  const spikeDownRows = scaledRows.filter(
+    row =>
+      row.lastStudents > 0 &&
+      (row.currentStudents - row.lastStudents) / row.lastStudents <= -0.2,
   );
   const downTotalPages = Math.max(
     1,
@@ -56,6 +105,22 @@ export default function SubscriptionsPage() {
     return spikeUpRows.slice(start, start + watchlistPageSize);
   }, [upPage, spikeUpRows]);
 
+  const handleAssumptionsChange = (next: Assumptions) => {
+    const normalized = {
+      teacherCount: Math.max(0, Math.round(next.teacherCount)),
+      avgStudentsPerTeacher: Math.max(0, Number(next.avgStudentsPerTeacher)),
+      lessonsPerStudent: Math.max(0, Math.round(next.lessonsPerStudent)),
+      teacherFee: Math.max(0, Number(next.teacherFee)),
+      studentFee: Math.max(0, Number(next.studentFee)),
+    };
+    setAssumptions(normalized);
+    try {
+      window.localStorage.setItem('sm_assumptions', JSON.stringify(normalized));
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="space-y-10">
       <header className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -73,10 +138,10 @@ export default function SubscriptionsPage() {
         </div>
         <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            New Billing Rule
+            Monthly Fees
           </p>
           <p className="text-2xl font-semibold mt-2 text-[var(--c-1f1f1d)]">
-            ${flatRate} per student
+            ${assumptions.teacherFee} teacher · ${assumptions.studentFee} student access
           </p>
           <p className="text-sm text-[var(--c-6f6c65)] mt-1">
             Charged on the 1st of every month
@@ -85,6 +150,54 @@ export default function SubscriptionsPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Teacher Billing Total
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {totalNextBilling.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            })}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Projected for Mar 1, 2026
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Student Access Total
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {totalStudentAccess.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            })}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Student subscription revenue
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Grand Total Monthly
+          </p>
+          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+            {totalCombined.toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            })}
+          </p>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Teacher + student access fees combined
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Teachers Billed
@@ -107,22 +220,9 @@ export default function SubscriptionsPage() {
             Counted for next monthly charge
           </p>
         </div>
-        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Next Billing Total
-          </p>
-          <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {totalNextBilling.toLocaleString('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0,
-            })}
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Projected for Mar 1, 2026
-          </p>
-        </div>
       </div>
+
+      <AssumptionsBar value={assumptions} onChange={handleAssumptionsChange} />
 
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -157,8 +257,8 @@ export default function SubscriptionsPage() {
             </thead>
             <tbody className="divide-y divide-[var(--c-ecebe7)]">
               {pagedRows.map(row => {
-                const lastBilled = row.lastStudents * flatRate;
-                const nextBilling = row.currentStudents * flatRate;
+                const lastBilled = row.lastStudents * assumptions.teacherFee;
+                const nextBilling = row.currentStudents * assumptions.teacherFee;
                 const status =
                   row.currentStudents > row.lastStudents
                     ? 'Growing'
@@ -492,7 +592,7 @@ export default function SubscriptionsPage() {
                 New Model
               </p>
               <p className="mt-2 text-sm text-[var(--c-1f1f1d)]">
-                Students &times; $9 flat monthly fee
+                Students &times; ${assumptions.teacherFee} teacher fee + ${assumptions.studentFee} student access
               </p>
               <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
                 Charged automatically on the first of each month.
@@ -525,7 +625,7 @@ export default function SubscriptionsPage() {
               Automated invoicing
             </span>
             <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
-              Rate locked at $9
+              Rate locked at ${assumptions.teacherFee} + ${assumptions.studentFee}
             </span>
             <span className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1">
               Month start charge

@@ -619,8 +619,8 @@ export default function StudentMessagesPage() {
                 messages.map((message) => {
                   const isStudent = message.sender === "student";
                   const bubbleStyles = isStudent
-                    ? "max-w-[85%] rounded-2xl bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)] px-5 py-4 text-right"
-                    : "max-w-[85%] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-5 py-4";
+                    ? "max-w-[85%] rounded-2xl px-5 py-4 text-right"
+                    : "max-w-[85%] rounded-2xl border bg-[color:var(--teacher-bubble-bg)] px-5 py-4";
 
                   return (
                     <div
@@ -632,17 +632,47 @@ export default function StudentMessagesPage() {
                       }
                     >
                       {!isStudent && (
-                        <div className="rounded-full bg-[var(--c-f8f6f1)] px-3 py-2 text-xs font-semibold text-[var(--c-6f6c65)]">
+                        <div
+                          className="rounded-full px-3 py-2 text-xs font-semibold"
+                          style={{
+                            backgroundColor: "var(--teacher-chip-bg)",
+                            color: "var(--teacher-chip-text)",
+                          }}
+                        >
                           {teacherDisplayName}
                         </div>
                       )}
-                      <div className={bubbleStyles}>
+                      <div
+                        className={bubbleStyles}
+                        style={{
+                          borderColor: isStudent
+                            ? "transparent"
+                            : "var(--teacher-bubble-border)",
+                          backgroundColor: isStudent
+                            ? "var(--student-bubble-bg)"
+                            : "var(--teacher-bubble-bg)",
+                          color: isStudent
+                            ? "var(--student-bubble-text)"
+                            : "var(--teacher-bubble-text)",
+                        }}
+                      >
                         {message.subject ? (
                           <p
                             className={
                               isStudent
-                                ? "text-[12px] font-semibold uppercase tracking-[0.25em] text-[var(--c-ffffff)] pb-1 border-b border-[color:rgba(255,255,255,0.35)]"
-                                : "text-[12px] font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)] pb-1 border-b border-[var(--c-ecebe7)]"
+                                ? "text-[12px] font-semibold uppercase tracking-[0.25em] pb-1 border-b"
+                                : "text-[12px] font-semibold uppercase tracking-[0.25em] pb-1 border-b"
+                            }
+                            style={
+                              isStudent
+                                ? {
+                                    color: "var(--student-bubble-subject)",
+                                    borderColor: "var(--student-bubble-divider)",
+                                  }
+                                : {
+                                    color: "var(--teacher-bubble-meta)",
+                                    borderColor: "var(--teacher-bubble-border)",
+                                  }
                             }
                           >
                             {message.subject}
@@ -651,8 +681,13 @@ export default function StudentMessagesPage() {
                         <p
                           className={
                             isStudent
-                              ? "text-sm text-[var(--c-ffffff)] mt-2"
-                              : "text-sm text-[var(--c-1f1f1d)] mt-2"
+                              ? "text-sm mt-2"
+                              : "text-sm mt-2"
+                          }
+                          style={
+                            isStudent
+                              ? { color: "var(--student-bubble-text)" }
+                              : { color: "var(--teacher-bubble-text)" }
                           }
                         >
                           {message.text}
@@ -660,8 +695,13 @@ export default function StudentMessagesPage() {
                         <p
                           className={
                             isStudent
-                              ? "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-ffffff)]/70"
-                              : "mt-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                              ? "mt-2 text-[11px] uppercase tracking-[0.2em]"
+                              : "mt-2 text-[11px] uppercase tracking-[0.2em]"
+                          }
+                          style={
+                            isStudent
+                              ? { color: "var(--student-bubble-meta)" }
+                              : { color: "var(--teacher-bubble-meta)" }
                           }
                         >
                           {isStudent ? "You" : teacherDisplayName} ·{" "}
@@ -669,7 +709,13 @@ export default function StudentMessagesPage() {
                         </p>
                       </div>
                       {isStudent && (
-                        <div className="rounded-full bg-[var(--c-1f1f1d)] px-3 py-2 text-xs font-semibold text-[var(--c-ffffff)]">
+                        <div
+                          className="rounded-full px-3 py-2 text-xs font-semibold"
+                          style={{
+                            backgroundColor: "var(--student-chip-bg)",
+                            color: "var(--student-chip-text)",
+                          }}
+                        >
                           You
                         </div>
                       )}

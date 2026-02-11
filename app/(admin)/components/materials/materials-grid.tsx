@@ -95,6 +95,7 @@ export default function MaterialsGrid({
   const lessonTitle = selectedMaterial
     ? sectionTitleFor(selectedMaterial) || selectedMaterial
     : 'Lesson Title';
+  const partLabel = hasParts ? selectedPart ?? 'Select a lesson part to begin.' : null;
   const nextLabel = useMemo(() => {
     if (!selectedMaterial) return null;
     const partsMap = lessonParts as Record<string, string[]>;
@@ -360,6 +361,22 @@ export default function MaterialsGrid({
     setHasPlayed(true);
   };
 
+  const closePip = () => {
+    try {
+      const stored = window.localStorage.getItem('sm_pip_state');
+      const parsed = stored ? (JSON.parse(stored) as Record<string, unknown>) : {};
+      if (parsed?.open || parsed?.playing) {
+        window.localStorage.setItem(
+          'sm_pip_state',
+          JSON.stringify({ ...parsed, open: false, playing: false }),
+        );
+        window.dispatchEvent(new Event('sm-pip-update'));
+      }
+    } catch {
+      window.dispatchEvent(new Event('sm-pip-update'));
+    }
+  };
+
   useEffect(() => {
     if (!selectedMaterial) return;
     const payload = {
@@ -473,9 +490,9 @@ export default function MaterialsGrid({
                     <h4 className="mt-2 text-xl font-semibold text-white">
                       {lessonTitle}
                     </h4>
-                    <p className="mt-2 text-sm text-white/70">
-                      {selectedPart ?? 'Select a lesson part to begin.'}
-                    </p>
+                    {partLabel ? (
+                      <p className="mt-2 text-sm text-white/70">{partLabel}</p>
+                    ) : null}
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
                     <button
@@ -523,7 +540,10 @@ export default function MaterialsGrid({
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => setIsVideoModalOpen(true)}
+                        onClick={() => {
+                          closePip();
+                          setIsVideoModalOpen(true);
+                        }}
                         className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-white/80 transition hover:border-white/40 hover:text-white"
                         aria-label="Expand video"
                       >
@@ -977,9 +997,9 @@ export default function MaterialsGrid({
                 <h2 className="mt-2 text-2xl font-semibold text-white">
                   {lessonTitle}
                 </h2>
-                <p className="mt-2 text-sm text-white/70">
-                  {selectedPart ?? 'Select a lesson part to begin.'}
-                </p>
+                {partLabel ? (
+                  <p className="mt-2 text-sm text-white/70">{partLabel}</p>
+                ) : null}
               </div>
               <button
                 onClick={() => setIsVideoModalOpen(false)}
@@ -1004,7 +1024,7 @@ export default function MaterialsGrid({
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden">
                 <img
-                  src="/reference/dreams-come-true.png"
+                  src="/reference/StudentVideo-2.png"
                   alt="Lesson video preview"
                   className="absolute inset-0 h-full w-full object-cover"
                 />
@@ -1016,9 +1036,9 @@ export default function MaterialsGrid({
                   <h4 className="mt-2 text-2xl font-semibold text-white">
                     {lessonTitle}
                   </h4>
-                  <p className="mt-2 text-sm text-white/70">
-                    {selectedPart ?? 'Select a lesson part to begin.'}
-                  </p>
+                  {partLabel ? (
+                    <p className="mt-2 text-sm text-white/70">{partLabel}</p>
+                  ) : null}
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
                   <button

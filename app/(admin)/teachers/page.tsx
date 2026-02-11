@@ -769,6 +769,13 @@ export default function TeachersPage() {
                 ) : null}
               </div>
 
+              <StudentPromoCard
+                title="Jazz Colors: Teacher Edition"
+                body="Quick coaching ideas, voicing tips, and a groove-first approach to keep students smiling."
+                ctaLabel="View Lesson Pack Details"
+                ctaHref="/teachers?mode=training"
+              />
+
               <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                   Quick Note

@@ -133,6 +133,22 @@ export default function AdminShell({ children }: AdminShellProps) {
     part: null,
     materials: [],
   });
+  const [pipDock, setPipDock] = useState<
+    'left-bottom' | 'right-bottom' | 'right-top'
+  >('right-bottom');
+  const pipSwipeRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+    startTime: number;
+  }>({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+  });
   const [isPipExpanded, setIsPipExpanded] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [accountForm, setAccountForm] = useState({
@@ -1408,23 +1424,115 @@ export default function AdminShell({ children }: AdminShellProps) {
       ) : null}
 
       {pipState.open && pipState.material ? (
-        <div className="fixed bottom-6 right-6 z-[70] w-[360px] rounded-2xl border border-white/10 bg-white/3 p-4 text-white shadow-2xl backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-3">
+        <div
+          className={`fixed z-[70] w-[360px] rounded-2xl border p-4 shadow-2xl backdrop-blur-sm ${
+            pipDock === 'left-bottom'
+              ? 'bottom-6 left-6'
+              : pipDock === 'right-top'
+                ? 'right-6 top-6'
+                : 'bottom-6 right-6'
+          }`}
+          style={{
+            backgroundColor: "var(--pip-bg)",
+            borderColor: "var(--pip-border)",
+            color: "var(--pip-text)",
+          }}
+        >
+          <div
+            className="flex items-start justify-between gap-3 select-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              pipSwipeRef.current = {
+                active: true,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                startTime: performance.now(),
+              };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!pipSwipeRef.current.active) return;
+              if (pipSwipeRef.current.pointerId !== event.pointerId) return;
+            }}
+            onPointerUp={(event) => {
+              if (!pipSwipeRef.current.active) return;
+              if (pipSwipeRef.current.pointerId !== event.pointerId) return;
+              const endX = event.clientX;
+              const endY = event.clientY;
+              const deltaX = endX - pipSwipeRef.current.startX;
+              const deltaY = endY - pipSwipeRef.current.startY;
+              const deltaTime = Math.max(
+                1,
+                performance.now() - pipSwipeRef.current.startTime,
+              );
+              const velocityX = deltaX / deltaTime;
+              const velocityY = deltaY / deltaTime;
+              const horizontalSwipe =
+                Math.abs(deltaX) > 80 && Math.abs(velocityX) > 0.6;
+              const verticalSwipe =
+                Math.abs(deltaY) > 80 && Math.abs(velocityY) > 0.6;
+              if (horizontalSwipe && Math.abs(deltaX) >= Math.abs(deltaY)) {
+                if (deltaX < 0) {
+                  setPipDock('left-bottom');
+                } else {
+                  setPipDock('right-bottom');
+                }
+              } else if (verticalSwipe && Math.abs(deltaY) > Math.abs(deltaX)) {
+                if (pipDock.startsWith('right')) {
+                  if (deltaY < 0) {
+                    setPipDock('right-top');
+                  } else {
+                    setPipDock('right-bottom');
+                  }
+                }
+              }
+              pipSwipeRef.current = {
+                active: false,
+                pointerId: null,
+                startX: 0,
+                startY: 0,
+                startTime: 0,
+              };
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={(event) => {
+              if (pipSwipeRef.current.pointerId === event.pointerId) {
+                pipSwipeRef.current = {
+                  active: false,
+                  pointerId: null,
+                  startX: 0,
+                  startTime: 0,
+                };
+              }
+            }}
+          >
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[color:var(--pip-muted)]">
                 {pipState.playing ? 'Now Playing' : 'Viewing'}
               </p>
               <p className="mt-2 text-lg font-semibold">
                 {pipState.material}
               </p>
-              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/50">
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[color:var(--pip-muted)]">
                 {pipState.part || 'Select a lesson part to begin.'}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => updatePipState({ open: false, playing: false })}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
+              onPointerDown={event => {
+                event.stopPropagation();
+              }}
+              onClick={event => {
+                event.stopPropagation();
+                updatePipState({ open: false, playing: false });
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border transition"
+              style={{
+                borderColor: "var(--pip-control-border)",
+                color: "var(--pip-muted)",
+              }}
               aria-label="Close"
             >
               <svg
@@ -1442,30 +1550,51 @@ export default function AdminShell({ children }: AdminShellProps) {
             </button>
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+          <div
+            className="mt-4 overflow-hidden rounded-xl border"
+            style={{
+              borderColor: "var(--pip-border)",
+              backgroundColor: "var(--pip-control-bg)",
+            }}
+          >
             <div className="relative flex aspect-video items-center justify-center">
               <img
                 src="/reference/StudentVideo-2.png"
                 alt="Lesson video preview"
                 className="absolute inset-0 h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.25),rgba(3,3,3,0.6))]" />
+              <div
+                className="absolute inset-0"
+                style={{ background: "var(--pip-overlay)" }}
+              />
               <div className="relative z-10 w-full -translate-y-4 px-4 text-center">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-white/70">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-white/80">
                   {pipState.playing ? 'Now Playing' : 'Viewing'}
                 </p>
-                <p className="mt-2 text-lg font-semibold text-white text-center">
+                <p className="mt-2 text-lg font-semibold text-center text-white">
                   {pipState.material}
                 </p>
                 <p className="mt-1 text-xs text-white/70">
                   {pipState.part || 'Select a lesson part to begin.'}
                 </p>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between gap-2 border-t border-white/10 bg-black/50 px-3 py-2 text-white">
+              <div
+                className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between gap-2 border-t px-3 py-2"
+                style={{
+                  borderColor: "var(--pip-border)",
+                  backgroundColor: "var(--pip-control-bg)",
+                  color: "var(--pip-control-text)",
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => updatePipState({ playing: !pipState.playing })}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/15 text-white transition hover:border-white/40 hover:bg-white/25"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  style={{
+                    borderColor: "var(--pip-control-border)",
+                    backgroundColor: "rgba(255, 255, 255, 0.12)",
+                    color: "var(--pip-control-text)",
+                  }}
                   aria-label={pipState.playing ? 'Pause' : 'Play'}
                 >
                   <svg
@@ -1487,9 +1616,17 @@ export default function AdminShell({ children }: AdminShellProps) {
                     disabled={!pipCanPrev}
                     className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
                       pipCanPrev
-                        ? 'border-white/40 text-white hover:border-white'
-                        : 'border-white/10 text-white/40'
+                        ? ''
+                        : ''
                     }`}
+                    style={{
+                      borderColor: pipCanPrev
+                        ? "var(--pip-control-border)"
+                        : "var(--pip-border)",
+                      color: pipCanPrev
+                        ? "var(--pip-control-text)"
+                        : "var(--pip-control-text)",
+                    }}
                   >
                     Prev
                   </button>
@@ -1499,17 +1636,32 @@ export default function AdminShell({ children }: AdminShellProps) {
                     disabled={!pipCanNext}
                     className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
                       pipCanNext
-                        ? 'border-white/40 text-white hover:border-white'
-                        : 'border-white/10 text-white/40'
+                        ? ''
+                        : ''
                     }`}
+                    style={{
+                      borderColor: pipCanNext
+                        ? "var(--pip-control-border)"
+                        : "var(--pip-border)",
+                      color: pipCanNext
+                        ? "var(--pip-control-text)"
+                        : "var(--pip-control-text)",
+                    }}
                   >
                     Next
                   </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsPipExpanded(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
+                  onClick={() => {
+                    updatePipState({ open: false, playing: pipState.playing });
+                    setIsPipExpanded(true);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  style={{
+                    borderColor: "var(--pip-control-border)",
+                    color: "var(--pip-control-text)",
+                  }}
                   aria-label="Expand"
                 >
                   <svg

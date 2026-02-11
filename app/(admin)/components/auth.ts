@@ -47,6 +47,7 @@ export const allowedRoots: Record<UserRole, string[]> = {
   company: [
     '/dashboard',
     '/company',
+    '/lesson-pack-builder',
     '/teachers',
     '/students',
     '/curriculum',
