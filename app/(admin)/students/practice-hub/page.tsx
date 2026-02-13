@@ -12,6 +12,8 @@ export default function StudentPracticeHubPage() {
   const { purchasedItems } = useLessonCart(studentScope);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [focusIds, setFocusIds] = useState<string[]>([]);
+  const [practiceDays, setPracticeDays] = useState<Record<string, string[]>>({});
+  const [helpFlags, setHelpFlags] = useState<Record<string, boolean>>({});
   const [studentServerUnlocks, setStudentServerUnlocks] = useState<
     typeof purchasedItems
   >([]);
@@ -46,6 +48,16 @@ export default function StudentPracticeHubPage() {
         setFocusIds(
           Array.isArray(visibilityData.focusIds) ? visibilityData.focusIds : [],
         );
+        setPracticeDays(
+          visibilityData.practiceDays && typeof visibilityData.practiceDays === 'object'
+            ? visibilityData.practiceDays
+            : {},
+        );
+        setHelpFlags(
+          visibilityData.helpFlags && typeof visibilityData.helpFlags === 'object'
+            ? visibilityData.helpFlags
+            : {},
+        );
       } catch {
         // ignore
       }
@@ -54,6 +66,19 @@ export default function StudentPracticeHubPage() {
     const timer = window.setInterval(refreshFromServer, 2000);
     return () => window.clearInterval(timer);
   }, [studentId]);
+
+  useEffect(() => {
+    if (!studentId) return;
+    fetch('/api/practice-hub/visibility', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId,
+        practiceDays,
+        helpFlags,
+      }),
+    }).catch(() => undefined);
+  }, [practiceDays, helpFlags, studentId]);
 
   const unlockedSections = useMemo(() => {
     return studentServerUnlocks.map(item => ({
@@ -111,6 +136,24 @@ export default function StudentPracticeHubPage() {
     return focused;
   }, [visibleSections]);
 
+  const daysOfWeek = useMemo(
+    () => ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
+    [],
+  );
+
+  const togglePracticeDay = (id: string, day: string) => {
+    setPracticeDays(current => {
+      const existing = current[id] ?? [];
+      const next = existing.includes(day)
+        ? existing.filter(value => value !== day)
+        : [...existing, day];
+      return { ...current, [id]: next };
+    });
+  };
+
+  const toggleHelpFlag = (id: string) => {
+    setHelpFlags(current => ({ ...current, [id]: !current[id] }));
+  };
 
   return (
     <div className="space-y-8">
@@ -157,26 +200,74 @@ export default function StudentPracticeHubPage() {
                   Songs To Focus On
                 </p>
                 <div className="mt-3 space-y-2">
-                  {focusItems.map(item => (
+                  {focusItems.map(item => {
+                    const materialId = makePracticeMaterialId(
+                      item.program,
+                      item.section,
+                      item.name,
+                    );
+                    return (
                     <div
                       key={`${item.program}-${item.section}-${item.name}`}
                       className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-base text-[var(--c-1f1f1d)]"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{item.name}</span>
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="text-white"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 17.27l5.18 3.03-1.39-5.81 4.52-3.9-5.95-.5L12 4.5 9.64 10.09l-5.95.5 4.52 3.9-1.39 5.81L12 17.27z" />
-                        </svg>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 pr-2">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            {daysOfWeek.map(day => {
+                              const isChecked =
+                                practiceDays[materialId]?.includes(day) ?? false;
+                              return (
+                                <button
+                                  key={`${materialId}-${day}`}
+                                  type="button"
+                                  onClick={() => togglePracticeDay(materialId, day)}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
+                                    isChecked
+                                      ? 'border-[var(--c-c8102e)] bg-[var(--c-c8102e)] text-white'
+                                      : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                                  }`}
+                                  aria-pressed={isChecked}
+                                  aria-label={`Practiced on ${day}`}
+                                  title={day}
+                                >
+                                  {day.slice(0, 1)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleHelpFlag(materialId)}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold transition ${
+                              helpFlags[materialId]
+                                ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-c8102e)]'
+                                : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                            }`}
+                            aria-pressed={helpFlags[materialId] ?? false}
+                            aria-label="Needs help"
+                            title="Needs help"
+                          >
+                            ?
+                          </button>
+                          <span className="flex h-7 w-7 items-center justify-center">
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              className="text-white"
+                              aria-hidden="true"
+                            >
+                              <path d="M12 17.27l5.18 3.03-1.39-5.81 4.52-3.9-5.95-.5L12 4.5 9.64 10.09l-5.95.5 4.52 3.9-1.39 5.81L12 17.27z" />
+                            </svg>
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -208,20 +299,88 @@ export default function StudentPracticeHubPage() {
                           : 'bg-[var(--c-fcfcfb)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{material.name}</span>
-                        {material.focused ? (
-                          <svg
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="text-white"
-                            aria-hidden="true"
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 pr-2">{material.name}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            {daysOfWeek.map(day => {
+                              const materialId = makePracticeMaterialId(
+                                section.program,
+                                section.section,
+                                material.name,
+                              );
+                              const isChecked =
+                                practiceDays[materialId]?.includes(day) ?? false;
+                              return (
+                                <button
+                                  key={`${materialId}-${day}`}
+                                  type="button"
+                                  onClick={() => togglePracticeDay(materialId, day)}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-semibold uppercase tracking-[0.1em] transition ${
+                                    isChecked
+                                      ? 'border-[var(--c-c8102e)] bg-[var(--c-c8102e)] text-white'
+                                      : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                                  }`}
+                                  aria-pressed={isChecked}
+                                  aria-label={`Practiced on ${day}`}
+                                  title={day}
+                                >
+                                  {day.slice(0, 1)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleHelpFlag(
+                                makePracticeMaterialId(
+                                  section.program,
+                                  section.section,
+                                  material.name,
+                                ),
+                              )
+                            }
+                            className={`flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold transition ${
+                              helpFlags[
+                                makePracticeMaterialId(
+                                  section.program,
+                                  section.section,
+                                  material.name,
+                                )
+                              ]
+                                ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-c8102e)]'
+                                : 'border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)] hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]'
+                            }`}
+                            aria-pressed={
+                              helpFlags[
+                                makePracticeMaterialId(
+                                  section.program,
+                                  section.section,
+                                  material.name,
+                                )
+                              ] ?? false
+                            }
+                            aria-label="Needs help"
+                            title="Needs help"
                           >
-                            <path d="M12 17.27l5.18 3.03-1.39-5.81 4.52-3.9-5.95-.5L12 4.5 9.64 10.09l-5.95.5 4.52 3.9-1.39 5.81L12 17.27z" />
-                          </svg>
-                        ) : null}
+                            ?
+                          </button>
+                          <span className="flex h-7 w-7 items-center justify-center">
+                            {material.focused ? (
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                className="text-white"
+                                aria-hidden="true"
+                              >
+                                <path d="M12 17.27l5.18 3.03-1.39-5.81 4.52-3.9-5.95-.5L12 4.5 9.64 10.09l-5.95.5 4.52 3.9-1.39 5.81L12 17.27z" />
+                              </svg>
+                            ) : null}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}

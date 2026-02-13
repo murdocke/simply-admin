@@ -1,0 +1,477 @@
+{
+  "lessonPacks": [
+    {
+      "id": "pack-piano-101",
+      "title": "Piano Keys Foundations",
+      "subtitle": "A clean, groove-first starter pack",
+      "description": "Build confident finger control, even tone, and smooth hand shifts with simple piano drills.",
+      "coverImage": "/reference/JAZZ-COLORS.png",
+      "tags": [
+        "piano",
+        "beginner"
+      ],
+      "priceTeacher": 39,
+      "priceStudent": 19,
+      "subjectCount": 2,
+      "status": "draft",
+      "createdAt": "2026-02-11T00:00:00.000Z",
+      "updatedAt": "2026-02-11T18:55:55.187Z",
+      "subjects": [
+        {
+          "id": "subject-piano-2",
+          "title": "Simple Hand Shifts",
+          "body": "Shifting positions smoothly is one of the foundations of confident playing. Focus on moving your entire hand as one relaxed unit rather than stretching individual fingers to reach new notes. Keep your thumb light on the back of the neck and avoid squeezing.\n\nPractice sliding between two nearby positions slowly, listening for clean tone with no buzzing or gaps. Keep fingers close to the strings to reduce wasted motion. The goal is controlled, quiet movement — not speed.\n\nAs you improve, begin shifting without looking at your hand. Build trust in your muscle memory and develop consistency across all strings.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1445985543470-41fba5c3144a?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Finger Warmups",
+              "url": "https://www.pianoscales.org/hanon.html"
+            },
+            {
+              "label": "Easy Chords",
+              "url": "https://www.pianochords.com/"
+            },
+            {
+              "label": "Technique Tips",
+              "url": "https://www.pianolessons.com/piano-technique/"
+            }
+          ],
+          "soundSliceUrl": "https://www.soundslice.com/slices/HZnfc/embed/",
+          "soundSlicePlacement": "body",
+          "order": 0,
+          "subjectNumber": 1
+        },
+        {
+          "id": "subject-piano-1",
+          "title": "Even Finger Strikes",
+          "body": "Balanced finger strength creates a clean, professional sound. When playing five-finger patterns, aim for consistent tone, volume, and timing across every note. Avoid letting stronger fingers overpower weaker ones.\n\nKeep wrists level and relaxed. Each finger should lift only slightly before striking — no exaggerated motion. Focus on control over force.\n\nUse a slow metronome setting and listen carefully. If one note sounds louder or weaker, isolate that finger and repeat short patterns until it matches the others. Consistency is more important than speed.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1477233534935-f5e6fe7c1159?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Find Any Chord",
+              "url": "https://www.pianochord.org/"
+            },
+            {
+              "label": "Scales Made Easy",
+              "url": "https://www.pianoscales.org/"
+            },
+            {
+              "label": "Quick Theory Help",
+              "url": "https://www.musictheory.net/lessons"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 1,
+          "subjectNumber": 2
+        },
+        {
+          "id": "subject-9rzgnmgo",
+          "subjectNumber": 6,
+          "title": "UNTITLED LESSON SUBJECT",
+          "body": "",
+          "headerImageUrl": "",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "",
+              "url": ""
+            },
+            {
+              "label": "",
+              "url": ""
+            },
+            {
+              "label": "",
+              "url": ""
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 2
+        },
+        {
+          "id": "subject-r2xezcv2",
+          "subjectNumber": 7,
+          "title": "UNTITLED LESSON SUBJECT",
+          "body": "",
+          "headerImageUrl": "",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "",
+              "url": ""
+            },
+            {
+              "label": "",
+              "url": ""
+            },
+            {
+              "label": "",
+              "url": ""
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 3
+        }
+      ]
+    },
+    {
+      "id": "pack-piano-201",
+      "title": "Piano Melody Lab",
+      "subtitle": "Tone, phrasing, and musical intent",
+      "description": "Shape simple melodies with dynamics, clean hand balance, and relaxed articulation.",
+      "coverImage": "/reference/WARM-UPS.png",
+      "tags": [
+        "piano",
+        "intermediate"
+      ],
+      "priceTeacher": 49,
+      "priceStudent": 25,
+      "subjectCount": 1,
+      "status": "draft",
+      "createdAt": "2026-02-11T00:00:00.000Z",
+      "updatedAt": "2026-02-11T00:00:00.000Z",
+      "subjects": [
+        {
+          "id": "subject-piano-3",
+          "title": "Target Notes",
+          "body": "Land on chord tones for a clear melodic outline. Use passing notes to connect phrases.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1513883049090-d0b7439799bf?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Scales Made Easy",
+              "url": "https://www.pianoscales.org/"
+            },
+            {
+              "label": "Chord Pathways",
+              "url": "https://www.pianochord.org/chord-progressions.html"
+            },
+            {
+              "label": "Sight Reading Fun",
+              "url": "https://www.sightreadingfactory.com/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 0,
+          "subjectNumber": 1
+        }
+      ]
+    },
+    {
+      "id": "pack-piano-301",
+      "title": "Chords and Colors",
+      "subtitle": "Create richer piano textures",
+      "description": "Explore simple triads, inversions, and progressions to make your playing feel full and musical.",
+      "coverImage": "/reference/JAZZ-COLORS.png",
+      "tags": [
+        "piano",
+        "chords"
+      ],
+      "priceTeacher": 45,
+      "priceStudent": 22,
+      "subjectCount": 3,
+      "status": "draft",
+      "createdAt": "2026-02-11T00:00:00.000Z",
+      "updatedAt": "2026-02-11T00:00:00.000Z",
+      "subjects": [
+        {
+          "id": "subject-piano-4",
+          "title": "Triads Up Close",
+          "body": "Build major and minor triads in a few keys. Keep fingers curved and relaxed.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Chord Finder",
+              "url": "https://www.pianochord.org/"
+            },
+            {
+              "label": "Triad Guide",
+              "url": "https://www.musictheory.net/lessons/40"
+            },
+            {
+              "label": "Practice Tracker",
+              "url": "https://www.notion.so/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 0,
+          "subjectNumber": 1
+        },
+        {
+          "id": "subject-piano-5",
+          "title": "Inversion Shapes",
+          "body": "Move between root position and inversions to keep progressions smooth.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Inversion Help",
+              "url": "https://www.pianochord.org/chords-inversions.html"
+            },
+            {
+              "label": "Progression Ideas",
+              "url": "https://www.pianochord.org/chord-progressions.html"
+            },
+            {
+              "label": "Ear Training",
+              "url": "https://www.musictheory.net/exercises/ear"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "body",
+          "order": 1,
+          "subjectNumber": 2
+        },
+        {
+          "id": "subject-piano-6",
+          "title": "Left Hand Support",
+          "body": "Try simple broken chords and keep the rhythm steady and light.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1513883049090-d0b7439799bf?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Arpeggio Basics",
+              "url": "https://www.pianoscales.org/arpeggios.html"
+            },
+            {
+              "label": "Rhythm Trainer",
+              "url": "https://www.musictheory.net/exercises/rhythm"
+            },
+            {
+              "label": "Hand Balance Tips",
+              "url": "https://www.pianolessons.com/piano-technique/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 2,
+          "subjectNumber": 3
+        }
+      ]
+    },
+    {
+      "id": "pack-piano-401",
+      "title": "Smooth Scales",
+      "subtitle": "Flow and consistency",
+      "description": "Improve scale confidence with small steps, clear fingering, and steady timing.",
+      "coverImage": "https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&w=1200&q=80",
+      "tags": [
+        "piano",
+        "scales"
+      ],
+      "priceTeacher": 35,
+      "priceStudent": 18,
+      "subjectCount": 2,
+      "status": "draft",
+      "createdAt": "2026-02-11T00:00:00.000Z",
+      "updatedAt": "2026-02-11T00:00:00.000Z",
+      "subjects": [
+        {
+          "id": "subject-piano-7",
+          "title": "Right Hand Scale",
+          "body": "Use a slow tempo and focus on even tone. Keep thumbs relaxed during crossovers.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1513883049090-d0b7439799bf?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Scale Library",
+              "url": "https://www.pianoscales.org/"
+            },
+            {
+              "label": "Fingering Tips",
+              "url": "https://www.pianoscales.org/fingering.html"
+            },
+            {
+              "label": "Metronome",
+              "url": "https://www.metronomeonline.com/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 0,
+          "subjectNumber": 1
+        },
+        {
+          "id": "subject-piano-8",
+          "title": "Left Hand Scale",
+          "body": "Slow down the crossover points and keep the wrist loose.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1445985543470-41fba5c3144a?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Left Hand Guide",
+              "url": "https://www.pianoscales.org/"
+            },
+            {
+              "label": "Practice Timer",
+              "url": "https://www.metronomeonline.com/"
+            },
+            {
+              "label": "Tone Tips",
+              "url": "https://www.pianolessons.com/piano-technique/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "body",
+          "order": 1,
+          "subjectNumber": 2
+        }
+      ]
+    },
+    {
+      "id": "pack-piano-501",
+      "title": "Rhythm and Groove",
+      "subtitle": "Make piano feel alive",
+      "description": "Work on steady timing, accents, and groove feel with simple rhythm drills.",
+      "coverImage": "https://images.unsplash.com/photo-1513883049090-d0b7439799bf?auto=format&fit=crop&w=1200&q=80",
+      "tags": [
+        "piano",
+        "rhythm"
+      ],
+      "priceTeacher": 42,
+      "priceStudent": 21,
+      "subjectCount": 4,
+      "status": "draft",
+      "createdAt": "2026-02-11T00:00:00.000Z",
+      "updatedAt": "2026-02-11T00:00:00.000Z",
+      "subjects": [
+        {
+          "id": "subject-piano-9",
+          "title": "Quarter-Note Groove",
+          "body": "Keep a steady pulse and make every beat sound the same. Stay relaxed.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1484820540004-14229fe36ca4?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Groove Meter",
+              "url": "https://www.metronomeonline.com/"
+            },
+            {
+              "label": "Rhythm Games",
+              "url": "https://www.musictheory.net/exercises/rhythm"
+            },
+            {
+              "label": "Practice Tracker",
+              "url": "https://www.notion.so/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 0,
+          "subjectNumber": 1
+        },
+        {
+          "id": "subject-piano-10",
+          "title": "Eighth-Note Flow",
+          "body": "Count out loud and keep the rhythm smooth. Light touch, steady tempo.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1477233534935-f5e6fe7c1159?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Counting Help",
+              "url": "https://www.musictheory.net/lessons/10"
+            },
+            {
+              "label": "Tempo Trainer",
+              "url": "https://www.metronomeonline.com/"
+            },
+            {
+              "label": "Groove Ideas",
+              "url": "https://www.youtube.com/"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "body",
+          "order": 1,
+          "subjectNumber": 2
+        },
+        {
+          "id": "subject-piano-11",
+          "title": "Accent Patterns",
+          "body": "Add accents on beat two and four. Keep your hand light between accents.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1445985543470-41fba5c3144a?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Accent Practice",
+              "url": "https://www.musictheory.net/lessons/10"
+            },
+            {
+              "label": "Groove Backing",
+              "url": "https://www.youtube.com/"
+            },
+            {
+              "label": "Rhythm Tips",
+              "url": "https://www.musictheory.net/lessons"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "header",
+          "order": 2,
+          "subjectNumber": 3
+        },
+        {
+          "id": "subject-piano-12",
+          "title": "Syncopation Starter",
+          "body": "Clap the rhythm first, then play it. Keep the pulse steady underneath.",
+          "headerImageUrl": "https://images.unsplash.com/photo-1484820540004-14229fe36ca4?auto=format&fit=crop&w=1200&q=80",
+          "headerVideoUrl": "",
+          "inlineVideoUrl": "",
+          "inlinePdfUrl": "",
+          "links": [
+            {
+              "label": "Clap Along",
+              "url": "https://www.musictheory.net/exercises/rhythm"
+            },
+            {
+              "label": "Slow It Down",
+              "url": "https://www.metronomeonline.com/"
+            },
+            {
+              "label": "Syncopation Tips",
+              "url": "https://www.musictheory.net/lessons/10"
+            }
+          ],
+          "soundSliceUrl": "",
+          "soundSlicePlacement": "body",
+          "order": 3,
+          "subjectNumber": 4
+        }
+      ]
+    }
+  ]
+}

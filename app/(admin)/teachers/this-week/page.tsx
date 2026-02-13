@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -80,6 +80,45 @@ const formatDurationLabel = (value?: StudentRecord['lessonDuration'] | '15M') =>
   return '30 min';
 };
 
+const dateKeyFromDate = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value.toISOString().slice(0, 10);
+};
+
+const minutesToTimeLabel = (minutes: number) => {
+  const hours24 = Math.floor(minutes / 60) % 24;
+  const mins = minutes % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hour = hours24 % 12 || 12;
+  return `${hour}:${String(mins).padStart(2, '0')} ${period}`;
+};
+
+const timeLabelTo24 = (value: string) => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return '12:00';
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const period = match[3].toUpperCase();
+  if (period === 'PM' && hour !== 12) hour += 12;
+  if (period === 'AM' && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, '0')}:${minute}`;
+};
+
+const time24ToLabel = (value: string) => {
+  const [hoursRaw, minutesRaw] = value.split(':');
+  const hours24 = Number(hoursRaw ?? 0);
+  const mins = Number(minutesRaw ?? 0);
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hour = hours24 % 12 || 12;
+  return `${hour}:${String(mins).padStart(2, '0')} ${period}`;
+};
+
+const dayFromDateKey = (dateKey: string) => {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return WEEK_DAYS[date.getDay()] ?? 'Sunday';
+};
+
 export default function TeacherThisWeekPage() {
   const [teacherName, setTeacherName] = useState<string | null>(null);
   const [teacherLabel, setTeacherLabel] = useState<string | null>(null);
@@ -99,12 +138,57 @@ export default function TeacherThisWeekPage() {
       duration: '15M' | '30M' | '45M' | '1HR';
       color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
       recurring: boolean;
+      allowLessonSwap?: boolean;
       startWeek: string;
       dateKey?: string;
+      skipDates?: string[];
     }[]
   >([]);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [lessonOverrides, setLessonOverrides] = useState<
+    Array<{
+      id: string;
+      studentId: string;
+      dateKey: string;
+      day: WeekDay;
+      time: string;
+    }>
+  >([]);
+  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [hoveredDropId, setHoveredDropId] = useState<string | null>(null);
+  const [rescheduleForm, setRescheduleForm] = useState<{
+    kind: 'lesson' | 'event';
+    id: string;
+    label: string;
+    currentDateKey: string;
+    currentTime: string;
+    newDate: string;
+    newTime: string;
+    choice: 'single' | 'future';
+    eventRecurring: boolean;
+    durationMinutes: number;
+    swap?: {
+      kind: 'lesson' | 'event';
+      id: string;
+      label: string;
+      dateKey: string;
+      time: string;
+      durationMinutes: number;
+      recurring: boolean;
+    } | null;
+    swapPreference?: 'swap' | 'change';
+  } | null>(null);
+  const dayColumnRefs = useRef<Record<WeekDay, HTMLDivElement | null>>({
+    Sunday: null,
+    Monday: null,
+    Tuesday: null,
+    Wednesday: null,
+    Thursday: null,
+    Friday: null,
+    Saturday: null,
+  });
   const [eventForm, setEventForm] = useState({
     day: 'Sunday' as WeekDay,
     hour: '4',
@@ -114,6 +198,7 @@ export default function TeacherThisWeekPage() {
     color: 'sage' as 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint',
     label: '',
     recurring: false,
+    allowLessonSwap: false,
   });
 
   useEffect(() => {
@@ -213,6 +298,26 @@ export default function TeacherThisWeekPage() {
   }, [loadPersonalEvents]);
 
   useEffect(() => {
+    if (!teacherName) return;
+    const key = `sm_week_overrides:${teacherName}`;
+    const stored = window.localStorage.getItem(key);
+    if (!stored) {
+      setLessonOverrides([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as typeof lessonOverrides;
+      if (Array.isArray(parsed)) {
+        setLessonOverrides(parsed);
+      } else {
+        setLessonOverrides([]);
+      }
+    } catch {
+      setLessonOverrides([]);
+    }
+  }, [teacherName]);
+
+  useEffect(() => {
     const handleSync = () => loadPersonalEvents();
     window.addEventListener('storage', handleSync);
     window.addEventListener('sm-personal-events-updated', handleSync);
@@ -299,12 +404,26 @@ export default function TeacherThisWeekPage() {
 
   const weekStart = weekDates[0]?.date ?? new Date();
   const weekEnd = weekDates[6]?.date ?? new Date();
+  const weekStartDate = weekDates[0]?.date ?? new Date();
+  const weekEndDate = weekDates[weekDates.length - 1]?.date ?? new Date();
 
   const currentWeekKey = useMemo(() => {
     const date = new Date(weekStart);
     date.setHours(0, 0, 0, 0);
     return date.toISOString().slice(0, 10);
   }, [weekStart]);
+
+  const overridesThisWeek = useMemo(() => {
+    return lessonOverrides.filter(override => {
+      const overrideDate = new Date(`${override.dateKey}T00:00:00`);
+      return overrideDate >= weekStartDate && overrideDate <= weekEndDate;
+    });
+  }, [lessonOverrides, weekEndDate, weekStartDate]);
+
+  const overrideByStudent = useMemo(
+    () => new Map(overridesThisWeek.map(override => [override.studentId, override])),
+    [overridesThisWeek],
+  );
 
   const scheduleByDay = useMemo(() => {
     const map = new Map<
@@ -327,6 +446,18 @@ export default function TeacherThisWeekPage() {
     WEEK_DAYS.forEach(day => map.set(day, []));
     students.forEach(student => {
       if (student.status !== 'Active') return;
+      const override = overrideByStudent.get(student.id);
+      if (override) {
+        const current = map.get(override.day) ?? [];
+        current.push({
+          ...student,
+          lessonDay: override.day,
+          lessonTime: override.time,
+          kind: 'lesson',
+        });
+        map.set(override.day, current);
+        return;
+      }
       const index = dayIndex(student.lessonDay);
       if (index < 0) return;
       const day = WEEK_DAYS[index];
@@ -334,9 +465,6 @@ export default function TeacherThisWeekPage() {
       current.push({ ...student, kind: 'lesson' });
       map.set(day, current);
     });
-    const weekStartDate = weekDates[0];
-    const weekEndDate = weekDates[weekDates.length - 1];
-
     const weekDateMap = new Map(
       weekDates.map(entry => [
         entry.date.toISOString().slice(0, 10),
@@ -346,6 +474,16 @@ export default function TeacherThisWeekPage() {
 
     personalEvents.forEach(event => {
       if (event.recurring) {
+        if (event.startWeek) {
+          const eventStart = new Date(`${event.startWeek}T00:00:00`);
+          if (weekStartDate < eventStart) return;
+        }
+        const occurrenceDate =
+          weekDates.find(entry => entry.day === event.day)?.date ?? weekStartDate;
+        const occurrenceKey = dateKeyFromDate(occurrenceDate);
+        if (event.skipDates?.includes(occurrenceKey)) {
+          return;
+        }
         const current = map.get(event.day) ?? [];
         current.push({ ...event, kind: 'event' });
         map.set(event.day, current);
@@ -385,9 +523,9 @@ export default function TeacherThisWeekPage() {
       );
     });
     return map;
-  }, [currentWeekKey, personalEvents, students]);
+  }, [currentWeekKey, overrideByStudent, personalEvents, students, weekDates, weekEndDate, weekStartDate]);
 
-  const getDateKeyForDay = (day: WeekDay) => {
+  const getDateKeyForDay = (day?: WeekDay) => {
     const matched = weekDates.find(entry => entry.day === day);
     if (!matched) return currentWeekKey;
     const date = new Date(matched.date);
@@ -404,6 +542,16 @@ export default function TeacherThisWeekPage() {
     }
     setPersonalEvents(nextEvents);
     window.dispatchEvent(new Event('sm-personal-events-updated'));
+  };
+
+  const saveLessonOverrides = (nextOverrides: typeof lessonOverrides) => {
+    if (teacherName) {
+      window.localStorage.setItem(
+        `sm_week_overrides:${teacherName}`,
+        JSON.stringify(nextOverrides),
+      );
+    }
+    setLessonOverrides(nextOverrides);
   };
 
   const handleWeekStartChange = (value: WeekDay) => {
@@ -424,6 +572,7 @@ export default function TeacherThisWeekPage() {
       color: 'sage',
       label: '',
       recurring: false,
+      allowLessonSwap: false,
     });
     setIsEventModalOpen(true);
   };
@@ -436,6 +585,7 @@ export default function TeacherThisWeekPage() {
     duration: '15M' | '30M' | '45M' | '1HR';
     color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
     recurring: boolean;
+    allowLessonSwap?: boolean;
   }) => {
     const match = event.time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
     setEditingEventId(event.id);
@@ -448,6 +598,7 @@ export default function TeacherThisWeekPage() {
       color: event.color,
       label: event.label,
       recurring: event.recurring,
+      allowLessonSwap: event.allowLessonSwap ?? false,
     });
     setIsEventModalOpen(true);
   };
@@ -455,6 +606,747 @@ export default function TeacherThisWeekPage() {
   const closeEventModal = () => {
     setIsEventModalOpen(false);
   };
+
+  const inferTimeFromDrop = (
+    day: WeekDay,
+    clientY: number,
+    lessons: Array<
+      | (StudentRecord & { kind: 'lesson' })
+      | {
+          id: string;
+          label: string;
+          day: WeekDay;
+          time: string;
+          duration: '15M' | '30M' | '45M' | '1HR';
+          color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
+          recurring: boolean;
+          startWeek: string;
+          kind: 'event';
+        }
+    >,
+    duration: number,
+    targetEl?: HTMLElement | null,
+    fallbackTime?: string,
+  ) => {
+    if (lessons.length === 0 && fallbackTime) {
+      return fallbackTime;
+    }
+    const dayStart = 8 * 60;
+    const dayEnd = 20 * 60;
+    const slots = lessons.map(item => {
+      const start =
+        item.kind === 'lesson'
+          ? parseMinutes(item.lessonTime)
+          : parseMinutes(item.time);
+      const normalizedStart = Number.isFinite(start) ? start : dayStart;
+      const end =
+        normalizedStart +
+        (item.kind === 'lesson'
+          ? durationMinutes(item.lessonDuration)
+          : durationMinutes(item.duration ?? '15M'));
+      return {
+        id: item.id,
+        start: normalizedStart,
+        end,
+      };
+    });
+    slots.sort((a, b) => a.start - b.start);
+
+    const clampToDay = (value: number) =>
+      Math.min(Math.max(value, dayStart), dayEnd - duration);
+
+    const first = slots[0];
+    const last = slots[slots.length - 1];
+
+    if (targetEl?.dataset?.slotType === 'gap') {
+      const gapStart = Number(targetEl.dataset.gapstart ?? dayStart);
+      const gapEnd = Number(targetEl.dataset.gapend ?? dayEnd);
+      if (gapEnd - gapStart >= duration) {
+        const rect = targetEl.getBoundingClientRect();
+        const ratio =
+          rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+        if (ratio <= 0.5) {
+          return minutesToTimeLabel(clampToDay(gapStart));
+        }
+        return minutesToTimeLabel(clampToDay(gapEnd - duration));
+      }
+    }
+
+    if (targetEl?.dataset?.slotType === 'lesson') {
+      const targetId = targetEl.dataset.id ?? '';
+      const index = slots.findIndex(slot => slot.id === targetId);
+      if (index >= 0) {
+        const slot = slots[index];
+        const prev = slots[index - 1];
+        const next = slots[index + 1];
+        const rect = targetEl.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (clientY <= mid) {
+          const proposed = slot.start - duration;
+          const minStart = prev ? prev.end : dayStart;
+          const final = proposed < minStart ? minStart : proposed;
+          return minutesToTimeLabel(clampToDay(final));
+        }
+        const proposed = slot.end;
+        const maxEnd = next ? next.start : dayEnd;
+        const final =
+          proposed + duration > maxEnd ? maxEnd - duration : proposed;
+        return minutesToTimeLabel(clampToDay(final));
+      }
+    }
+
+    if (first) {
+      const column = dayColumnRefs.current[day];
+      if (column) {
+        const rect = column.getBoundingClientRect();
+        if (clientY <= rect.top + 20) {
+          const proposed = first.start - duration;
+          return minutesToTimeLabel(
+            clampToDay(proposed < dayStart ? dayStart : proposed),
+          );
+        }
+        if (clientY >= rect.bottom - 20 && last) {
+          return minutesToTimeLabel(clampToDay(last.end));
+        }
+      }
+    }
+
+    if (last) {
+      return minutesToTimeLabel(clampToDay(last.end));
+    }
+    return minutesToTimeLabel(dayStart);
+  };
+
+  const openRescheduleModal = (payload: {
+    kind: 'lesson' | 'event';
+    id: string;
+    label: string;
+    currentDateKey: string;
+    currentTime: string;
+    newDate: string;
+    newTime: string;
+    eventRecurring: boolean;
+    durationMinutes: number;
+    swap?: {
+      kind: 'lesson' | 'event';
+      id: string;
+      label: string;
+      dateKey: string;
+      time: string;
+      durationMinutes: number;
+      recurring: boolean;
+    } | null;
+  }) => {
+    setRescheduleForm({
+      kind: payload.kind,
+      id: payload.id,
+      label: payload.label,
+      currentDateKey: payload.currentDateKey,
+      currentTime: payload.currentTime,
+      newDate: payload.newDate,
+      newTime: payload.newTime,
+      choice: 'single',
+      eventRecurring: payload.eventRecurring,
+      durationMinutes: payload.durationMinutes,
+      swap: payload.swap ?? null,
+      swapPreference: payload.swap ? 'change' : 'change',
+    });
+    setRescheduleError(null);
+    setIsRescheduleOpen(true);
+  };
+
+  const closeRescheduleModal = () => {
+    setIsRescheduleOpen(false);
+    setRescheduleError(null);
+  };
+
+  const handleRescheduleSave = async () => {
+    if (!rescheduleForm) return;
+    setRescheduleError(null);
+    const nextDateKey = rescheduleForm.newDate;
+    const nextDay = dayFromDateKey(nextDateKey);
+    const nextTimeLabel = time24ToLabel(rescheduleForm.newTime);
+    const nextStart = parseMinutes(nextTimeLabel);
+    const nextEnd = nextStart + rescheduleForm.durationMinutes;
+
+    const collectItemsForDate = (dateKey: string) => {
+      const day = dayFromDateKey(dateKey);
+      const items: Array<{ id: string; kind: 'lesson' | 'event'; start: number; end: number }> = [];
+      students.forEach(student => {
+        if (student.status !== 'Active') return;
+        const override = lessonOverrides.find(
+          item => item.studentId === student.id && item.dateKey === dateKey,
+        );
+        if (override) {
+          items.push({
+            id: student.id,
+            kind: 'lesson',
+            start: parseMinutes(override.time),
+            end: parseMinutes(override.time) + durationMinutes(student.lessonDuration),
+          });
+          return;
+        }
+        if (student.lessonDay?.toLowerCase() !== day.toLowerCase()) return;
+        if (!student.lessonTime) return;
+        const start = parseMinutes(student.lessonTime);
+        if (!Number.isFinite(start)) return;
+        items.push({
+          id: student.id,
+          kind: 'lesson',
+          start,
+          end: start + durationMinutes(student.lessonDuration),
+        });
+      });
+
+      personalEvents.forEach(event => {
+        if (event.recurring) {
+          if (event.startWeek) {
+            const eventStart = new Date(`${event.startWeek}T00:00:00`);
+            const targetDate = new Date(`${dateKey}T00:00:00`);
+            if (targetDate < eventStart) return;
+          }
+          if (event.day.toLowerCase() !== day.toLowerCase()) return;
+          if (event.skipDates?.includes(dateKey)) return;
+          const start = parseMinutes(event.time);
+          if (!Number.isFinite(start)) return;
+          items.push({
+            id: event.id,
+            kind: 'event',
+            start,
+            end: start + durationMinutes(event.duration ?? '15M'),
+          });
+          return;
+        }
+        if (event.dateKey !== dateKey) return;
+        const start = parseMinutes(event.time);
+        if (!Number.isFinite(start)) return;
+        items.push({
+          id: event.id,
+          kind: 'event',
+          start,
+          end: start + durationMinutes(event.duration ?? '15M'),
+        });
+      });
+      return items;
+    };
+
+    const isOverlapping = (
+      dateKey: string,
+      ignoreIds: Array<{ id: string; kind: 'lesson' | 'event' }>,
+    ) => {
+      const items = collectItemsForDate(dateKey);
+      return items.some(item => {
+        if (
+          ignoreIds.some(ignore => ignore.id === item.id && ignore.kind === item.kind)
+        ) {
+          return false;
+        }
+        return nextStart < item.end && nextEnd > item.start;
+      });
+    };
+
+    if (rescheduleForm.kind === 'lesson') {
+      const shouldSwap =
+        Boolean(rescheduleForm.swap) &&
+        rescheduleForm.swapPreference === 'swap';
+      if (shouldSwap && rescheduleForm.swap) {
+        const swap = rescheduleForm.swap;
+        const swapStart = parseMinutes(swap.time);
+        const swapEnd = swapStart + swap.durationMinutes;
+        if (swap.durationMinutes !== rescheduleForm.durationMinutes) {
+          setRescheduleError('Swap requires matching durations.');
+          return;
+        }
+        if (swap.kind === 'event') {
+          const swapEvent = personalEvents.find(item => item.id === swap.id);
+          if (!swapEvent) {
+            setIsRescheduleOpen(false);
+            return;
+          }
+          const originalDateKey = rescheduleForm.currentDateKey;
+          const createOneOff = (source: typeof swapEvent, dateKey: string, time: string) => ({
+            ...source,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            day: dayFromDateKey(dateKey),
+            time,
+            dateKey,
+            recurring: false,
+            startWeek: currentWeekKey,
+            skipDates: undefined,
+          });
+          const nextEvents = personalEvents.flatMap(item => {
+            if (item.id === swapEvent.id) {
+              if (item.recurring) {
+                return [
+                  {
+                    ...item,
+                    skipDates: Array.from(
+                      new Set([...(item.skipDates ?? []), originalDateKey]),
+                    ),
+                  },
+                  createOneOff(item, originalDateKey, rescheduleForm.currentTime),
+                ];
+              }
+              return [
+                {
+                  ...item,
+                  day: dayFromDateKey(originalDateKey),
+                  time: rescheduleForm.currentTime,
+                  dateKey: originalDateKey,
+                  recurring: false,
+                },
+              ];
+            }
+            return [item];
+          });
+
+          const swapConflict =
+            collectItemsForDate(originalDateKey).some(item => {
+              if (item.id === swapEvent.id && item.kind === 'event') return false;
+              return (
+                parseMinutes(rescheduleForm.currentTime) < item.end &&
+                parseMinutes(rescheduleForm.currentTime) +
+                  rescheduleForm.durationMinutes >
+                  item.start
+              );
+            }) ||
+            collectItemsForDate(nextDateKey).some(item => {
+              if (item.id === rescheduleForm.id && item.kind === 'lesson') return false;
+              return nextStart < item.end && nextEnd > item.start;
+            });
+          if (swapConflict) {
+            setRescheduleError('That time slot is already taken.');
+            return;
+          }
+
+          savePersonalEvents(nextEvents);
+          const overrideId = `${rescheduleForm.id}:${nextDateKey}`;
+          const nextOverrides = [
+            ...lessonOverrides.filter(
+              override =>
+                !(override.studentId === rescheduleForm.id &&
+                  override.dateKey === nextDateKey),
+            ),
+            {
+              id: overrideId,
+              studentId: rescheduleForm.id,
+              dateKey: nextDateKey,
+              day: nextDay,
+              time: nextTimeLabel,
+            },
+          ];
+          saveLessonOverrides(nextOverrides);
+          setIsRescheduleOpen(false);
+          return;
+        }
+        const swapDateKey = rescheduleForm.currentDateKey;
+        if (
+          isOverlapping(nextDateKey, [
+            { id: rescheduleForm.id, kind: 'lesson' },
+            { id: swap.id, kind: swap.kind },
+          ]) ||
+          (swapDateKey !== nextDateKey &&
+            collectItemsForDate(swapDateKey).some(item => {
+              if (item.id === swap.id && item.kind === swap.kind) {
+                return false;
+              }
+              return swapStart < item.end && swapEnd > item.start;
+            }))
+        ) {
+          setRescheduleError('That time slot is already taken.');
+          return;
+        }
+
+        if (rescheduleForm.choice === 'future' && swap.kind === 'lesson') {
+          try {
+            await fetch(`/api/students/${rescheduleForm.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lessonDay: nextDay, lessonTime: nextTimeLabel }),
+            });
+            await fetch(`/api/students/${swap.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                lessonDay: dayFromDateKey(rescheduleForm.currentDateKey),
+                lessonTime: rescheduleForm.currentTime,
+              }),
+            });
+          } catch {
+            // ignore
+          }
+          setIsRescheduleOpen(false);
+          return;
+        }
+
+        const nextOverrides = [
+          ...lessonOverrides.filter(
+            override =>
+              !(
+                (override.studentId === rescheduleForm.id &&
+                  override.dateKey === nextDateKey) ||
+                (override.studentId === swap.id &&
+                  override.dateKey === rescheduleForm.currentDateKey)
+              ),
+          ),
+          {
+            id: `${rescheduleForm.id}:${nextDateKey}`,
+            studentId: rescheduleForm.id,
+            dateKey: nextDateKey,
+            day: nextDay,
+            time: nextTimeLabel,
+          },
+          swap.kind === 'lesson'
+            ? {
+                id: `${swap.id}:${rescheduleForm.currentDateKey}`,
+                studentId: swap.id,
+                dateKey: rescheduleForm.currentDateKey,
+                day: dayFromDateKey(rescheduleForm.currentDateKey),
+                time: rescheduleForm.currentTime,
+              }
+            : null,
+        ].filter(Boolean) as typeof lessonOverrides;
+        saveLessonOverrides(nextOverrides);
+        setIsRescheduleOpen(false);
+        return;
+      }
+
+      if (
+        isOverlapping(nextDateKey, [{ id: rescheduleForm.id, kind: 'lesson' }])
+      ) {
+        setRescheduleError('That time slot is already taken.');
+        return;
+      }
+      if (rescheduleForm.choice === 'future') {
+        try {
+          const response = await fetch(`/api/students/${rescheduleForm.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lessonDay: nextDay,
+              lessonTime: nextTimeLabel,
+            }),
+          });
+          if (response.ok) {
+            const data = (await response.json()) as { student: StudentRecord };
+            setStudents(current =>
+              current.map(student =>
+                student.id === data.student.id ? data.student : student,
+              ),
+            );
+          }
+        } catch {
+          // ignore
+        }
+        const cleaned = lessonOverrides.filter(
+          override =>
+            override.studentId !== rescheduleForm.id ||
+            override.dateKey < nextDateKey,
+        );
+        saveLessonOverrides(cleaned);
+      } else {
+        const overrideId = `${rescheduleForm.id}:${nextDateKey}`;
+        const nextOverrides = [
+          ...lessonOverrides.filter(
+            override =>
+              !(override.studentId === rescheduleForm.id &&
+                override.dateKey === nextDateKey),
+          ),
+          {
+            id: overrideId,
+            studentId: rescheduleForm.id,
+            dateKey: nextDateKey,
+            day: nextDay,
+            time: nextTimeLabel,
+          },
+        ];
+        saveLessonOverrides(nextOverrides);
+      }
+      setIsRescheduleOpen(false);
+      return;
+    }
+
+    const event = personalEvents.find(item => item.id === rescheduleForm.id);
+    if (!event) {
+      setIsRescheduleOpen(false);
+      return;
+    }
+    const shouldSwap =
+      Boolean(rescheduleForm.swap) &&
+      rescheduleForm.swapPreference === 'swap';
+    if (shouldSwap && rescheduleForm.swap) {
+      const swap = rescheduleForm.swap;
+      if (swap.durationMinutes !== rescheduleForm.durationMinutes) {
+        setRescheduleError('Swap requires matching durations.');
+        return;
+      }
+      if (swap.kind === 'lesson' && !event.allowLessonSwap) {
+        setRescheduleError('This event is not enabled for lesson swaps.');
+        return;
+      }
+      if (swap.kind === 'lesson') {
+        const targetLesson = students.find(item => item.id === swap.id);
+        if (!targetLesson) {
+          setIsRescheduleOpen(false);
+          return;
+        }
+        const originalDateKey = rescheduleForm.currentDateKey;
+        const originalTime = rescheduleForm.currentTime;
+        const swapConflict =
+          collectItemsForDate(originalDateKey).some(item => {
+            if (item.id === swap.id && item.kind === 'lesson') return false;
+            return (
+              parseMinutes(originalTime) < item.end &&
+              parseMinutes(originalTime) +
+                rescheduleForm.durationMinutes >
+                item.start
+            );
+          }) ||
+          collectItemsForDate(nextDateKey).some(item => {
+            if (item.id === rescheduleForm.id && item.kind === 'event') return false;
+            return nextStart < item.end && nextEnd > item.start;
+          });
+        if (swapConflict) {
+          setRescheduleError('That time slot is already taken.');
+          return;
+        }
+
+        const nextEvents = personalEvents.flatMap(item => {
+          if (item.id === rescheduleForm.id) {
+            if (item.recurring) {
+              return [
+                {
+                  ...item,
+                  skipDates: Array.from(
+                    new Set([...(item.skipDates ?? []), originalDateKey]),
+                  ),
+                },
+                {
+                  ...item,
+                  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  day: dayFromDateKey(nextDateKey),
+                  time: nextTimeLabel,
+                  dateKey: nextDateKey,
+                  recurring: false,
+                  startWeek: currentWeekKey,
+                  skipDates: undefined,
+                },
+              ];
+            }
+            return [
+              {
+                ...item,
+                day: dayFromDateKey(nextDateKey),
+                time: nextTimeLabel,
+                dateKey: nextDateKey,
+                recurring: false,
+              },
+            ];
+          }
+          return [item];
+        });
+        savePersonalEvents(nextEvents);
+
+        const nextOverrides = [
+          ...lessonOverrides.filter(
+            override =>
+              !(
+                override.studentId === swap.id &&
+                override.dateKey === originalDateKey
+              ),
+          ),
+          {
+            id: `${swap.id}:${originalDateKey}`,
+            studentId: swap.id,
+            dateKey: originalDateKey,
+            day: dayFromDateKey(originalDateKey),
+            time: originalTime,
+          },
+        ];
+        saveLessonOverrides(nextOverrides);
+        setIsRescheduleOpen(false);
+        return;
+      }
+      if (swap.kind === 'event') {
+        const swapEvent = personalEvents.find(item => item.id === swap.id);
+        if (!swapEvent) {
+          setIsRescheduleOpen(false);
+          return;
+        }
+        const originalDateKey = rescheduleForm.currentDateKey;
+        const createOneOff = (source: typeof event, dateKey: string, time: string) => ({
+          ...source,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          day: dayFromDateKey(dateKey),
+          time,
+          dateKey,
+          recurring: false,
+          startWeek: currentWeekKey,
+          skipDates: undefined,
+        });
+
+        const nextEvents = personalEvents.flatMap(item => {
+          if (item.id === event.id) {
+            if (item.recurring) {
+              return [
+                {
+                  ...item,
+                  skipDates: Array.from(
+                    new Set([...(item.skipDates ?? []), originalDateKey]),
+                  ),
+                },
+                createOneOff(item, nextDateKey, nextTimeLabel),
+              ];
+            }
+            return [
+              {
+                ...item,
+                day: nextDay,
+                time: nextTimeLabel,
+                dateKey: nextDateKey,
+                recurring: false,
+              },
+            ];
+          }
+          if (item.id === swapEvent.id) {
+            if (item.recurring) {
+              return [
+                {
+                  ...item,
+                  skipDates: Array.from(
+                    new Set([...(item.skipDates ?? []), nextDateKey]),
+                  ),
+                },
+                createOneOff(item, originalDateKey, rescheduleForm.currentTime),
+              ];
+            }
+            return [
+              {
+                ...item,
+                day: dayFromDateKey(originalDateKey),
+                time: rescheduleForm.currentTime,
+                dateKey: originalDateKey,
+                recurring: false,
+              },
+            ];
+          }
+          return [item];
+        });
+
+        const hasSwapConflict =
+          collectItemsForDate(originalDateKey).some(item => {
+            if (item.id === swapEvent.id && item.kind === 'event') return false;
+            return (
+              parseMinutes(rescheduleForm.currentTime) < item.end &&
+              parseMinutes(rescheduleForm.currentTime) +
+                rescheduleForm.durationMinutes >
+                item.start
+            );
+          }) ||
+          collectItemsForDate(nextDateKey).some(item => {
+            if (item.id === event.id && item.kind === 'event') return false;
+            return nextStart < item.end && nextEnd > item.start;
+          });
+        if (hasSwapConflict) {
+          setRescheduleError('That time slot is already taken.');
+          return;
+        }
+
+        savePersonalEvents(nextEvents);
+        setIsRescheduleOpen(false);
+        return;
+      }
+      setRescheduleError('Swap with a lesson is only supported for lessons.');
+      return;
+    }
+
+    if (
+      isOverlapping(nextDateKey, [{ id: rescheduleForm.id, kind: 'event' }])
+    ) {
+      setRescheduleError('That time slot is already taken.');
+      return;
+    }
+
+    if (event.recurring && rescheduleForm.choice === 'future') {
+      const nextEvents = personalEvents.map(item =>
+        item.id === event.id
+          ? {
+              ...item,
+              day: nextDay,
+              time: nextTimeLabel,
+              startWeek: currentWeekKey,
+            }
+          : item,
+      );
+      savePersonalEvents(nextEvents);
+      setIsRescheduleOpen(false);
+      return;
+    }
+
+    if (event.recurring && rescheduleForm.choice === 'single') {
+      const nextEvents = [
+        ...personalEvents.map(item =>
+          item.id === event.id
+            ? {
+                ...item,
+                skipDates: Array.from(
+                  new Set([...(item.skipDates ?? []), rescheduleForm.currentDateKey]),
+                ),
+              }
+            : item,
+        ),
+        {
+          ...event,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          day: nextDay,
+          time: nextTimeLabel,
+          recurring: false,
+          dateKey: nextDateKey,
+          startWeek: currentWeekKey,
+          skipDates: undefined,
+        },
+      ];
+      savePersonalEvents(nextEvents);
+      setIsRescheduleOpen(false);
+      return;
+    }
+
+    const nextEvents = personalEvents.map(item =>
+      item.id === event.id
+        ? {
+            ...item,
+            day: nextDay,
+            time: nextTimeLabel,
+            dateKey: nextDateKey,
+          }
+        : item,
+    );
+    savePersonalEvents(nextEvents);
+    setIsRescheduleOpen(false);
+  };
+
+  useEffect(() => {
+    if (!rescheduleForm) return;
+    if (rescheduleForm.kind === 'event' && !rescheduleForm.eventRecurring) {
+      if (rescheduleForm.choice !== 'single') {
+        setRescheduleForm(current =>
+          current ? { ...current, choice: 'single' } : current,
+        );
+      }
+    }
+    if (rescheduleForm.swap) {
+      if (
+        rescheduleForm.kind === 'event' ||
+        rescheduleForm.swap.kind === 'event'
+      ) {
+        if (rescheduleForm.choice !== 'single') {
+          setRescheduleForm(current =>
+            current ? { ...current, choice: 'single' } : current,
+          );
+        }
+      }
+    }
+  }, [rescheduleForm]);
 
   const handleDeleteEvent = () => {
     if (!editingEventId) return;
@@ -479,6 +1371,7 @@ export default function TeacherThisWeekPage() {
                 duration: eventForm.duration,
                 color: eventForm.color,
                 recurring: eventForm.recurring,
+                allowLessonSwap: eventForm.allowLessonSwap,
                 dateKey: eventForm.recurring
                   ? item.dateKey
                   : getDateKeyForDay(eventForm.day),
@@ -494,6 +1387,7 @@ export default function TeacherThisWeekPage() {
             duration: eventForm.duration,
             color: eventForm.color,
             recurring: eventForm.recurring,
+            allowLessonSwap: eventForm.allowLessonSwap,
             startWeek: currentWeekKey,
             dateKey: eventForm.recurring
               ? undefined
@@ -503,6 +1397,225 @@ export default function TeacherThisWeekPage() {
         ];
     savePersonalEvents(next);
     setIsEventModalOpen(false);
+  };
+
+  const handleDropOnDay = (
+    event: React.DragEvent<HTMLDivElement>,
+    day: WeekDay,
+    date: Date,
+    lessons: Array<
+      | (StudentRecord & { kind: 'lesson' })
+      | {
+          id: string;
+          label: string;
+          day: WeekDay;
+          time: string;
+          duration: '15M' | '30M' | '45M' | '1HR';
+          color: 'sage' | 'sky' | 'lilac' | 'sand' | 'rose' | 'mint';
+          recurring: boolean;
+          startWeek: string;
+          kind: 'event';
+        }
+    >,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const raw = event.dataTransfer.getData('text/plain');
+    if (!raw) return;
+    let payload: { kind: 'lesson' | 'event'; id: string } | null = null;
+    try {
+      payload = JSON.parse(raw) as { kind: 'lesson' | 'event'; id: string };
+    } catch {
+      payload = null;
+    }
+    if (!payload) return;
+    const candidates = document
+      .elementsFromPoint(event.clientX, event.clientY)
+      .map(element =>
+        (element as HTMLElement).closest?.('[data-slot]') as HTMLElement | null,
+      )
+      .filter(Boolean) as HTMLElement[];
+    const resolvedTargetEl =
+      candidates.find(
+        element =>
+          element.dataset.id !== payload?.id ||
+          element.dataset.slotType !== payload?.kind,
+      ) ?? candidates[0];
+    const resolvedTargetId = resolvedTargetEl?.dataset?.id ?? null;
+    setHoveredDropId(resolvedTargetId);
+    window.setTimeout(() => setHoveredDropId(null), 900);
+    const targetDateKey = dateKeyFromDate(date);
+
+    if (payload.kind === 'lesson') {
+      const student = students.find(item => item.id === payload!.id);
+      if (!student) return;
+      const override = overrideByStudent.get(student.id);
+      const currentTime = override?.time ?? student.lessonTime ?? 'Time TBA';
+      const dragDuration = durationMinutes(student.lessonDuration);
+      const suggestedTimeLabel = inferTimeFromDrop(
+        day,
+        event.clientY,
+        lessons,
+        dragDuration,
+        resolvedTargetEl,
+        currentTime !== 'Time TBA' ? currentTime : undefined,
+      );
+      const targetSlotType = resolvedTargetEl?.dataset?.slotType;
+      const targetId = resolvedTargetEl?.dataset?.id ?? '';
+      let swap: {
+        kind: 'lesson' | 'event';
+        id: string;
+        label: string;
+        dateKey: string;
+        time: string;
+        durationMinutes: number;
+        recurring: boolean;
+      } | null = null;
+      if (targetSlotType === 'lesson' && targetId && targetId !== student.id) {
+        const targetLesson = students.find(item => item.id === targetId);
+        if (targetLesson) {
+          const rect = resolvedTargetEl?.getBoundingClientRect();
+          const ratio =
+            rect && rect.height
+              ? Math.abs(event.clientY - (rect.top + rect.height / 2)) /
+                rect.height
+              : 1;
+          const targetDuration = durationMinutes(targetLesson.lessonDuration);
+          if (ratio <= 0.2 && targetDuration === dragDuration) {
+            if (!Number.isFinite(parseMinutes(targetLesson.lessonTime))) {
+              swap = null;
+            } else {
+              swap = {
+                kind: 'lesson',
+                id: targetLesson.id,
+                label: targetLesson.name,
+                dateKey: targetDateKey,
+                time: targetLesson.lessonTime ?? 'Time TBA',
+                durationMinutes: targetDuration,
+                recurring: true,
+              };
+            }
+          }
+      }
+      if (targetSlotType === 'event' && targetId) {
+        const targetEvent = personalEvents.find(item => item.id === targetId);
+        if (targetEvent?.allowLessonSwap) {
+          const targetDuration = durationMinutes(targetEvent.duration ?? '15M');
+          if (targetDuration === dragDuration) {
+            swap = {
+              kind: 'event',
+              id: targetEvent.id,
+              label: targetEvent.label,
+              dateKey: targetDateKey,
+              time: targetEvent.time,
+              durationMinutes: targetDuration,
+              recurring: targetEvent.recurring,
+            };
+          }
+        }
+      }
+    }
+      const suggestedTime24 = timeLabelTo24(suggestedTimeLabel);
+      const currentDateKey =
+        override?.dateKey ??
+        getDateKeyForDay(student.lessonDay as WeekDay | undefined);
+      openRescheduleModal({
+        kind: 'lesson',
+        id: student.id,
+        label: student.name,
+        currentDateKey,
+        currentTime,
+        newDate: targetDateKey,
+        newTime: suggestedTime24,
+        eventRecurring: true,
+        durationMinutes: dragDuration,
+        swap,
+      });
+      return;
+    }
+
+    const eventItem = personalEvents.find(item => item.id === payload!.id);
+    if (!eventItem) return;
+    const dragDuration = durationMinutes(eventItem.duration ?? '15M');
+    const suggestedTimeLabel = inferTimeFromDrop(
+      day,
+      event.clientY,
+      lessons,
+      dragDuration,
+      resolvedTargetEl,
+      eventItem.time,
+    );
+    const targetSlotType = resolvedTargetEl?.dataset?.slotType;
+    const targetId = resolvedTargetEl?.dataset?.id ?? '';
+    let swap: {
+      kind: 'lesson' | 'event';
+      id: string;
+      label: string;
+      dateKey: string;
+      time: string;
+      durationMinutes: number;
+      recurring: boolean;
+    } | null = null;
+    if (targetSlotType === 'event' && targetId && targetId !== eventItem.id) {
+      const targetEvent = personalEvents.find(item => item.id === targetId);
+      if (targetEvent) {
+        const rect = resolvedTargetEl?.getBoundingClientRect();
+        const ratio =
+          rect && rect.height
+            ? Math.abs(event.clientY - (rect.top + rect.height / 2)) /
+              rect.height
+            : 1;
+        const targetDuration = durationMinutes(targetEvent.duration ?? '15M');
+        if (ratio <= 0.2 && targetDuration === dragDuration) {
+          if (!Number.isFinite(parseMinutes(targetEvent.time))) {
+            swap = null;
+          } else {
+            swap = {
+              kind: 'event',
+              id: targetEvent.id,
+              label: targetEvent.label,
+              dateKey: targetDateKey,
+              time: targetEvent.time,
+              durationMinutes: targetDuration,
+              recurring: targetEvent.recurring,
+            };
+          }
+        }
+      }
+    }
+    if (targetSlotType === 'lesson' && targetId && eventItem.allowLessonSwap) {
+      const targetLesson = students.find(item => item.id === targetId);
+      if (targetLesson) {
+        const targetDuration = durationMinutes(targetLesson.lessonDuration);
+        if (targetDuration === dragDuration) {
+          swap = {
+            kind: 'lesson',
+            id: targetLesson.id,
+            label: targetLesson.name,
+            dateKey: targetDateKey,
+            time: targetLesson.lessonTime ?? 'Time TBA',
+            durationMinutes: targetDuration,
+            recurring: true,
+          };
+        }
+      }
+    }
+    const suggestedTime24 = timeLabelTo24(suggestedTimeLabel);
+    const currentDateKey = eventItem.recurring
+      ? getDateKeyForDay(eventItem.day)
+      : eventItem.dateKey ?? targetDateKey;
+    openRescheduleModal({
+      kind: 'event',
+      id: eventItem.id,
+      label: eventItem.label,
+      currentDateKey,
+      currentTime: eventItem.time,
+      newDate: targetDateKey,
+      newTime: suggestedTime24,
+      eventRecurring: eventItem.recurring,
+      durationMinutes: dragDuration,
+      swap,
+    });
   };
 
   return (
@@ -596,7 +1709,12 @@ export default function TeacherThisWeekPage() {
             {weekDates.map(({ day, date }) => {
               const lessons = scheduleByDay.get(day) ?? [];
               return (
-                <div key={`${day}-${date.toDateString()}`} className="space-y-3">
+                <div
+                  key={`${day}-${date.toDateString()}`}
+                  className="space-y-3"
+                  onDragOver={event => event.preventDefault()}
+                  onDrop={event => handleDropOnDay(event, day, date, lessons)}
+                >
                   <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-3 text-center">
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                       {day.slice(0, 3)}
@@ -609,120 +1727,159 @@ export default function TeacherThisWeekPage() {
                     </p>
                   </div>
 
-                  {lessons.length === 0 ? (
-                    <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-4 text-xs text-[var(--c-9a9892)]">
-                      No lessons
-                    </div>
-                  ) : (
-                    lessons.map((lesson, index) => {
-                      const currentStart =
-                        lesson.kind === 'lesson'
-                          ? parseMinutes(lesson.lessonTime)
-                          : parseMinutes(lesson.time);
-                      const currentEnd =
-                        currentStart !== Number.POSITIVE_INFINITY
-                          ? currentStart +
-                            (lesson.kind === 'lesson'
-                              ? durationMinutes(lesson.lessonDuration)
-                              : durationMinutes(lesson.duration ?? '15M'))
-                          : null;
-                      const nextLesson = lessons[index + 1];
-                      const nextStart = nextLesson
-                        ? parseMinutes(
-                            nextLesson.kind === 'lesson'
-                              ? nextLesson.lessonTime
-                              : nextLesson.time,
-                          )
-                        : null;
-                      const gapMinutes =
-                        currentEnd !== null &&
-                        nextStart !== null &&
-                        nextStart !== Number.POSITIVE_INFINITY
-                          ? nextStart - currentEnd
-                          : 0;
-                      const gapLabel = formatGap(gapMinutes);
-                      const gapHeight = Math.min(
-                        Math.max(28, Math.round(gapMinutes * 1.1)),
-                        180,
-                      );
-                      const duration = lesson.kind === 'lesson'
-                        ? lesson.lessonDuration
-                        : lesson.duration;
-                      const durationLabel = formatDurationLabel(duration);
-                      const baseHeight30 = 70;
-                      const cardHeight =
-                        lesson.kind === 'lesson'
-                          ? Math.min(
-                              210,
-                              Math.round(
-                                (durationMinutes(duration) / 30) * baseHeight30,
-                              ),
+                  <div
+                    ref={node => {
+                      dayColumnRefs.current[day] = node;
+                    }}
+                    onDragOver={event => event.preventDefault()}
+                    onDrop={event => handleDropOnDay(event, day, date, lessons)}
+                    className="space-y-3 min-h-[120px]"
+                  >
+                    {lessons.length === 0 ? (
+                      <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-4 text-xs text-[var(--c-9a9892)]">
+                        No lessons
+                      </div>
+                    ) : (
+                      lessons.map((lesson, index) => {
+                        const currentStart =
+                          lesson.kind === 'lesson'
+                            ? parseMinutes(lesson.lessonTime)
+                            : parseMinutes(lesson.time);
+                        const currentEnd =
+                          currentStart !== Number.POSITIVE_INFINITY
+                            ? currentStart +
+                              (lesson.kind === 'lesson'
+                                ? durationMinutes(lesson.lessonDuration)
+                                : durationMinutes(lesson.duration ?? '15M'))
+                            : null;
+                        const nextLesson = lessons[index + 1];
+                        const nextStart = nextLesson
+                          ? parseMinutes(
+                              nextLesson.kind === 'lesson'
+                                ? nextLesson.lessonTime
+                                : nextLesson.time,
                             )
                           : null;
-                      return (
-                        <div key={lesson.id} className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              lesson.kind === 'event'
-                                ? openEditEventModal(lesson)
-                                : null
-                            }
-                            className={`w-full text-left rounded-2xl border px-4 py-4 shadow-sm transition ${
-                              lesson.kind === 'event'
-                                ? 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[color:var(--c-c8102e)]/40'
-                                : 'border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)]'
-                            }`}
-                            aria-label={
-                              lesson.kind === 'event'
-                                ? `Edit ${lesson.label}`
-                                : `${lesson.name} lesson`
-                            }
-                            style={
-                              lesson.kind === 'lesson' && cardHeight
-                                ? { height: `${cardHeight}px` }
-                                : lesson.kind === 'event'
-                                  ? {
-                                      background:
-                                        lesson.color === 'sage'
-                                          ? 'rgba(164, 190, 172, 0.18)'
-                                          : lesson.color === 'sky'
-                                            ? 'rgba(140, 180, 212, 0.18)'
-                                            : lesson.color === 'lilac'
-                                              ? 'rgba(171, 163, 205, 0.18)'
-                                              : lesson.color === 'sand'
-                                                ? 'rgba(211, 197, 160, 0.2)'
-                                                : lesson.color === 'rose'
-                                                  ? 'rgba(209, 158, 166, 0.2)'
-                                                  : 'rgba(160, 201, 187, 0.2)',
-                                    }
-                                  : undefined
-                            }
-                            disabled={lesson.kind !== 'event'}
+                        const gapMinutes =
+                          currentEnd !== null &&
+                          nextStart !== null &&
+                          nextStart !== Number.POSITIVE_INFINITY
+                            ? nextStart - currentEnd
+                            : 0;
+                        const gapLabel = formatGap(gapMinutes);
+                        const gapHeight = Math.min(
+                          Math.max(28, Math.round(gapMinutes * 1.1)),
+                          180,
+                        );
+                        const duration = lesson.kind === 'lesson'
+                          ? lesson.lessonDuration
+                          : lesson.duration;
+                        const durationLabel = formatDurationLabel(duration);
+                        const baseHeight30 = 70;
+                        const cardHeight =
+                          lesson.kind === 'lesson'
+                            ? Math.min(
+                                210,
+                                Math.round(
+                                  (durationMinutes(duration) / 30) *
+                                    baseHeight30,
+                                ),
+                              )
+                            : null;
+                        return (
+                          <div
+                            key={lesson.id}
+                            className="space-y-2"
+                            data-slot
+                            data-slot-type={lesson.kind}
+                            data-id={lesson.id}
                           >
-                            <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                              {lesson.kind === 'lesson' ? lesson.name : lesson.label}
-                            </p>
-                            <p className="text-xs text-[var(--c-6f6c65)]">
-                              {formatDate(date)} ·{' '}
-                              {lesson.kind === 'lesson'
-                                ? lesson.lessonTime ?? 'Time TBA'
-                                : lesson.time}{' '}
-                              · {durationLabel}
-                            </p>
-                          </button>
-                          {gapLabel ? (
-                            <div
-                              className="rounded-2xl border border-dashed border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]"
-                              style={{ height: `${gapHeight}px` }}
+                            <button
+                              type="button"
+                              draggable
+                              data-slot
+                              data-slot-type={lesson.kind}
+                              data-id={lesson.id}
+                              onDragStart={event => {
+                                event.dataTransfer.setData(
+                                  'text/plain',
+                                  JSON.stringify({
+                                    kind: lesson.kind,
+                                    id: lesson.id,
+                                  }),
+                                );
+                                event.dataTransfer.effectAllowed = 'move';
+                              }}
+                              onClick={() =>
+                                lesson.kind === 'event'
+                                  ? openEditEventModal(lesson)
+                                  : null
+                              }
+                              className={`w-full text-left rounded-2xl border px-4 py-4 shadow-sm transition ${
+                                lesson.kind === 'event'
+                                  ? 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[color:var(--c-c8102e)]/40'
+                                  : 'border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)]'
+                              } ${
+                                hoveredDropId === lesson.id
+                                  ? 'ring-2 ring-[var(--c-c8102e)]/60 border-[color:var(--c-c8102e)]/60'
+                                  : ''
+                              }`}
+                              aria-label={
+                                lesson.kind === 'event'
+                                  ? `Edit ${lesson.label}`
+                                  : `${lesson.name} lesson`
+                              }
+                              style={
+                                lesson.kind === 'lesson' && cardHeight
+                                  ? { height: `${cardHeight}px` }
+                                  : lesson.kind === 'event'
+                                    ? {
+                                        background:
+                                          lesson.color === 'sage'
+                                            ? 'rgba(164, 190, 172, 0.18)'
+                                            : lesson.color === 'sky'
+                                              ? 'rgba(140, 180, 212, 0.18)'
+                                              : lesson.color === 'lilac'
+                                                ? 'rgba(171, 163, 205, 0.18)'
+                                                : lesson.color === 'sand'
+                                                  ? 'rgba(211, 197, 160, 0.2)'
+                                                  : lesson.color === 'rose'
+                                                    ? 'rgba(209, 158, 166, 0.2)'
+                                                    : 'rgba(160, 201, 187, 0.2)',
+                                      }
+                                    : undefined
+                              }
                             >
-                              {gapLabel}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })
-                  )}
+                              <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                                {lesson.kind === 'lesson'
+                                  ? lesson.name
+                                  : lesson.label}
+                              </p>
+                              <p className="text-xs text-[var(--c-6f6c65)]">
+                                {formatDate(date)} ·{' '}
+                                {lesson.kind === 'lesson'
+                                  ? lesson.lessonTime ?? 'Time TBA'
+                                  : lesson.time}{' '}
+                                · {durationLabel}
+                              </p>
+                            </button>
+                            {gapLabel ? (
+                              <div
+                                className="rounded-2xl border border-dashed border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]"
+                                style={{ height: `${gapHeight}px` }}
+                                data-slot
+                                data-slot-type="gap"
+                                data-gapstart={currentEnd ?? undefined}
+                                data-gapend={nextStart ?? undefined}
+                              >
+                                {gapLabel}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                   {(() => {
                     const lessonItems = lessons.filter(
                       entry => entry.kind === 'lesson',
@@ -775,6 +1932,168 @@ export default function TeacherThisWeekPage() {
           Add Personal Event
         </button>
       </div>
+
+      {isRescheduleOpen && rescheduleForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={closeRescheduleModal}
+          />
+          <div className="relative w-full max-w-xl rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-8 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Reschedule
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  {rescheduleForm.label}
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  Current: {rescheduleForm.currentDateKey} ·{' '}
+                  {rescheduleForm.currentTime}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                New Date
+                <input
+                  type="date"
+                  value={rescheduleForm.newDate}
+                  onChange={event =>
+                    setRescheduleForm(current =>
+                      current
+                        ? { ...current, newDate: event.target.value }
+                        : current,
+                    )
+                  }
+                  className="mt-3 w-full rounded-2xl border border-[var(--c-ecebe7)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                New Time
+                <input
+                  type="time"
+                  step={1800}
+                  value={rescheduleForm.newTime}
+                  onChange={event =>
+                    setRescheduleForm(current =>
+                      current
+                        ? { ...current, newTime: event.target.value }
+                        : current,
+                    )
+                  }
+                  className="mt-3 w-full rounded-2xl border border-[var(--c-ecebe7)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]"
+                />
+              </label>
+            </div>
+
+            {rescheduleForm.swap ? (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)] px-4 py-3 text-sm text-[var(--c-6f6c65)]">
+                  Swap detected with {rescheduleForm.swap.label}.
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                    <input
+                      type="radio"
+                      name="swap-mode"
+                      checked={rescheduleForm.swapPreference === 'swap'}
+                      onChange={() =>
+                        setRescheduleForm(current =>
+                          current ? { ...current, swapPreference: 'swap' } : current,
+                        )
+                      }
+                    />
+                    <span>Swap times with {rescheduleForm.swap.label}</span>
+                  </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                    <input
+                      type="radio"
+                      name="swap-mode"
+                      checked={rescheduleForm.swapPreference === 'change'}
+                      onChange={() =>
+                        setRescheduleForm(current =>
+                          current ? { ...current, swapPreference: 'change' } : current,
+                        )
+                      }
+                    />
+                    <span>
+                      Don&apos;t swap — keep {rescheduleForm.swap.label} as-is
+                    </span>
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-6 space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Update Scope
+              </p>
+              <label className="flex items-center gap-3 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                <input
+                  type="radio"
+                  name="reschedule-scope"
+                  checked={rescheduleForm.choice === 'single'}
+                  onChange={() =>
+                    setRescheduleForm(current =>
+                      current ? { ...current, choice: 'single' } : current,
+                    )
+                  }
+                />
+                <span>
+                  {rescheduleForm.kind === 'lesson'
+                    ? 'Just this lesson'
+                    : 'Just this event'}
+                </span>
+              </label>
+              {rescheduleForm.kind === 'lesson' || rescheduleForm.eventRecurring ? (
+                <label className="flex items-center gap-3 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                  <input
+                    type="radio"
+                    name="reschedule-scope"
+                    checked={rescheduleForm.choice === 'future'}
+                    onChange={() =>
+                      setRescheduleForm(current =>
+                        current ? { ...current, choice: 'future' } : current,
+                      )
+                    }
+                  />
+                  <span>
+                    {rescheduleForm.kind === 'lesson'
+                      ? 'This and all future lessons'
+                      : 'This and all future events'}
+                  </span>
+                </label>
+              ) : null}
+            </div>
+
+            {rescheduleError ? (
+              <div className="mt-5 rounded-2xl border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-4 py-3 text-sm text-[var(--c-8f2f3b)]">
+                {rescheduleError}
+              </div>
+            ) : null}
+
+            <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeRescheduleModal}
+                className="rounded-full border border-[var(--c-e5e3dd)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRescheduleSave}
+                className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              >
+                Save Update
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isEventModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
@@ -915,8 +2234,8 @@ export default function TeacherThisWeekPage() {
                 </div>
               </div>
 
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Duration
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Duration
                 <div className="relative">
                   <select
                     value={eventForm.duration}
@@ -946,7 +2265,48 @@ export default function TeacherThisWeekPage() {
                     />
                   </svg>
                 </div>
-              </label>
+                </label>
+
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Recurring
+                  <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[var(--c-ecebe7)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                    <input
+                      type="checkbox"
+                      checked={eventForm.recurring}
+                      onChange={event =>
+                        setEventForm(current => ({
+                          ...current,
+                          recurring: event.target.checked,
+                          allowLessonSwap: event.target.checked
+                            ? current.allowLessonSwap
+                            : false,
+                        }))
+                      }
+                    />
+                    <span>Repeats weekly</span>
+                  </div>
+                </label>
+
+                {eventForm.recurring ? (
+                  <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    Lesson Swap
+                    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[var(--c-ecebe7)] px-4 py-3 text-sm text-[var(--c-1f1f1d)]">
+                      <input
+                        type="checkbox"
+                        checked={eventForm.allowLessonSwap}
+                        onChange={event =>
+                          setEventForm(current => ({
+                            ...current,
+                            allowLessonSwap: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        Allow lesson swaps with this recurring event
+                      </span>
+                    </div>
+                  </label>
+                ) : null}
 
               <div className="h-3" aria-hidden="true" />
 
@@ -990,22 +2350,6 @@ export default function TeacherThisWeekPage() {
                   })}
                 </div>
               </div>
-
-              <div className="h-1" aria-hidden="true" />
-
-              <label className="flex items-center gap-3 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-5 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                <input
-                  type="checkbox"
-                  checked={eventForm.recurring}
-                  onChange={event =>
-                    setEventForm(current => ({
-                      ...current,
-                      recurring: event.target.checked,
-                    }))
-                  }
-                />
-                Recurring weekly
-              </label>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                 {editingEventId ? (

@@ -442,9 +442,6 @@ export default function TeacherMessagesPage() {
               Select a recipient and send a quick update or note.
             </p>
           </div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-            Messages sync in real time.
-          </p>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">

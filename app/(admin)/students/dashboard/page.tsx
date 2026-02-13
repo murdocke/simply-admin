@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import studentsData from '@/data/students.json';
+import teachersData from '@/data/teachers.json';
 import LastViewedVideoCard from '../../components/last-viewed-video-card';
 import StudentPromoCard from '../../components/student-promo-card';
 import {
@@ -18,6 +19,11 @@ import {
   useLessonCartScope,
 } from '../../components/lesson-cart-scope';
 import { slugifyLessonValue } from '../../components/lesson-utils';
+import {
+  COMMUNICATIONS_UPDATE_EVENT,
+  readCommunications,
+  type CommunicationEntry,
+} from '../../components/communications-store';
 
 type StudentRecord = {
   id: string;
@@ -26,6 +32,16 @@ type StudentRecord = {
   username?: string;
   teacher?: string;
   lessonDay?: string;
+  lessonTime?: string;
+  lessonDuration?: '30M' | '45M' | '1HR';
+};
+
+type TeacherRecord = {
+  id: string;
+  name: string;
+  email: string;
+  username?: string;
+  goesBy?: string;
 };
 
 type LastViewedVideo = {
@@ -33,6 +49,36 @@ type LastViewedVideo = {
   part?: string;
   materials?: string[];
   viewedAt?: string;
+};
+
+const WEEK_DAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+const parseLessonMinutes = (value?: string) => {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3].toUpperCase();
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  const normalizedHours = hours % 12;
+  const offset = period === 'PM' ? 12 * 60 : 0;
+  return normalizedHours * 60 + minutes + offset;
+};
+
+const lessonDurationMinutes = (value?: StudentRecord['lessonDuration']) => {
+  if (value === '30M') return 30;
+  if (value === '45M') return 45;
+  if (value === '1HR') return 60;
+  return 45;
 };
 
 export default function StudentDashboardPage() {
@@ -44,12 +90,26 @@ export default function StudentDashboardPage() {
     null,
   );
   const [isTeacherView, setIsTeacherView] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const [lastViewedVideo, setLastViewedVideo] = useState<LastViewedVideo | null>(
     null,
   );
   const [isFeePaid, setIsFeePaid] = useState<boolean | null>(null);
   const [isCongratsToastVisible, setIsCongratsToastVisible] = useState(false);
   const [isCongratsCardVisible, setIsCongratsCardVisible] = useState(false);
+  const [promoPayload, setPromoPayload] = useState<{
+    id?: string;
+    title: string;
+    body: string;
+    cta?: string;
+  } | null>(null);
+  const [isPromoOpen, setIsPromoOpen] = useState(false);
+  const [alertPayload, setAlertPayload] = useState<{
+    title: string;
+    body: string;
+    color: string;
+    persistence: string;
+  } | null>(null);
   const defaultFullPlayerCover = '/reference/StudentVideo.png';
   const neilFullPlayerCover = '/reference/NeilMooreVideo.png';
   const [fullPlayerCover, setFullPlayerCover] = useState(
@@ -65,6 +125,78 @@ export default function StudentDashboardPage() {
   const [studentServerUnlocks, setStudentServerUnlocks] = useState<
     typeof purchasedItems
   >([]);
+  const [communications, setCommunications] = useState<CommunicationEntry[]>([]);
+  const [teacherOnline, setTeacherOnline] = useState(false);
+  const teacherRecordForStatus = useMemo(() => {
+    if (!selectedStudent?.teacher) return null;
+    const normalized = selectedStudent.teacher.toLowerCase();
+    const teachers = teachersData.teachers as TeacherRecord[];
+    return (
+      teachers.find(teacher => teacher.username?.toLowerCase() === normalized) ??
+      teachers.find(teacher => teacher.email.toLowerCase() === normalized) ??
+      teachers.find(teacher => teacher.name.toLowerCase() === normalized) ??
+      teachers.find(teacher => teacher.name.toLowerCase().startsWith(normalized)) ??
+      null
+    );
+  }, [selectedStudent?.teacher]);
+  const teacherIdForStatus = teacherRecordForStatus?.id ?? null;
+  const teacherDisplayName =
+    teacherRecordForStatus?.goesBy?.trim() ||
+    teacherRecordForStatus?.name?.trim() ||
+    'Teacher';
+
+  const teacherStudents = useMemo(() => {
+    if (!selectedStudent?.teacher) return [];
+    return students.filter(student => student.teacher === selectedStudent.teacher);
+  }, [students, selectedStudent?.teacher]);
+
+  const isTeacherTeachingNow = useMemo(() => {
+    if (!teacherStudents.length) return false;
+    const today = WEEK_DAYS[now.getDay()]?.toLowerCase();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return teacherStudents.some(student => {
+      if (!student.lessonDay || !student.lessonTime) return false;
+      if (student.lessonDay.toLowerCase() !== today) return false;
+      const start = parseLessonMinutes(student.lessonTime);
+      if (start === null) return false;
+      const duration = lessonDurationMinutes(student.lessonDuration);
+      return nowMinutes >= start && nowMinutes <= start + duration;
+    });
+  }, [now, teacherStudents]);
+
+  useEffect(() => {
+    if (!teacherIdForStatus) {
+      setTeacherOnline(false);
+      return;
+    }
+    const key = `teacher:${teacherIdForStatus}`;
+    const checkOnline = async () => {
+      try {
+        const response = await fetch(
+          `/api/presence?key=${encodeURIComponent(key)}`,
+          { cache: 'no-store' },
+        );
+        if (!response.ok) {
+          setTeacherOnline(false);
+          return;
+        }
+        const data = (await response.json()) as { lastSeen?: string | null };
+        if (!data.lastSeen) {
+          setTeacherOnline(false);
+          return;
+        }
+        const diff = Date.now() - new Date(data.lastSeen).getTime();
+        setTeacherOnline(diff < 120000);
+      } catch {
+        setTeacherOnline(false);
+      }
+    };
+    void checkOnline();
+    const interval = window.setInterval(() => {
+      void checkOnline();
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [teacherIdForStatus]);
 
   const handleFullPlayerChange = (next: boolean) => {
     setIsFullPlayerOpen(next);
@@ -73,6 +205,13 @@ export default function StudentDashboardPage() {
       setIsCongratsPlayer(false);
     }
   };
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const handlePlayCongratsMessage = () => {
     setFullPlayerCover(neilFullPlayerCover);
@@ -195,6 +334,219 @@ export default function StudentDashboardPage() {
     setIsCongratsToastVisible(false);
     setIsCongratsCardVisible(false);
   }, [selectedStudent?.name]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadCommunications = async () => {
+      const list = await readCommunications();
+      if (isActive) {
+        setCommunications(list);
+      }
+    };
+    void loadCommunications();
+    const handleUpdate = () => {
+      void loadCommunications();
+    };
+    window.addEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+    return () => {
+      isActive = false;
+      window.removeEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('sm-company-promos');
+      channel.onmessage = event => {
+        if (event?.data?.type === 'promo-removed') {
+          setIsPromoOpen(false);
+          setPromoPayload(null);
+        }
+      };
+    } catch {
+      channel = null;
+    }
+    return () => {
+      channel?.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('sm-company-alerts');
+      channel.onmessage = event => {
+        if (event?.data?.type === 'alert-removed') {
+          setAlertPayload(null);
+        }
+      };
+    } catch {
+      channel = null;
+    }
+    return () => {
+      channel?.close();
+    };
+  }, []);
+  useEffect(() => {
+    try {
+      const storedPromo = window.localStorage.getItem('sm_company_promo_student');
+      if (storedPromo) {
+        const parsed = JSON.parse(storedPromo) as {
+          title: string;
+          body: string;
+          cta?: string;
+          trigger?: string;
+          createdAt?: string;
+        };
+        if (!parsed.trigger || parsed.trigger === 'dashboard' || parsed.trigger === 'instant') {
+          setPromoPayload(parsed);
+          setIsPromoOpen(true);
+          window.localStorage.removeItem('sm_company_promo_student');
+        }
+      }
+      const storedAlert = window.localStorage.getItem('sm_company_alert_student');
+      if (storedAlert) {
+        const parsed = JSON.parse(storedAlert) as {
+          title: string;
+          body: string;
+          color: string;
+          persistence: string;
+        };
+        setAlertPayload(parsed);
+        if (parsed.persistence !== 'persist') {
+          window.localStorage.removeItem('sm_company_alert_student');
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadPromos = async () => {
+      try {
+        const response = await fetch('/api/company-promos', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          promos?: {
+            active?: {
+              student?: {
+              title: string;
+              body: string;
+              cta?: string;
+              trigger?: string;
+              createdAt?: string;
+              id?: string;
+              audience?: string;
+            } | null;
+            };
+          };
+        };
+        const promo = data.promos?.active?.student ?? null;
+        if (
+          isActive &&
+          promoPayload &&
+          (!promo || (promoPayload.id && promo?.id && promoPayload.id !== promo.id))
+        ) {
+          setIsPromoOpen(false);
+          setPromoPayload(null);
+          try {
+            window.localStorage.removeItem('sm_company_promo_student');
+          } catch {
+            // ignore
+          }
+        }
+        if (promo && isActive) {
+          const trigger = promo.trigger ?? 'dashboard';
+          const lastLogin = window.localStorage.getItem('sm_last_login_at');
+          const canShow =
+            trigger === 'instant' ||
+            trigger === 'dashboard' ||
+            (trigger === 'login' &&
+              lastLogin &&
+              promo.createdAt &&
+              new Date(lastLogin) >= new Date(promo.createdAt));
+          if (canShow) {
+            setPromoPayload(promo);
+            setIsPromoOpen(true);
+            await fetch('/api/company-promos?audience=student', { method: 'DELETE' });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const loadAlerts = async () => {
+      try {
+        const response = await fetch('/api/company-alerts', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          alerts?: {
+            active?: {
+              student?: {
+              title: string;
+              body: string;
+              color: string;
+              persistence: string;
+              id?: string;
+              audience?: string;
+            } | null;
+            };
+          };
+        };
+        const alert = data.alerts?.active?.student ?? null;
+        if (!alert && isActive && alertPayload) {
+          setAlertPayload(null);
+        }
+        if (alert && isActive) {
+          setAlertPayload(alert);
+          if (alert.persistence !== 'persist') {
+            await fetch('/api/company-alerts?audience=student', { method: 'DELETE' });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadPromos();
+    void loadAlerts();
+    const promoInterval = window.setInterval(loadPromos, 2500);
+    const alertInterval = window.setInterval(loadAlerts, 15000);
+    return () => {
+      isActive = false;
+      window.clearInterval(promoInterval);
+      window.clearInterval(alertInterval);
+    };
+  }, []);
+
+  const dismissAlert = () => {
+    setAlertPayload(null);
+    try {
+      window.localStorage.removeItem('sm_company_alert_student');
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const triggerExampleAlert = (payload: {
+    title: string;
+    body: string;
+    color: string;
+  }) => {
+    setAlertPayload({
+      ...payload,
+      persistence: 'persist',
+    });
+  };
+
+  const alertStyles =
+    alertPayload?.color === 'blue'
+      ? 'border-[var(--c-d9e2ef)] bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]'
+      : alertPayload?.color === 'sage'
+        ? 'border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] text-[var(--c-3f4f3b)]'
+        : 'border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] text-[var(--c-7a4a17)]';
 
   useEffect(() => {
     const loadLastViewed = () => {
@@ -502,7 +854,7 @@ export default function StudentDashboardPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
         <header>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Students
@@ -515,36 +867,102 @@ export default function StudentDashboardPage() {
           </p>
         </header>
 
-        {isTeacherView ? (
-          <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)] lg:max-w-sm lg:flex-1">
-            <div className="flex flex-col gap-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-                Selected Student
-              </p>
-              <h2 className="text-xl font-semibold text-[var(--c-1f1f1d)]">
-                {selectedStudent?.name ?? 'No student selected'}
-              </h2>
-              <p className="text-[15px] text-[var(--c-6f6c65)]">
-                {selectedStudent?.name
-                  ? 'You are viewing the student dashboard for this learner.'
-                  : 'Choose a student in the sidebar to view their dashboard.'}
-              </p>
-            </div>
-          </section>
-        ) : null}
+        <div className="flex items-start justify-end">
+          {isCongratsEligible && !isCongratsToastVisible && !isCongratsCardVisible ? (
+            <button
+              type="button"
+              onClick={showCongratsToast}
+              className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)]/70 px-4 py-2 text-[10px] uppercase tracking-[0.3em] text-[var(--c-9a9892)] transition hover:border-[color:var(--c-c8102e)]/30 hover:text-[var(--c-7a776f)]"
+            >
+              Show Neil Message
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {isCongratsEligible && !isCongratsToastVisible && !isCongratsCardVisible ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={showCongratsToast}
-            className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Show Neil Message
-          </button>
+      {isTeacherView ? (
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)] lg:max-w-sm">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              Selected Student
+            </p>
+            <h2 className="text-xl font-semibold text-[var(--c-1f1f1d)]">
+              {selectedStudent?.name ?? 'No student selected'}
+            </h2>
+            <p className="text-[15px] text-[var(--c-6f6c65)]">
+              {selectedStudent?.name
+                ? 'You are viewing the student dashboard for this learner.'
+                : 'Choose a student in the sidebar to view their dashboard.'}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {alertPayload ? (
+        <div className={`rounded-2xl border px-5 py-4 text-[15px] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${alertStyles}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em]">
+                {alertPayload.title}
+              </p>
+              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
+                {alertPayload.body}
+              </p>
+            </div>
+            {alertPayload.persistence === 'persist' ? (
+              <button
+                type="button"
+                onClick={dismissAlert}
+                className="rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em]"
+              >
+                Dismiss
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            triggerExampleAlert({
+              title: 'Upcoming Lesson',
+              body: 'Your upcoming lesson is in 2 days.',
+              color: 'sage',
+            })
+          }
+          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+        >
+          Upcoming Lesson
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            triggerExampleAlert({
+              title: 'Lesson Today',
+              body: 'Your lesson is today! See you soon.',
+              color: 'blue',
+            })
+          }
+          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+        >
+          Lesson Today
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            triggerExampleAlert({
+              title: 'Studio Update',
+              body: 'Mr. Brian is not feeling well. No lesson today.',
+              color: 'amber',
+            })
+          }
+          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+        >
+          No Lesson Today
+        </button>
+      </div>
 
       {isFeePaid === false ? (
         <div className="rounded-2xl border border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] px-5 py-4 text-[15px] text-[var(--c-7a4a17)] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)]">
@@ -557,6 +975,35 @@ export default function StudentDashboardPage() {
           <p className="mt-2 text-[15px] text-[var(--c-6f6c65)]">
             Please check in with your teacher and get this taken care of.
           </p>
+        </div>
+      ) : null}
+
+      {isPromoOpen && promoPayload ? (
+        <div className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsPromoOpen(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              Studio Update
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+              {promoPayload.title}
+            </h2>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              {promoPayload.body}
+            </p>
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setIsPromoOpen(false)}
+                className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              >
+                {promoPayload.cta ?? 'GOT IT'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -736,6 +1183,32 @@ export default function StudentDashboardPage() {
               </button>
             </section>
           ) : null}
+          {selectedStudent?.teacher && teacherOnline ? (
+            <section className="rounded-2xl border border-[color:rgba(16,185,129,0.6)] bg-[color:rgba(16,185,129,0.08)] p-4 shadow-[0_12px_26px_-22px_rgba(16,185,129,0.25)] text-[var(--c-1f1f1d)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[color:rgb(16,185,129)]" />
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-[color:rgb(16,185,129)]">
+                    Teacher Status
+                  </p>
+                </div>
+                <Link
+                  href="/students/messages"
+                  className="inline-flex items-center justify-center rounded-full border border-[color:rgba(16,185,129,0.4)] bg-[color:rgba(16,185,129,0.12)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:rgb(16,185,129)] transition hover:border-[color:rgba(16,185,129,0.7)] hover:bg-[color:rgba(16,185,129,0.18)]"
+                >
+                  Send Message
+                </Link>
+              </div>
+              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
+                {teacherDisplayName} Is Online
+              </p>
+              <p className="mt-2 text-[13px] text-[var(--c-6f6c65)]">
+                {isTeacherTeachingNow
+                  ? 'Currently with another student. Replies may take a bit.'
+                  : 'Available between lessons today.'}
+              </p>
+            </section>
+          ) : null}
           <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f1f1ef)] p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)] ring-1 ring-[var(--c-ecebe7)]">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               This Week
@@ -753,6 +1226,44 @@ export default function StudentDashboardPage() {
             >
               View Lesson Plan
             </Link>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Communications
+                </p>
+                <h2 className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                  Teacher updates and studio notes
+                </h2>
+              </div>
+              <Link
+                href="/students/communications"
+                className="inline-flex items-center justify-center rounded-full border border-[var(--c-1f1f1d)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-1f1f1d)] transition hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+              >
+                View communications
+              </Link>
+            </div>
+            <div className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">
+              {communications[0] ? (
+                <>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    Latest
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
+                    {communications[0].title}
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--c-6f6c65)] line-clamp-2">
+                    {communications[0].body}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-[var(--c-6f6c65)]">
+                  No communications posted yet.
+                </p>
+              )}
+            </div>
           </section>
 
           <StudentPromoCard />

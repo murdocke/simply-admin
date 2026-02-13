@@ -21,6 +21,11 @@ import {
   type ThemeMode,
 } from '../../components/theme';
 import lessonParts from '../teachers/students/lesson-data/lesson-parts.json';
+import {
+  COMMUNICATIONS_UPDATE_EVENT,
+  readCommunications,
+  type CommunicationEntry,
+} from './communications-store';
 
 type TeacherRecord = {
   id: string;
@@ -72,6 +77,8 @@ type NotificationMessage = {
 const RECENT_TEACHERS_KEY = 'sm_recent_teachers';
 const RECENT_STUDENTS_KEY = 'sm_recent_students';
 const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
+const COMMUNICATIONS_NOTIFICATIONS_KEY = 'sm_communications_notifications';
+const FEATURES_OVERVIEW_KEY = 'sm_features_overview_active';
 const normalizeTeacherStatus = (
   status:
     | 'Licensed'
@@ -98,6 +105,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [pendingViewRole, setPendingViewRole] = useState<UserRole | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('light');
+  const [featuresOverviewActive, setFeaturesOverviewActive] = useState(false);
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
   const [selectedTeacher, setSelectedTeacher] =
     useState<SelectedTeacher | null>(null);
@@ -200,6 +208,9 @@ export default function AdminShell({ children }: AdminShellProps) {
       const normalized = username.toLowerCase();
       const studentsList = studentsData.students as StudentRecord[];
       return (
+        studentsList.find(
+          student => student.username?.toLowerCase() === normalized,
+        ) ??
         studentsList.find(student => student.email.toLowerCase() === normalized) ??
         studentsList.find(
           student => student.name.toLowerCase() === normalized,
@@ -220,7 +231,13 @@ export default function AdminShell({ children }: AdminShellProps) {
     return (
       teachersList.find(
         teacher => teacher.username?.toLowerCase() === normalized,
-      ) ?? null
+      ) ??
+      teachersList.find(teacher => teacher.email.toLowerCase() === normalized) ??
+      teachersList.find(teacher => teacher.name.toLowerCase() === normalized) ??
+      teachersList.find(teacher =>
+        teacher.name.toLowerCase().startsWith(normalized),
+      ) ??
+      null
     );
   }, []);
 
@@ -472,6 +489,100 @@ export default function AdminShell({ children }: AdminShellProps) {
       isActive = false;
     };
   }, [role, user?.username]);
+
+  useEffect(() => {
+    if (role !== 'teacher' || !user?.username) return;
+    const teachersList = teachersData.teachers as TeacherRecord[];
+    const normalized = user.username.toLowerCase();
+    const teacherRecord =
+      teachersList.find(
+        teacher => teacher.username?.toLowerCase() === normalized,
+      ) ??
+      teachersList.find(teacher => teacher.email.toLowerCase() === normalized) ??
+      teachersList.find(teacher => teacher.name.toLowerCase() === normalized) ??
+      teachersList.find(teacher =>
+        teacher.name.toLowerCase().startsWith(normalized),
+      ) ??
+      null;
+    if (!teacherRecord?.id) return;
+
+    const key = `teacher:${teacherRecord.id}`;
+    const sendPresence = async () => {
+      try {
+        await fetch('/api/presence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    void sendPresence();
+    const interval = window.setInterval(sendPresence, 45000);
+    return () => {
+      window.clearInterval(interval);
+      void fetch(`/api/presence?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    };
+  }, [role, user?.username]);
+
+  useEffect(() => {
+    if (role !== 'student' || !user?.username) return;
+    const studentRecord = resolveStudentFromUser(user.username);
+    if (!studentRecord?.id) return;
+
+    const key = `student:${studentRecord.id}`;
+    const getStudentActivity = () => {
+      if (typeof window === 'undefined') return undefined;
+      const path = window.location.pathname;
+      const baseActivity = (() => {
+        if (path.startsWith('/students/current-lesson')) return 'Current Lesson';
+        if (path.startsWith('/students/practice-hub')) return 'Practice Hub';
+        if (path.startsWith('/students/lesson-library')) return 'Lesson Library';
+        if (path.startsWith('/students/lesson-packs')) return 'Lesson Packs';
+        if (path.startsWith('/students/communications')) return 'Communications';
+        if (path.startsWith('/students/messages')) return 'Messages';
+        if (path.startsWith('/students/past-lessons')) return 'Past Lessons';
+        if (path.startsWith('/students/what-to-practice'))
+          return 'What To Practice';
+        if (path.startsWith('/students/ask-question')) return 'Ask a Question';
+        if (path.startsWith('/students/dashboard')) return 'Dashboard';
+        return 'Student Area';
+      })();
+      const song =
+        path.startsWith('/students/current-lesson') &&
+        window.localStorage.getItem('sm_student_current_song')
+          ? window.localStorage.getItem('sm_student_current_song')
+          : null;
+      return {
+        label: baseActivity,
+        detail: song ?? undefined,
+      };
+    };
+    const sendPresence = async () => {
+      try {
+        await fetch('/api/presence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, activity: getStudentActivity() }),
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    void sendPresence();
+    const interval = window.setInterval(sendPresence, 45000);
+    return () => {
+      window.clearInterval(interval);
+      void fetch(`/api/presence?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    };
+  }, [role, user?.username, resolveStudentFromUser]);
 
   useEffect(() => {
     let teacherUsername: string | null = null;
@@ -885,6 +996,65 @@ export default function AdminShell({ children }: AdminShellProps) {
     }
   }, [pathname]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!(role === 'student' || viewRole === 'student')) return;
+    let lastNotified = window.localStorage.getItem(
+      COMMUNICATIONS_NOTIFICATIONS_KEY,
+    );
+
+    const notifyIfNew = (latest?: CommunicationEntry | null) => {
+      if (!latest) return;
+      const latestTime = new Date(latest.createdAt);
+      const lastSeen = lastNotified ? new Date(lastNotified) : null;
+      if (lastSeen && latestTime <= lastSeen) return;
+      setNotifications(prev => {
+        const next = [
+          {
+            id: crypto.randomUUID(),
+            sender: latest.author ?? 'Teacher',
+            text: latest.body,
+            subject: latest.title,
+            threadId: 'communications',
+            timestamp: latest.createdAt,
+          },
+          ...prev,
+        ].slice(0, 3);
+        next.forEach(note => scheduleNotificationDismiss(note.id));
+        return next;
+      });
+      lastNotified = latest.createdAt;
+      window.localStorage.setItem(
+        COMMUNICATIONS_NOTIFICATIONS_KEY,
+        latest.createdAt,
+      );
+    };
+
+    const readLatest = async () => {
+      const list = await readCommunications();
+      return list[0] ?? null;
+    };
+
+    const handleUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<CommunicationEntry>).detail;
+      if (detail) {
+        notifyIfNew(detail);
+        return;
+      }
+      void readLatest().then(latest => notifyIfNew(latest));
+    };
+
+    void readLatest().then(latest => notifyIfNew(latest));
+    window.addEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+    const interval = window.setInterval(() => {
+      void readLatest().then(latest => notifyIfNew(latest));
+    }, 6000);
+    return () => {
+      window.removeEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+      window.clearInterval(interval);
+    };
+  }, [role, viewRole, scheduleNotificationDismiss]);
+
   const items = useMemo(() => {
     if (!effectiveRole) return [];
     return navItems[effectiveRole];
@@ -908,6 +1078,62 @@ export default function AdminShell({ children }: AdminShellProps) {
       border: 'border-[var(--c-ecebe7)]',
     };
   }, [effectiveRole]);
+
+  useEffect(() => {
+    if (role !== 'company') return;
+    try {
+      const stored = window.localStorage.getItem(FEATURES_OVERVIEW_KEY);
+      if (stored === 'true') {
+        setFeaturesOverviewActive(true);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [role]);
+
+  useEffect(() => {
+    if (!pathname) return;
+    const cameFromOverview = searchParams?.get('from') === 'features-overview';
+    const onOverviewPage = pathname.startsWith('/company/features-overview');
+    if (role === 'company' && (cameFromOverview || onOverviewPage)) {
+      setFeaturesOverviewActive(true);
+      try {
+        window.localStorage.setItem(FEATURES_OVERVIEW_KEY, 'true');
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [pathname, role, searchParams]);
+
+  useEffect(() => {
+    if (!role) return;
+    const requestedView = searchParams?.get('view');
+    if (!requestedView) return;
+    if (requestedView === 'company') {
+      setViewRole('company');
+      try {
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'company');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    if (requestedView === 'teacher') {
+      setViewRole('teacher');
+      try {
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'teacher');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    if (requestedView === 'student') {
+      setViewRole('student');
+      try {
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'student');
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [role, searchParams]);
 
   const pipParts = useMemo(() => {
     if (!pipState.material) return [];
@@ -1040,6 +1266,41 @@ export default function AdminShell({ children }: AdminShellProps) {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
     window.localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
     router.replace('/login');
+  };
+
+  const handleExitFeaturesOverview = () => {
+    setFeaturesOverviewActive(false);
+    try {
+      window.localStorage.removeItem(FEATURES_OVERVIEW_KEY);
+    } catch {
+      // ignore storage errors
+    }
+    if (role === 'company') {
+      setViewRole('company');
+      try {
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'company');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    if (!pathname) return;
+    const nextParams = new URLSearchParams(searchParams?.toString() ?? '');
+    nextParams.delete('from');
+    nextParams.delete('view');
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
+
+  const handleBackToFeaturesOverview = () => {
+    if (role === 'company') {
+      setViewRole('company');
+      try {
+        window.localStorage.setItem(VIEW_ROLE_STORAGE_KEY, 'company');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    router.replace('/company/features-overview?view=company');
   };
 
   const handleViewRoleChange = (nextRole: UserRole) => {
@@ -1348,9 +1609,11 @@ export default function AdminShell({ children }: AdminShellProps) {
     );
   }
 
+  const isMessagesPage = Boolean(pathname?.includes('/messages'));
+
   return (
     <div className="app-shell-bg min-h-screen text-[var(--c-1f1f1d)]">
-      {notifications.length > 0 ? (
+      {notifications.length > 0 && !isMessagesPage ? (
         <div className="fixed right-6 top-6 z-[70] flex w-full max-w-sm flex-col gap-3">
           {notifications.map(notification => (
             <div
@@ -1496,6 +1759,9 @@ export default function AdminShell({ children }: AdminShellProps) {
                 startTime: 0,
               };
               event.currentTarget.releasePointerCapture(event.pointerId);
+              if (window.getSelection) {
+                window.getSelection()?.removeAllRanges();
+              }
             }}
             onPointerCancel={(event) => {
               if (pipSwipeRef.current.pointerId === event.pointerId) {
@@ -1505,6 +1771,9 @@ export default function AdminShell({ children }: AdminShellProps) {
                   startX: 0,
                   startTime: 0,
                 };
+              }
+              if (window.getSelection) {
+                window.getSelection()?.removeAllRanges();
               }
             }}
           >
@@ -2094,6 +2363,14 @@ export default function AdminShell({ children }: AdminShellProps) {
             What&#39;s Next
           </a>
         ) : null}
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/features-overview"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+          >
+            Features Overview
+          </a>
+        ) : null}
       </aside>
 
         <div className="flex-1">
@@ -2123,6 +2400,29 @@ export default function AdminShell({ children }: AdminShellProps) {
           </div>
         </div>
         <main className="p-6 md:p-10">{children}</main>
+        {role === 'company' &&
+        featuresOverviewActive &&
+        !pathname?.startsWith('/company/features-overview') ? (
+          <div className="fixed left-1/2 top-4 z-40 -translate-x-1/2">
+            <div className="flex items-center gap-3 rounded-full border border-white/30 bg-white/30 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--c-1f1f1d)]/80 shadow-md backdrop-blur-[2px]">
+              <button
+                type="button"
+                onClick={handleBackToFeaturesOverview}
+                className="transition hover:brightness-110"
+              >
+                BACK TO FEATURES OVERVIEW
+              </button>
+              <span className="h-5 w-px bg-[var(--c-1f1f1d)]/20" />
+              <button
+                type="button"
+                onClick={handleExitFeaturesOverview}
+                className="transition hover:brightness-110"
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
 
@@ -2313,6 +2613,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             onClick={() => setIsOpen(false)}
           >
             What&#39;s Next
+          </a>
+        ) : null}
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/features-overview"
+            className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-3 text-lg font-semibold text-[var(--c-3a3935)] shadow-sm transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+            onClick={() => setIsOpen(false)}
+          >
+            Features Overview
           </a>
         ) : null}
         <nav className="space-y-2 text-sm">

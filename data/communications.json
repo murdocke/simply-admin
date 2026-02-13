@@ -1,0 +1,256 @@
+{
+  "communications": [
+    {
+      "id": "fde15251-1ce7-4c08-bc14-8572af43efdb",
+      "title": "February Monthly Lesson Fees",
+      "body": "Just a friendly reminder that February lesson fees are now past due... Please send your payment when you can.. Thanks! - Tiffany",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-12T21:41:15.238Z",
+      "author": "brian"
+    },
+    {
+      "id": "7253d25d-0d58-4a09-83f2-1f9899249f97",
+      "title": "Who's practicing today?",
+      "body": "Remember I will be reviewing all the practice hubs this week... who is putting the work for some amazing results this week? - Happy learning!",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-12T15:12:15.273Z",
+      "author": "brian"
+    },
+    {
+      "id": "showcase-2026-02-11-1235",
+      "title": "Piano Showcase Highlight - Halloween Showcase",
+      "body": "What an incredible Halloween Showcase! The energy in the room was amazing, and every student brought their best to the piano. We heard confident rhythm, expressive phrasing, and so many smiles from the audience.\n\nFrom the first notes to the final bow, the progress on display was huge. Students supported each other, handled nerves with grace, and played with real musicality. It was a joy to see how all the practice is paying off.\n\nIf you attended, thank you for cheering so loudly. If you couldn’t make it, we’ll share more clips and photos soon. Everyone should be proud of the way they showed up and played their hearts out.",
+      "mediaType": "image",
+      "mediaUrl": "/reference/halloween-showcase.jpg",
+      "createdAt": "2026-02-11T20:35:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "c4b9f7a1-1c5b-4e5e-9c2f-6bdb3b2b4c21",
+      "title": "Makeup Lessons This Saturday",
+      "body": "We are hosting makeup lessons this Saturday between 10:00 AM and 2:00 PM. Reply if you would like a slot and we will confirm the time.\n\nIf you cannot make Saturday, let us know your availability and we will find another option that works for your schedule.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-11T15:30:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "d7a1b2c3-4d5e-6f70-8a9b-1c2d3e4f5a6b",
+      "title": "Watch for the ice on the front porch",
+      "body": "Please use the side steps today — there is ice on the front porch and it is slick. Be safe coming in for your lesson.\n\nWe have put down salt and will re-check the walkway this afternoon. If conditions change we will update everyone right away.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "image",
+      "mediaUrl": "/reference/ice-porch.jpg",
+      "createdAt": "2026-02-10T18:10:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "a1f3e6d9-2b4c-5d6e-7f80-9a0b1c2d3e4f",
+      "title": "New Lesson Calendar!",
+      "body": "The updated lesson calendar is live. Please review your times for the rest of the month and let us know if anything needs to shift.\n\nIf you need to swap a date, send a note with your preferred alternatives so we can adjust quickly.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "image",
+      "mediaUrl": "/reference/calendar.jpg",
+      "createdAt": "2026-02-09T16:45:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "b9c8d7e6-5f4a-3b2c-1d0e-9f8a7b6c5d4e",
+      "title": "Cancelling Todays Lessons - Illness",
+      "body": "I am under the weather and need to cancel today’s lessons. We will follow up with makeup options shortly.\n\nThank you for understanding. Please check your email later today for rescheduling details.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-08T19:05:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "e2d1c0b9-a8f7-6e5d-4c3b-2a1908070605",
+      "title": "Current Month Prorating",
+      "body": "If your start date was mid-month, your invoice reflects a prorated amount. Please reach out if you have questions.\n\nWe can also help set up a consistent billing date going forward if that is easier for you.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-07T17:20:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "1a2b3c4d-5e6f-7081-92a3-b4c5d6e7f801",
+      "title": "Practice Check-ins This Week",
+      "body": "This week we are focusing on steady rhythm and relaxed hands. Please plan to record a short 30-second clip and share it before your lesson.\n\nIf you need help setting up a recording space, send a quick note and we will guide you through a simple setup.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-06T16:05:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "2b3c4d5e-6f70-8192-a3b4-c5d6e7f80192",
+      "title": "Studio Closed for Presidents Day",
+      "body": "The studio will be closed on Presidents Day. Lessons scheduled for that day will be rescheduled automatically.\n\nWe will follow up with makeup options and confirm new times by the end of this week.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "none",
+      "mediaUrl": "",
+      "createdAt": "2026-02-05T18:40:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "3c4d5e6f-7081-92a3-b4c5-d6e7f80192a3",
+      "title": "New Warm-up Sheet Posted",
+      "body": "We added a fresh warm-up sheet to help with finger independence and clean transitions. Please print it out or view it on a tablet.\n\nWe will use this in lessons for the next two weeks, so bring it with you if you can.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "image",
+      "mediaUrl": "/reference/warmup-sheet.png",
+      "createdAt": "2026-02-04T15:20:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "4d5e6f70-8192-a3b4-c5d6-e7f80192a3b4",
+      "title": "Snow Day Planning",
+      "body": "We are watching the weather for later this week. If conditions worsen, we may shift to virtual lessons for one day.\n\nWe will text everyone by 8:00 AM that morning if any changes are needed.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/snow-day/1200/600",
+      "createdAt": "2026-02-03T17:55:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "5e6f7081-92a3-b4c5-d6e7-f80192a3b4c5",
+      "title": "Upcoming Recital Save the Date",
+      "body": "Please save the date for our spring recital on March 23rd at 4:00 PM. Location details will be sent soon.\n\nWe will also share a sign-up sheet for performance order and any accompaniment needs.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/recital-date/1200/600",
+      "createdAt": "2026-02-02T18:15:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "6f708192-a3b4-c5d6-e7f8-0192a3b4c5d6",
+      "title": "Lesson Materials Pickup",
+      "body": "New lesson materials are available for pickup at the front desk. If you prefer, we can send digital copies via email.\n\nPlease let us know your preference so we can keep everything organized for you.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/materials-pickup/1200/600",
+      "createdAt": "2026-02-01T16:50:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "708192a3-b4c5-d6e7-f801-92a3b4c5d6e7",
+      "title": "Piano Tuning Reminder",
+      "body": "If you have a home piano, this is a good time for a tuning. Consistent tuning helps your ear and makes practice more enjoyable.\n\nWe can recommend a local tuner if you need a contact.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/piano-tuning/1200/600",
+      "createdAt": "2026-01-31T19:10:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "8192a3b4-c5d6-e7f8-0192-a3b4c5d6e7f8",
+      "title": "Studio Playlist Refresh",
+      "body": "We refreshed the studio playlist with new practice tracks. Try pairing them with your warm-ups to build tempo stability.\n\nLet us know your favorites so we can feature student picks next month.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/playlist-refresh/1200/600",
+      "createdAt": "2026-01-30T17:35:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "92a3b4c5-d6e7-f801-92a3-b4c5d6e7f801",
+      "title": "Practice Challenge Week",
+      "body": "We are kicking off a friendly practice challenge next week. Aim for three focused sessions and track your minutes.\n\nEveryone who completes the challenge will receive a small studio reward.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/practice-challenge/1200/600",
+      "createdAt": "2026-01-29T16:25:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "a3b4c5d6-e7f8-0192-a3b4-c5d6e7f80192",
+      "title": "Reminder: Bring Your Notebook",
+      "body": "Please bring your lesson notebook to each session so we can capture key notes and next steps.\n\nIf you need a new notebook, we have a few available at the studio.\n\nIf you have any questions, send a quick note and we will respond as soon as possible. Thanks for staying connected!\n\nWe appreciate your flexibility and will keep you updated with any changes.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/notebook-reminder/1200/600",
+      "createdAt": "2026-01-28T18:05:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd11e0-0000-0000-0000-0000000000011",
+      "title": "Studio Spotlight: Student Progress",
+      "body": "A quick spotlight on recent progress across the studio. We are hearing stronger left-hand balance and more confident counting in almost every lesson.\n\nKeep leaning into slow practice this week and write down one thing you are proud of after each session.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/spotlight-progress/1200/600",
+      "createdAt": "2026-01-16T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd12e0-0000-0000-0000-0000000000012",
+      "title": "Open Practice Room Hours",
+      "body": "We will open the practice room for drop-ins on Wednesday from 3:00–5:00 PM. Space is first come, first served.\n\nIf you plan to stop by, send a quick message so we can plan monitors.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/open-practice/1200/600",
+      "createdAt": "2026-01-15T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd13e0-0000-0000-0000-0000000000013",
+      "title": "New Listening Assignment",
+      "body": "This week’s listening assignment is a short piano trio playlist focused on groove and dynamics. It is posted in the resources section.\n\nListen once without playing, then again while tapping the beat.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/listening-assignment/1200/600",
+      "createdAt": "2026-01-14T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd14e0-0000-0000-0000-0000000000014",
+      "title": "Holiday Week Schedule Reminder",
+      "body": "Please double-check your holiday week schedule. Some lesson times are moved earlier due to travel plans.\n\nIf you need to swap, reply with two alternate options.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/holiday-schedule/1200/600",
+      "createdAt": "2026-01-13T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd15e0-0000-0000-0000-0000000000015",
+      "title": "Sheet Music PDFs Uploaded",
+      "body": "New PDFs for your current songs are uploaded and ready to download. Please print or save them before your lesson.\n\nWe will reference the markings together next week.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/pdfs-uploaded/1200/600",
+      "createdAt": "2026-01-12T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd16e0-0000-0000-0000-0000000000016",
+      "title": "Metronome Challenge Results",
+      "body": "Thank you for joining the metronome challenge! The average streak was 4 days, and several students hit 7.\n\nWe will keep the challenge going with a new tempo goal.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/metronome-challenge/1200/600",
+      "createdAt": "2026-01-11T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd17e0-0000-0000-0000-0000000000017",
+      "title": "Studio Closed Early Friday",
+      "body": "We will close the studio early this Friday at 3:00 PM for maintenance.\n\nIf your lesson is affected, we will reach out to reschedule.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/closed-early/1200/600",
+      "createdAt": "2026-01-10T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd18e0-0000-0000-0000-0000000000018",
+      "title": "Reminder: Tuition Auto-Pay",
+      "body": "If you are using auto-pay, please verify your card on file before the 1st.\n\nReach out if you need help updating billing info.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/tuition-autopay/1200/600",
+      "createdAt": "2026-01-09T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd19e0-0000-0000-0000-0000000000019",
+      "title": "New Practice Journal Cards",
+      "body": "Practice journal cards are available at the front desk. They are a simple way to track goals and wins.\n\nPick one up next time you are in the studio.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/journal-cards/1200/600",
+      "createdAt": "2026-01-08T16:00:00.000Z",
+      "author": "Studio"
+    },
+    {
+      "id": "badd20e0-0000-0000-0000-0000000000020",
+      "title": "Community Recital Volunteers",
+      "body": "We are looking for two volunteers to help with seating at the community recital.\n\nIf you can help, send a message and we will confirm details.",
+      "mediaType": "image",
+      "mediaUrl": "https://picsum.photos/seed/recital-volunteers/1200/600",
+      "createdAt": "2026-01-07T16:00:00.000Z",
+      "author": "Studio"
+    }
+  ]
+}

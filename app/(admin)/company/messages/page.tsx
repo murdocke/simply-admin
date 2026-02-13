@@ -52,6 +52,7 @@ export default function CompanyMessagesPage() {
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
   const [threadReads, setThreadReads] = useState<Record<string, string>>({});
+  const [isRecipientModalOpen, setIsRecipientModalOpen] = useState(false);
 
   const filteredTeachers = useMemo(() => {
     if (!teacherQuery.trim()) return teachers;
@@ -62,6 +63,19 @@ export default function CompanyMessagesPage() {
       )
     );
   }, [teacherQuery, teachers]);
+
+  const brianTeacher = useMemo(
+    () =>
+      teachers.find((teacher) =>
+        teacher.name.toLowerCase().includes("brian")
+      ) ?? null,
+    [teachers]
+  );
+
+  useEffect(() => {
+    if (!brianTeacher) return;
+    setSelectedTeacherId(brianTeacher.id);
+  }, [brianTeacher]);
 
   const activeTeacher = teachers.find(
     (teacher) => teacher.id === selectedTeacherId
@@ -214,46 +228,9 @@ export default function CompanyMessagesPage() {
                 New Message
               </p>
               <div className="mt-4 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Teacher Lookup
-                  </label>
-                  <input
-                    className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                    placeholder="Search by name, email, or region"
-                    value={teacherQuery}
-                    onChange={(event) => setTeacherQuery(event.target.value)}
-                  />
-                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
-                    {filteredTeachers.map((teacher) => (
-                      <button
-                        key={teacher.id}
-                        className={
-                          selectedTeacherId === teacher.id
-                            ? "w-full rounded-xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-2 text-left"
-                            : "w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
-                        }
-                        onClick={() => setSelectedTeacherId(teacher.id)}
-                      >
-                        <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                          {teacher.name}
-                        </p>
-                        <p className="text-xs text-[var(--c-6f6c65)]">
-                          {teacher.region ?? "Region"} · {teacher.email}
-                        </p>
-                      </button>
-                    ))}
-                    {filteredTeachers.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-[var(--c-ecebe7)] px-3 py-3 text-xs text-[var(--c-6f6c65)]">
-                        No teachers found. Try a different search.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
+                <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-3 text-sm text-[var(--c-6f6c65)]">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                    Selected Teacher
+                    Current
                   </p>
                   {activeTeacher ? (
                     <div className="mt-2">
@@ -270,6 +247,13 @@ export default function CompanyMessagesPage() {
                     </p>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRecipientModalOpen(true)}
+                  className="w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+                >
+                  Choose Recipient
+                </button>
               </div>
             </div>
 
@@ -460,6 +444,98 @@ export default function CompanyMessagesPage() {
           </div>
         </div>
       </section>
+
+      {isRecipientModalOpen ? (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsRecipientModalOpen(false)}
+          />
+          <div className="absolute inset-x-4 top-16 mx-auto max-w-2xl rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Send To
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  Choose Recipient
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  Pick a teacher to message.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsRecipientModalOpen(false)}
+                className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fafafa)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Teacher Lookup
+                </label>
+                <input
+                  className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                  placeholder="Search by name, email, or region"
+                  value={teacherQuery}
+                  onChange={(event) => setTeacherQuery(event.target.value)}
+                />
+                <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                  {filteredTeachers.map((teacher) => (
+                    <button
+                      key={teacher.id}
+                      className={
+                        selectedTeacherId === teacher.id
+                          ? "w-full rounded-xl border border-[var(--c-1f1f1d)] bg-[var(--c-f7f7f5)] px-3 py-2 text-left"
+                          : "w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
+                      }
+                      onClick={() => setSelectedTeacherId(teacher.id)}
+                    >
+                      <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                        {teacher.name}
+                      </p>
+                      <p className="text-xs text-[var(--c-6f6c65)]">
+                        {teacher.region ?? "Region"} · {teacher.email}
+                      </p>
+                    </button>
+                  ))}
+                  {filteredTeachers.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-[var(--c-ecebe7)] px-3 py-3 text-xs text-[var(--c-6f6c65)]">
+                      No teachers found. Try a different search.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4 text-sm text-[var(--c-6f6c65)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  Selected
+                </p>
+                {activeTeacher ? (
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      {activeTeacher.name}
+                    </p>
+                    <p className="text-xs text-[var(--c-6f6c65)]">
+                      {activeTeacher.email}
+                    </p>
+                    <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
+                      {activeTeacher.region ?? "Region"} · Ready to message
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
+                    Choose a teacher to start messaging.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

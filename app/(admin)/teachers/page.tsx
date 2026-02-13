@@ -12,6 +12,8 @@ import lessonSections from './students/lesson-data/lesson-sections.json';
 import LockedSectionCard from '../components/locked-section-card';
 import LessonCartPurchaseButton from '../components/lesson-cart-actions';
 import StudentPromoCard from '../components/student-promo-card';
+import LessonPackPromoCard from '../components/lesson-pack-promo-card';
+import type { LessonPack } from '../components/lesson-pack-types';
 import studentsData from '@/data/students.json';
 
 type TeacherRecord = {
@@ -123,6 +125,7 @@ export default function TeachersPage() {
   const [formState, setFormState] = useState(defaultForm);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lessonPacks, setLessonPacks] = useState<LessonPack[]>([]);
 
   const notifyTeachersUpdated = () => {
     try {
@@ -185,6 +188,27 @@ export default function TeachersPage() {
       setViewRole(null);
       setTeacherName(null);
     }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadLessonPacks = async () => {
+      try {
+        const response = await fetch('/api/lesson-packs');
+        const data = (await response.json()) as { lessonPacks?: LessonPack[] };
+        if (!isMounted) return;
+        setLessonPacks(
+          Array.isArray(data.lessonPacks) ? data.lessonPacks : [],
+        );
+      } catch {
+        if (!isMounted) return;
+        setLessonPacks([]);
+      }
+    };
+    void loadLessonPacks();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const effectiveRole = role === 'company' && viewRole ? viewRole : role;
@@ -509,10 +533,10 @@ export default function TeachersPage() {
                 : 'Curriculum paths, practice coaching, and studio readiness tools.'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-col items-end gap-3">
             {hubMode === 'teaching' ? (
               <div className="text-right">
-                <span className="text-sm font-semibold uppercase tracking-[0.25em] text-[var(--c-1f1f1d)]">
+                <span className="text-base font-semibold uppercase tracking-[0.3em] text-[var(--c-1f1f1d)]">
                   {new Intl.DateTimeFormat('en-US', {
                     month: 'short',
                     day: 'numeric',
@@ -523,36 +547,42 @@ export default function TeachersPage() {
                     minute: '2-digit',
                   }).format(offsetNow)}
                 </span>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]/70">
                   Fast clock
                 </p>
               </div>
             ) : null}
-            <button
-              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                hubMode === 'training'
-                  ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
-                  : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
-              }`}
-              onClick={() => handleHubModeChange('training')}
-            >
-              Training
-            </button>
-            <button
-              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                hubMode === 'teaching'
-                  ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
-                  : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
-              }`}
-              onClick={() => handleHubModeChange('teaching')}
-            >
-              Teaching
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                  hubMode === 'training'
+                    ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                    : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
+                }`}
+                onClick={() => handleHubModeChange('training')}
+              >
+                Training
+              </button>
+              <button
+                className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                  hubMode === 'teaching'
+                    ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                    : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
+                }`}
+                onClick={() => handleHubModeChange('teaching')}
+              >
+                Teaching
+              </button>
+            </div>
           </div>
         </header>
 
         {hubMode === 'training' ? (
           <>
+            <div className="fixed right-6 top-6 z-50">
+              <LessonCartPurchaseButton />
+            </div>
+
             <div className="rounded-2xl border border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] px-5 py-4 text-sm text-[var(--c-7a4a17)] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)]">
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-7a4a17)]">
                 Training Mode
@@ -575,28 +605,17 @@ export default function TeachersPage() {
               </div>
             </div>
 
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <StudentPromoCard
-                title="Jazz Colors: Teacher Edition"
-                body="Quick coaching ideas, voicing tips, and a groove-first approach to keep students smiling."
-                ctaLabel="View Lesson Pack Details"
-                ctaHref="/teachers?mode=training"
-              />
-              <StudentPromoCard
-                title="Studio Warm-Ups Pack"
-                body="Five-minute warmups, rhythm resets, and confidence builders you can drop into any lesson."
-                imageSrc="/reference/SIGHT-READING.png"
-                ctaLabel="View Lesson Pack Details"
-                ctaHref="/teachers?mode=training"
-              />
-              <StudentPromoCard
-                title="Sight-Reading Sprint"
-                body="Fast drills and pacing notes to help students read with ease (and less hesitation)."
-                imageSrc="/reference/WARM-UPS.png"
-                ctaLabel="View Lesson Pack Details"
-                ctaHref="/teachers?mode=training"
-              />
-            </section>
+            {lessonPacks.length ? (
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                {lessonPacks.slice(0, 3).map(pack => (
+                  <LessonPackPromoCard
+                    key={pack.id}
+                    pack={pack}
+                    href={`/teachers/lesson-packs/${pack.id}`}
+                  />
+                ))}
+              </section>
+            ) : null}
 
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <StudentPromoCard
@@ -821,9 +840,7 @@ export default function TeachersPage() {
                 Browse each program and open a section to see materials.
               </p>
             </div>
-            <div className="md:pt-4">
-              <LessonCartPurchaseButton />
-            </div>
+            <div className="md:pt-4" />
           </div>
           <div className="mt-6 space-y-6">
             {lessonTypes

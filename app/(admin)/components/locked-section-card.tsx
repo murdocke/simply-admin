@@ -65,7 +65,7 @@ export default function LockedSectionCard({
         <p className="text-sm font-medium text-[var(--c-1f1f1d)]">
           {sectionName}
         </p>
-        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-1f1f1d)]">
           View materials
         </p>
       </Link>
@@ -81,7 +81,7 @@ export default function LockedSectionCard({
           <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
             {sectionName}
           </p>
-          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Locked section
           </p>
         </div>
@@ -121,10 +121,10 @@ export default function LockedSectionCard({
     >
       <div className="grid gap-2 sm:grid-cols-2 sm:items-center">
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+          <p className="text-sm font-semibold text-[var(--c-c8102e)]">
             {sectionName}
           </p>
-          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Locked section
           </p>
         </div>

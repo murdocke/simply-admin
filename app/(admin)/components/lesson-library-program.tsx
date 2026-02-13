@@ -33,7 +33,7 @@ function UnlockedSectionCard({
         <p className="text-sm font-medium text-[var(--c-1f1f1d)]">
           {sectionName}
         </p>
-        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-2d6a4f)]">
           View materials
         </p>
       </div>

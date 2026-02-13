@@ -20,7 +20,7 @@ export default function LessonCartPurchaseButton({
   return (
     <Link
       href="/checkout"
-      className={`inline-flex items-center justify-center rounded-full bg-[#2f8f5b] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.25em] text-white transition hover:brightness-110 ${className}`}
+      className={`inline-flex items-center justify-center whitespace-nowrap rounded-full bg-[#2f8f5b] px-6 py-3 text-base font-semibold uppercase tracking-[0.2em] text-white transition hover:brightness-110 ${className}`}
     >
       PURCHASE {items.length} SELECTED SECTIONS - {formatCurrency(total)}
     </Link>

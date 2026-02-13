@@ -32,6 +32,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
       { label: 'This Week', href: '/teachers/this-week' },
       { label: 'Schedule', href: '/teachers/schedule' },
       { label: 'Students', href: '/teachers/students' },
+      { label: 'Communications', href: '/teachers/communications' },
       { label: 'Messages', href: '/teachers/messages' },
     ],
     student: [
@@ -39,6 +40,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
       { label: 'Current Lesson', href: '/students/current-lesson' },
       { label: 'Practice Hub', href: '/students/practice-hub' },
       { label: 'Lesson Library', href: '/students/lesson-library' },
+      { label: 'Communications', href: '/students/communications' },
       { label: 'Messages', href: '/students/messages' },
     ],
   };
@@ -57,6 +59,6 @@ export const allowedRoots: Record<UserRole, string[]> = {
     '/account-permissions',
     '/support',
   ],
-  teacher: ['/teachers', '/curriculum', '/checkout'],
+  teacher: ['/teachers', '/students/lesson-packs', '/teachers/lesson-packs', '/curriculum', '/checkout'],
   student: ['/students', '/checkout'],
 };

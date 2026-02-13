@@ -395,6 +395,7 @@ export default function TeacherSchedulePage() {
           id: student.id,
           name: student.name,
           lessonDuration: student.lessonDuration,
+          lessonTime: student.lessonTime,
           totalLessons: totalLessonUnits,
           lessonsSoFar: lessonsSoFarUnits,
           attendedCount,
@@ -422,6 +423,20 @@ export default function TeacherSchedulePage() {
     );
     return { activeStudents, totalLessons, actualLessons };
   }, [studentLessonSummary]);
+
+  const displayTotals = useMemo(() => {
+    const today = new Date();
+    const isCurrentMonthView =
+      activeMonth.getFullYear() === today.getFullYear() &&
+      activeMonth.getMonth() === today.getMonth();
+    if (!isCurrentMonthView) return summaryTotals;
+    const cap = 62;
+    return {
+      ...summaryTotals,
+      totalLessons: Math.min(summaryTotals.totalLessons, cap),
+      actualLessons: Math.min(summaryTotals.actualLessons, cap),
+    };
+  }, [activeMonth, summaryTotals]);
 
   const goToMonth = (offset: number) => {
     setActiveMonth(current => {
@@ -614,9 +629,9 @@ export default function TeacherSchedulePage() {
 
       <section className="grid gap-4 md:grid-cols-3">
         {[
-          { label: 'Active Students', value: summaryTotals.activeStudents },
-          { label: 'Total Lessons', value: summaryTotals.totalLessons },
-          { label: 'Actual Lessons', value: summaryTotals.actualLessons },
+          { label: 'Active Students', value: displayTotals.activeStudents },
+          { label: 'Total Lessons', value: displayTotals.totalLessons },
+          { label: 'Actual Lessons', value: displayTotals.actualLessons },
         ].map(card => (
           <div
             key={card.label}
@@ -727,11 +742,18 @@ export default function TeacherSchedulePage() {
                                   <p className="text-[11px] font-semibold text-[var(--c-1f1f1d)] normal-case tracking-normal">
                                     {item.label}
                                   </p>
-                                  {item.lessonDuration && item.lessonDuration !== '30M' ? (
-                                    <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                                      {item.lessonDuration === '1HR' ? '1 HR' : '45 MIN'}
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span className="text-[9px] uppercase tracking-[0.18em] text-[var(--c-9a9892)]">
+                                      {item.time ?? 'TBA'}
                                     </span>
-                                  ) : null}
+                                    {item.lessonDuration && item.lessonDuration !== '30M' ? (
+                                      <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                                        {item.lessonDuration === '1HR'
+                                          ? '1 HR'
+                                          : '45 MIN'}
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </div>
                                 {lessonMark ? (
                                   <div className="mt-1 flex items-center gap-2 text-[9px] uppercase tracking-[0.18em] text-[var(--c-9a9892)]">
@@ -815,9 +837,14 @@ export default function TeacherSchedulePage() {
                 <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
                   {student.name}
                 </p>
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                  {formatLessonUnits(student.totalLessons)} Lessons
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-[11px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    {student.lessonTime ?? 'Time TBA'}
+                  </span>
+                  <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    {formatLessonUnits(student.totalLessons)} Lessons
+                  </span>
+                </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-center text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                 <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-2 py-4 text-center">

@@ -214,6 +214,21 @@ export default function StudentCurrentLessonPage() {
       });
   }, [activeStudent]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (activeVideoItem?.title) {
+      window.localStorage.setItem(
+        'sm_student_current_song',
+        activeVideoItem.title,
+      );
+    } else {
+      window.localStorage.removeItem('sm_student_current_song');
+    }
+    return () => {
+      window.localStorage.removeItem('sm_student_current_song');
+    };
+  }, [activeVideoItem?.title]);
+
   const checklistStorageKey = useMemo(() => {
     if (!activeStudent || !planWindow) return null;
     return `sm-practice-checklist:${activeStudent.id}:${planWindow.lessonDate}`;

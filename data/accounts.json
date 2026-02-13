@@ -5,8 +5,8 @@
       "role": "company",
       "name": "Neil Moore",
       "email": "neil@simplymusic.com",
-      "lastLogin": "2026-02-10T21:00:49.718Z",
-      "password": "123456",
+      "lastLogin": "2026-02-13T14:29:49.236Z",
+      "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active"
     },
@@ -15,8 +15,8 @@
       "role": "teacher",
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
-      "lastLogin": "2026-02-10T04:31:49.270Z",
-      "password": "123456",
+      "lastLogin": "2026-02-12T22:09:17.379Z",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
       "goesBy": "Mr. Brian",
       "membershipStatus": "Licensed",
@@ -28,7 +28,7 @@
       "name": "Axel",
       "email": "joybeth.martinez@gmail.com",
       "lastLogin": "2026-02-06T20:49:59.212Z",
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active"
     },
@@ -38,7 +38,7 @@
       "name": "Susan Friedman",
       "email": "susan.f@gmail.com",
       "lastLogin": null,
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "32069b67-4c9a-4a32-990b-d971842f9810",
       "membershipStatus": "Licensed",
       "accountStatus": "Active"
@@ -49,7 +49,7 @@
       "name": "Sheri Reingold",
       "email": "sheri.r@gmail.com",
       "lastLogin": "2026-02-06T11:25:01.020Z",
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "2679881d-5592-4a01-93d2-e174d0ebf79e",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -60,7 +60,7 @@
       "name": "Lanette Saetre",
       "email": "lanette.saetre@gmail.com",
       "lastLogin": null,
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "d9dac0b0-64a3-423a-8dd6-e0be75e33a18",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -71,7 +71,7 @@
       "name": "Kim Nelson",
       "email": "kim.n@gmail.com",
       "lastLogin": null,
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "515494fa-3f01-43cb-b63f-9f5e788327b0",
       "membershipStatus": "Licensed",
       "accountStatus": "Active"
@@ -82,7 +82,7 @@
       "name": "Nancy Weddle",
       "email": "nweddle@gmail.com",
       "lastLogin": "2026-02-08T17:30:30.781Z",
-      "password": "123456",
+      "password": "Coffee@Sunrise@2026",
       "teacherId": "dbadc128-28fb-4f3f-afd0-1391bbdccf48",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -92,8 +92,8 @@
       "role": "student",
       "name": "Quinn",
       "email": "dawnfrancour@gmail.com",
-      "lastLogin": "2026-02-10T04:00:47.293Z",
-      "password": "123456",
+      "lastLogin": "2026-02-12T21:46:48.005Z",
+      "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active"
     }

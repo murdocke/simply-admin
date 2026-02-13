@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [showDemo, setShowDemo] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [bgIndex, setBgIndex] = useState(0);
   const [demoAccounts, setDemoAccounts] = useState<
     { username: string; role: string; name: string }[]
@@ -61,12 +62,15 @@ export default function LoginPage() {
         return data.accounts ?? [];
       })
       .then(list => {
+        const allowed = new Set(['neil', 'brian', 'quinn']);
         setDemoAccounts(
-          list.map(account => ({
-            username: account.username,
-            role: account.role,
-            name: account.name ?? '',
-          })),
+          list
+            .filter(account => allowed.has(account.username.toLowerCase()))
+            .map(account => ({
+              username: account.username,
+              role: account.role,
+              name: account.name ?? '',
+            })),
         );
       })
       .catch(() => {
@@ -94,6 +98,7 @@ export default function LoginPage() {
 
       const authUser = data.account;
       window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      window.localStorage.setItem('sm_last_login_at', new Date().toISOString());
       void fetch('/api/account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,13 +165,53 @@ export default function LoginPage() {
                 onChange={e => setUser(e.target.value)}
               />
 
-              <input
-                className="w-full mb-5 px-4 py-2 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
-                type="password"
-                placeholder="Password"
-                value={pass}
-                onChange={e => setPass(e.target.value)}
-              />
+              <div className="relative mb-5">
+                <input
+                  className="w-full px-4 py-2 pr-12 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={pass}
+                  onChange={e => setPass(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(current => !current)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)]"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 3l18 18" />
+                      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                      <path d="M9.5 5.1A10.9 10.9 0 0 1 12 4c5 0 9.3 3.1 11 7.5a11.3 11.3 0 0 1-4.2 5.1" />
+                      <path d="M6.1 6.1A11.1 11.1 0 0 0 1 11.5C2.7 15.9 7 19 12 19a10.9 10.9 0 0 0 3.4-.6" />
+                    </svg>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
+                      <circle cx="12" cy="12" r="3.2" />
+                    </svg>
+                  )}
+                </button>
+              </div>
 
               {error ? (
                 <div className="mb-4 rounded-lg border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-2 text-sm text-[var(--c-8f2f3b)]">
@@ -205,16 +250,43 @@ export default function LoginPage() {
             <div className="w-full max-w-lg rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                    Demo Accounts
-                  </p>
                   <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
                     Available Logins
                   </p>
                 </div>
-                <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-                  Password: 123456
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = 'Coffee@Sunrise@2026';
+                    const fallbackCopy = () => {
+                      const textarea = document.createElement('textarea');
+                      textarea.value = text;
+                      textarea.setAttribute('readonly', '');
+                      textarea.style.position = 'fixed';
+                      textarea.style.opacity = '0';
+                      document.body.appendChild(textarea);
+                      textarea.select();
+                      try {
+                        document.execCommand('copy');
+                      } catch {
+                        // ignore
+                      }
+                      document.body.removeChild(textarea);
+                    };
+
+                    if (navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(text).catch(() => {
+                        fallbackCopy();
+                      });
+                      return;
+                    }
+                    fallbackCopy();
+                  }}
+                  className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  title="Copy password"
+                >
+                  Coffee@Sunrise@2026
+                </button>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
                 <div className="grid grid-cols-3 gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
@@ -234,8 +306,8 @@ export default function LoginPage() {
                         className="grid cursor-pointer grid-cols-3 gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm"
                         onClick={() => {
                           setUser(account.username);
-                          setPass('123456');
-                          handleLogin(account.username, '123456');
+                          setPass('Coffee@Sunrise@2026');
+                          handleLogin(account.username, 'Coffee@Sunrise@2026');
                         }}
                       >
                         <div className="font-medium text-[var(--c-1f1f1d)]">

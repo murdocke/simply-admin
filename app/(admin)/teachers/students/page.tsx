@@ -136,6 +136,7 @@ export default function TeacherStudentsPage() {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isStudentOptionsOpen, setIsStudentOptionsOpen] = useState(false);
   const [assignForm, setAssignForm] = useState({
     title: '',
     date: '',
@@ -539,6 +540,14 @@ export default function TeacherStudentsPage() {
 
   const closeAssignModal = () => {
     setIsAssignModalOpen(false);
+  };
+
+  const openStudentOptions = () => {
+    setIsStudentOptionsOpen(true);
+  };
+
+  const closeStudentOptions = () => {
+    setIsStudentOptionsOpen(false);
   };
 
   const openDeleteModal = (student: StudentRecord) => {
@@ -1379,16 +1388,10 @@ export default function TeacherStudentsPage() {
                         <button
                           className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20 text-center"
                           type="button"
-                          onClick={openAssignModal}
+                          onClick={openStudentOptions}
                         >
-                          Assign Lesson
+                          View Options
                         </button>
-                        <Link
-                          href="/teachers/practice-hub"
-                          className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--sidebar-selected-text)] transition hover:bg-white/20 text-center"
-                        >
-                          Practice Hub
-                        </Link>
                       </div>
                     ) : null}
                   </div>
@@ -2673,6 +2676,86 @@ export default function TeacherStudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isStudentOptionsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={closeStudentOptions}
+          />
+          <div className="relative w-full max-w-lg rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Student Options
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  {selectedStudent?.name ?? 'Selected Student'}
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  Quick actions for lesson planning and practice support.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeStudentOptions}
+                aria-label="Close student options"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--c-ecebe7)] text-[var(--c-6f6c65)] transition hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="6" y1="18" x2="18" y2="6" />
+                </svg>
+              </button>
+            </div>
+            <div className="mt-6 grid gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  closeStudentOptions();
+                  openAssignModal();
+                }}
+                className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              >
+                Assign Lesson
+              </button>
+              <Link
+                href="/teachers/practice-hub"
+                className="w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)] text-center"
+              >
+                Practice Hub
+              </Link>
+              <button
+                type="button"
+                className="w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                View Student Videos
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                Student Lessons Owned
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                Progress Summary
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

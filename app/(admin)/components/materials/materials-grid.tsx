@@ -31,6 +31,14 @@ const learningPhrases = [
   "Nice pick... let's make some music.",
 ];
 
+const lessonFrameBackgrounds = [
+  '/reference/StudentVideo-1.png',
+  '/reference/StudentVideo-2.png',
+  '/reference/StudentVideo-3.png',
+  '/reference/StudentVideo-4.png',
+  '/reference/StudentVideo-5.png',
+];
+
 const hashString = (value: string) =>
   value.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
 
@@ -61,6 +69,8 @@ export default function MaterialsGrid({
   const [isSheetMusicOpen, setIsSheetMusicOpen] = useState(false);
   const [noteValue, setNoteValue] = useState('');
   const [showAskQuestion, setShowAskQuestion] = useState(false);
+  const [bgFrameIndex, setBgFrameIndex] = useState(0);
+  const previousPartRef = useRef<string | null>(null);
   const splitIndex = Math.ceil(materials.length / 2);
   const [columnOne, columnTwo] = useMemo(
     () => [materials.slice(0, splitIndex), materials.slice(splitIndex)],
@@ -217,6 +227,28 @@ export default function MaterialsGrid({
       window.dispatchEvent(new Event('sm-last-viewed-video'));
     }
   }, [lastViewedKey, materials, selectedMaterial, selectedPart]);
+
+  useEffect(() => {
+    if (!selectedMaterial) {
+      setBgFrameIndex(0);
+      previousPartRef.current = null;
+      return;
+    }
+    setBgFrameIndex(0);
+    previousPartRef.current = null;
+  }, [selectedMaterial]);
+
+  useEffect(() => {
+    if (!selectedPart) return;
+    if (!lessonFrameBackgrounds.length) return;
+    if (!previousPartRef.current) {
+      previousPartRef.current = selectedPart;
+      return;
+    }
+    if (previousPartRef.current === selectedPart) return;
+    previousPartRef.current = selectedPart;
+    setBgFrameIndex(index => (index + 1) % lessonFrameBackgrounds.length);
+  }, [selectedPart]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -478,7 +510,10 @@ export default function MaterialsGrid({
               <div className="overflow-hidden rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
                 <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-[#070707]">
                   <img
-                    src="/reference/StudentVideo-2.png"
+                    src={
+                      lessonFrameBackgrounds[bgFrameIndex] ??
+                      '/reference/StudentVideo-2.png'
+                    }
                     alt="Lesson video preview"
                     className="absolute inset-0 h-full w-full object-cover"
                   />

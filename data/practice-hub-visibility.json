@@ -1,0 +1,51 @@
+{
+  "88036240-9852-43ef-94da-4f275d25ccd7": {
+    "selectedIds": [
+      "foundation-program::level-3::3-9-tear-for-a-friend",
+      "foundation-program::level-3::3-7-greensleeves",
+      "foundation-program::level-2::2-11-fur-elise-2nd-section",
+      "foundation-program::level-4::4-6-the-squidgies-boogie"
+    ],
+    "focusIds": [
+      "foundation-program::level-3::3-9-tear-for-a-friend",
+      "foundation-program::level-3::3-7-greensleeves"
+    ],
+    "practiceDays": {
+      "foundation-program::level-2::2-10-light-blue": [
+        "SUN",
+        "TUE",
+        "WED"
+      ],
+      "foundation-program::level-3::3-7-greensleeves": [
+        "SUN",
+        "TUE",
+        "THU"
+      ],
+      "foundation-program::level-3::3-1-the-pipes": [
+        "SUN",
+        "TUE",
+        "WED"
+      ],
+      "foundation-program::level-3::3-9-tear-for-a-friend": [
+        "SUN",
+        "TUE",
+        "THU"
+      ],
+      "foundation-program::level-3::3-6-walking-with-billy": [
+        "SUN"
+      ],
+      "foundation-program::level-2::2-6-alma-mater-blues-3rd-section": [
+        "TUE",
+        "WED"
+      ],
+      "foundation-program::level-2::2-1-i-ll-be-there": [
+        "TUE",
+        "WED"
+      ],
+      "foundation-program::level-2::2-11-fur-elise-2nd-section": []
+    },
+    "helpFlags": {
+      "foundation-program::level-2::2-11-fur-elise-2nd-section": true
+    }
+  }
+}

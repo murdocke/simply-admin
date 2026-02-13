@@ -132,7 +132,7 @@ export default function SubscriptionsPage() {
             Teacher Subscription Billing
           </h1>
           <p className="text-sm text-[var(--c-6f6c65)] mt-2 max-w-2xl">
-            Move from honor-system lesson reporting to a predictable per-student
+            Move from royalty lesson reporting to a predictable per-student
             monthly charge billed at the start of each month.
           </p>
         </div>
@@ -573,7 +573,7 @@ export default function SubscriptionsPage() {
             Model Shift
           </p>
           <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-            Honor System to Flat Fee
+            Royalty Model to Flat Fee
           </h2>
           <div className="mt-5 grid grid-cols-1 gap-4">
             <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">

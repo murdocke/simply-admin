@@ -50,10 +50,10 @@ function UnlockedSectionCard({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[var(--c-1f1f1d)]">
+          <p className="text-sm font-medium text-[var(--c-2d6a4f)]">
             {sectionName}
           </p>
-          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--c-2d6a4f)]">
             View materials
           </p>
         </div>
@@ -150,8 +150,8 @@ export default function LessonLibraryView({
 
   return (
     <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+        <div className="md:pr-6">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
             Curriculum
           </p>
@@ -163,8 +163,10 @@ export default function LessonLibraryView({
           </p>
         </div>
         {showCartButton ? (
-          <div className="md:pt-4">
-            <LessonCartPurchaseButton />
+          <div className="md:flex md:justify-end">
+            <div className="md:sticky md:top-4 md:w-1/2">
+              <LessonCartPurchaseButton className="w-full" />
+            </div>
           </div>
         ) : null}
       </div>

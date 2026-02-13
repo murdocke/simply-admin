@@ -1,22 +1,22 @@
 export type LessonPackStatus = 'draft' | 'published';
-export type LessonPackAudience = 'student' | 'teacher';
-export type LessonPackBlockVisibility = 'student' | 'teacher' | 'both';
+export type LessonPackSubjectLink = {
+  label: string;
+  url: string;
+};
 
-export type LessonPackBlockType =
-  | 'heading'
-  | 'richText'
-  | 'image'
-  | 'pdf'
-  | 'soundSlice'
-  | 'linkExternal'
-  | 'linkInternal';
-
-export type LessonPackBlock = {
+export type LessonPackSubject = {
   id: string;
-  type: LessonPackBlockType;
-  visibility: LessonPackBlockVisibility;
+  subjectNumber: number;
+  title: string;
+  body: string;
+  headerImageUrl: string;
+  headerVideoUrl: string;
+  inlineVideoUrl: string;
+  inlinePdfUrl: string;
+  links: LessonPackSubjectLink[];
+  soundSliceUrl: string;
+  soundSlicePlacement: 'header' | 'body';
   order: number;
-  data: Record<string, unknown>;
 };
 
 export type LessonPack = {
@@ -26,14 +26,38 @@ export type LessonPack = {
   description?: string;
   coverImage?: string;
   tags: string[];
-  price?: number;
+  priceTeacher?: number;
+  priceStudent?: number;
+  subjectCount?: number;
   status: LessonPackStatus;
   createdAt: string;
   updatedAt: string;
-  blocks: LessonPackBlock[];
+  subjects: LessonPackSubject[];
 };
 
-export const LESSON_PACKS_KEY = 'sm-lesson-packs';
+const createEmptyLinks = (): LessonPackSubjectLink[] => [
+  { label: '', url: '' },
+  { label: '', url: '' },
+  { label: '', url: '' },
+];
+
+export const createLessonSubject = (
+  order: number,
+  subjectNumber: number,
+): LessonPackSubject => ({
+  id: `subject-${Math.random().toString(36).slice(2, 10)}`,
+  subjectNumber,
+  title: 'UNTITLED LESSON SUBJECT',
+  body: '',
+  headerImageUrl: '',
+  headerVideoUrl: '',
+  inlineVideoUrl: '',
+  inlinePdfUrl: '',
+  links: createEmptyLinks(),
+  soundSliceUrl: '',
+  soundSlicePlacement: 'header',
+  order,
+});
 
 export const emptyLessonPack = (): LessonPack => {
   const now = new Date().toISOString();
@@ -44,31 +68,12 @@ export const emptyLessonPack = (): LessonPack => {
     description: '',
     coverImage: '',
     tags: [],
-    price: undefined,
+    priceTeacher: undefined,
+    priceStudent: undefined,
+    subjectCount: 1,
     status: 'draft',
     createdAt: now,
     updatedAt: now,
-    blocks: [],
+    subjects: [],
   };
-};
-
-export const loadLessonPacks = (): LessonPack[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = window.localStorage.getItem(LESSON_PACKS_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored) as LessonPack[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-export const saveLessonPacks = (packs: LessonPack[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LESSON_PACKS_KEY, JSON.stringify(packs));
-  } catch {
-    // ignore
-  }
 };

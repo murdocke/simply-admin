@@ -9,6 +9,11 @@ import {
 } from '../../components/auth';
 import LastViewedVideoCard from '../../components/last-viewed-video-card';
 import StudentPromoCard from '../../components/student-promo-card';
+import {
+  COMMUNICATIONS_UPDATE_EVENT,
+  readCommunications,
+  type CommunicationEntry,
+} from '../../components/communications-store';
 
 type StudentRecord = {
   id: string;
@@ -35,6 +40,12 @@ type TeacherRecord = {
   name: string;
   email: string;
   username?: string;
+};
+
+type StudentPresenceActivity = {
+  label: string;
+  detail?: string;
+  updatedAt?: string;
 };
 
 type Message = {
@@ -109,6 +120,23 @@ export default function TeacherDashboardPage() {
   const [lastViewedVideo, setLastViewedVideo] = useState<LastViewedVideo | null>(
     null,
   );
+  const [communications, setCommunications] = useState<CommunicationEntry[]>([]);
+  const [promoPayload, setPromoPayload] = useState<{
+    id?: string;
+    title: string;
+    body: string;
+    cta?: string;
+  } | null>(null);
+  const [isPromoOpen, setIsPromoOpen] = useState(false);
+  const [alertPayload, setAlertPayload] = useState<{
+    title: string;
+    body: string;
+    color: string;
+    persistence: string;
+  } | null>(null);
+  const [onlineStudents, setOnlineStudents] = useState<
+    (StudentRecord & { activity?: StudentPresenceActivity | null })[]
+  >([]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -116,6 +144,189 @@ export default function TeacherDashboardPage() {
     }, 60_000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('sm-company-promos');
+      channel.onmessage = event => {
+        if (event?.data?.type === 'promo-removed') {
+          setIsPromoOpen(false);
+          setPromoPayload(null);
+        }
+      };
+    } catch {
+      channel = null;
+    }
+    return () => {
+      channel?.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('sm-company-alerts');
+      channel.onmessage = event => {
+        if (event?.data?.type === 'alert-removed') {
+          setAlertPayload(null);
+        }
+      };
+    } catch {
+      channel = null;
+    }
+    return () => {
+      channel?.close();
+    };
+  }, []);
+  useEffect(() => {
+    try {
+      const storedPromo = window.localStorage.getItem('sm_company_promo_teacher');
+      if (storedPromo) {
+        const parsed = JSON.parse(storedPromo) as {
+          title: string;
+          body: string;
+          cta?: string;
+          trigger?: string;
+          createdAt?: string;
+        };
+        if (!parsed.trigger || parsed.trigger === 'dashboard' || parsed.trigger === 'instant') {
+          setPromoPayload(parsed);
+          setIsPromoOpen(true);
+          window.localStorage.removeItem('sm_company_promo_teacher');
+        }
+      }
+      const storedAlert = window.localStorage.getItem('sm_company_alert_teacher');
+      if (storedAlert) {
+        const parsed = JSON.parse(storedAlert) as {
+          title: string;
+          body: string;
+          color: string;
+          persistence: string;
+        };
+        setAlertPayload(parsed);
+        if (parsed.persistence !== 'persist') {
+          window.localStorage.removeItem('sm_company_alert_teacher');
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadPromos = async () => {
+      try {
+        const response = await fetch('/api/company-promos', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          promos?: {
+            active?: {
+              teacher?: {
+              title: string;
+              body: string;
+              cta?: string;
+              trigger?: string;
+              createdAt?: string;
+              id?: string;
+              audience?: string;
+            } | null;
+            };
+          };
+        };
+        const promo = data.promos?.active?.teacher ?? null;
+        if (
+          isActive &&
+          promoPayload &&
+          (!promo || (promoPayload.id && promo?.id && promoPayload.id !== promo.id))
+        ) {
+          setIsPromoOpen(false);
+          setPromoPayload(null);
+          try {
+            window.localStorage.removeItem('sm_company_promo_teacher');
+          } catch {
+            // ignore
+          }
+        }
+        if (promo && isActive) {
+          const trigger = promo.trigger ?? 'dashboard';
+          const lastLogin = window.localStorage.getItem('sm_last_login_at');
+          const canShow =
+            trigger === 'instant' ||
+            trigger === 'dashboard' ||
+            (trigger === 'login' &&
+              lastLogin &&
+              promo.createdAt &&
+              new Date(lastLogin) >= new Date(promo.createdAt));
+          if (canShow) {
+            setPromoPayload(promo);
+            setIsPromoOpen(true);
+            await fetch('/api/company-promos?audience=teacher', { method: 'DELETE' });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const loadAlerts = async () => {
+      try {
+        const response = await fetch('/api/company-alerts', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          alerts?: {
+            active?: {
+              teacher?: {
+              title: string;
+              body: string;
+              color: string;
+              persistence: string;
+              id?: string;
+              audience?: string;
+            } | null;
+            };
+          };
+        };
+        const alert = data.alerts?.active?.teacher ?? null;
+        if (!alert && isActive && alertPayload) {
+          setAlertPayload(null);
+        }
+        if (alert && isActive) {
+          setAlertPayload(alert);
+          if (alert.persistence !== 'persist') {
+            await fetch('/api/company-alerts?audience=teacher', { method: 'DELETE' });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadPromos();
+    void loadAlerts();
+    const promoInterval = window.setInterval(loadPromos, 2500);
+    const alertInterval = window.setInterval(loadAlerts, 15000);
+    return () => {
+      isActive = false;
+      window.clearInterval(promoInterval);
+      window.clearInterval(alertInterval);
+    };
+  }, []);
+
+  const dismissAlert = () => {
+    setAlertPayload(null);
+    try {
+      window.localStorage.removeItem('sm_company_alert_teacher');
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const alertStyles =
+    alertPayload?.color === 'blue'
+      ? 'border-[var(--c-d9e2ef)] bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]'
+      : alertPayload?.color === 'sage'
+        ? 'border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] text-[var(--c-3f4f3b)]'
+        : 'border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] text-[var(--c-7a4a17)]';
 
   useEffect(() => {
     const stored = window.localStorage.getItem('sm_user');
@@ -191,6 +402,25 @@ export default function TeacherDashboardPage() {
     window.addEventListener('sm-last-viewed-video', loadLastViewed);
     return () =>
       window.removeEventListener('sm-last-viewed-video', loadLastViewed);
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadCommunications = async () => {
+      const list = await readCommunications();
+      if (isActive) {
+        setCommunications(list);
+      }
+    };
+    void loadCommunications();
+    const handleUpdate = () => {
+      void loadCommunications();
+    };
+    window.addEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+    return () => {
+      isActive = false;
+      window.removeEventListener(COMMUNICATIONS_UPDATE_EVENT, handleUpdate);
+    };
   }, []);
 
   const selectedDayLabel = useMemo(
@@ -340,6 +570,48 @@ export default function TeacherDashboardPage() {
     () => activeStudents.filter(student => !paymentStatus[student.id]).length,
     [activeStudents, paymentStatus],
   );
+
+  useEffect(() => {
+    if (!activeStudents.length) {
+      setOnlineStudents([]);
+      return;
+    }
+    let isActive = true;
+    const checkOnline = async () => {
+      try {
+          const results = await Promise.all(
+            activeStudents.map(async student => {
+              try {
+                const response = await fetch(
+                  `/api/presence?key=${encodeURIComponent(`student:${student.id}`)}`,
+                  { cache: 'no-store' },
+                );
+                if (!response.ok) return null;
+              const data = (await response.json()) as {
+                lastSeen?: string | null;
+                activity?: StudentPresenceActivity | null;
+              };
+              if (!data.lastSeen) return null;
+              const diff = Date.now() - new Date(data.lastSeen).getTime();
+              return diff < 120000 ? { ...student, activity: data.activity } : null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+        if (!isActive) return;
+        setOnlineStudents(results.filter(Boolean) as StudentRecord[]);
+      } catch {
+        if (isActive) setOnlineStudents([]);
+      }
+    };
+    void checkOnline();
+    const interval = window.setInterval(checkOnline, 5000);
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, [activeStudents]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -542,9 +814,32 @@ export default function TeacherDashboardPage() {
           </p>
         </header>
       </div>
+      {alertPayload ? (
+        <div className={`rounded-2xl border px-5 py-4 text-[15px] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${alertStyles}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em]">
+                {alertPayload.title}
+              </p>
+              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
+                {alertPayload.body}
+              </p>
+            </div>
+            {alertPayload.persistence === 'persist' ? (
+              <button
+                type="button"
+                onClick={dismissAlert}
+                className="rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em]"
+              >
+                Dismiss
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.6fr] lg:items-start">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)]/60 p-5 shadow-sm">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
               Lessons
             </p>
@@ -677,7 +972,7 @@ export default function TeacherDashboardPage() {
               )}
             </div>
           </div>
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)]/70 p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                 Upcoming
@@ -699,7 +994,7 @@ export default function TeacherDashboardPage() {
                     sortedNextDayLessons.slice(0, 4).map(student => (
                       <div
                         key={student.id}
-                        className="flex items-center justify-between rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs text-[var(--c-6f6c65)]"
+                        className="flex items-center justify-between rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)]/65 px-3 py-2 text-xs text-[var(--c-6f6c65)]"
                       >
                         <span className="font-medium text-[var(--c-1f1f1d)]">
                           {student.name}
@@ -840,12 +1135,87 @@ export default function TeacherDashboardPage() {
               </>
             )}
           </div>
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Students Online
+              </p>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                {onlineStudents.length} Online
+              </span>
+            </div>
+            {onlineStudents.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {onlineStudents.slice(0, 6).map(student => (
+                  <a
+                    key={student.id}
+                    href={`/teachers/messages?thread=student:${student.id}|teacher:${teacherId ?? ''}`}
+                    className="rounded-2xl border border-[color:rgba(16,185,129,0.35)] bg-[color:rgba(16,185,129,0.08)] px-3 py-2 text-[11px] text-[color:rgb(16,185,129)] transition hover:border-[color:rgba(16,185,129,0.6)] hover:bg-[color:rgba(16,185,129,0.15)]"
+                  >
+                    <p className="text-[12px] font-semibold text-[color:rgb(16,185,129)]">
+                      {student.name}
+                    </p>
+                    <p className="mt-1 text-[12px] text-[var(--c-6f6c65)]">
+                      {student.activity?.label ?? 'Active now'}
+                      {student.activity?.detail
+                        ? ` · ${student.activity.detail}`
+                        : ''}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                No students online right now.
+              </p>
+            )}
+          </div>
           <StudentPromoCard
             title="Jazz Colors: Teacher Edition"
             body="Quick coaching ideas, voicing tips, and a groove-first approach to keep students smiling."
             ctaLabel="View Lesson Pack Details"
             ctaHref="/teachers?mode=training"
           />
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Communications
+              </p>
+              <a
+                href="/teachers/communications"
+                className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] hover:text-[var(--c-c8102e)]"
+              >
+                View
+              </a>
+            </div>
+            <a href="/teachers/communications" className="mt-3 block">
+              <p className="text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                {communications.length}
+              </p>
+              <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                Shared updates
+              </p>
+            </a>
+            <div className="mt-4 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-4 py-3">
+              {communications[0] ? (
+                <>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    Latest
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[var(--c-1f1f1d)]">
+                    {communications[0].title}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)] line-clamp-2">
+                    {communications[0].body}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--c-9a9892)]">
+                  No communications posted yet.
+                </p>
+              )}
+            </div>
+          </div>
           <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
@@ -1036,6 +1406,34 @@ export default function TeacherDashboardPage() {
               Submit Prep
             </button>
           </form>
+        </div>
+      ) : null}
+    {isPromoOpen && promoPayload ? (
+      <div className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center px-4">
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsPromoOpen(false)}
+        />
+          <div className="relative w-full max-w-lg rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              Studio Update
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+              {promoPayload.title}
+            </h2>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              {promoPayload.body}
+            </p>
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setIsPromoOpen(false)}
+                className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              >
+                {promoPayload.cta ?? 'GOT IT'}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
