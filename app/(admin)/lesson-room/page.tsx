@@ -417,6 +417,12 @@ export default function LessonRoomPage(): ReactElement {
     "disconnected" | "connecting" | "connected"
   >("disconnected");
   const [participantCount, setParticipantCount] = useState(1);
+  const [connectionDebug, setConnectionDebug] = useState({
+    roomState: "unknown",
+    connectionState: "unknown",
+    remoteCount: 0,
+    roomName: "unknown",
+  });
   const [cameraPermission, setCameraPermission] = useState<
     "granted" | "denied" | "prompt" | "unknown"
   >("unknown");
@@ -633,10 +639,22 @@ export default function LessonRoomPage(): ReactElement {
         const handleConnected = () => {
           setLivekitState("connected");
           updateParticipants();
+          setConnectionDebug({
+            roomState: String(room.state),
+            connectionState: String(room.connectionState),
+            remoteCount: room.remoteParticipants.size,
+            roomName: room.name || "unknown",
+          });
         };
         const handleDisconnected = () => {
           setLivekitState("disconnected");
           updateParticipants();
+          setConnectionDebug({
+            roomState: String(room.state),
+            connectionState: String(room.connectionState),
+            remoteCount: room.remoteParticipants.size,
+            roomName: room.name || "unknown",
+          });
         };
         const handleParticipantChange = () => updateParticipants();
         const handleTrackSubscribed = (track: RemoteVideoTrack) => {
@@ -667,12 +685,24 @@ export default function LessonRoomPage(): ReactElement {
 
         setLivekitState(room.state === "connected" ? "connected" : "connecting");
         updateParticipants();
+        setConnectionDebug({
+          roomState: String(room.state),
+          connectionState: String(room.connectionState),
+          remoteCount: room.remoteParticipants.size,
+          roomName: room.name || "unknown",
+        });
         attachExistingRemoteTracks();
       } catch (error) {
         setLivekitError(
           error instanceof Error ? error.message : "LiveKit connect failed.",
         );
         setLivekitState("disconnected");
+        setConnectionDebug({
+          roomState: "error",
+          connectionState: "error",
+          remoteCount: 0,
+          roomName: "unknown",
+        });
       }
     };
     connectRoom();
@@ -688,6 +718,12 @@ export default function LessonRoomPage(): ReactElement {
         roomRef.current.disconnect();
         roomRef.current = null;
       }
+      setConnectionDebug({
+        roomState: "disconnected",
+        connectionState: "disconnected",
+        remoteCount: 0,
+        roomName: "unknown",
+      });
     };
   }, [activeRole, localVideoTrack]);
 
@@ -901,6 +937,9 @@ export default function LessonRoomPage(): ReactElement {
             </span>
             <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-[10px] font-semibold tracking-[0.2em] text-[var(--c-6f6c65)]">
               Participants: {participantCount}
+            </span>
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-[10px] font-semibold tracking-[0.2em] text-[var(--c-6f6c65)]">
+              Room: {connectionDebug.roomName} · {connectionDebug.roomState} · {connectionDebug.connectionState} · {connectionDebug.remoteCount}
             </span>
             <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-[10px] font-semibold tracking-[0.2em] text-[var(--c-6f6c65)]">
               Camera: {cameraPermission}
