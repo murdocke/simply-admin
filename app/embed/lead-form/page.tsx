@@ -1,7 +1,7 @@
 "use client";
 
 import { Space_Grotesk } from "next/font/google";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type Step = 1 | 2 | 3;
 
@@ -196,6 +196,21 @@ type PianoNote =
   | (typeof whiteKeys)[number]
   | (typeof blackKeys)[number];
 
+const noteFrequencies: Record<PianoNote, number> = {
+  C: 261.63,
+  "C#": 277.18,
+  D: 293.66,
+  "D#": 311.13,
+  E: 329.63,
+  F: 349.23,
+  "F#": 369.99,
+  G: 392.0,
+  "G#": 415.3,
+  A: 440.0,
+  "A#": 466.16,
+  B: 493.88,
+};
+
 const isEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
 
 const isPhone = (value: string) => value.replace(/\D/g, "").length >= 10;
@@ -211,6 +226,44 @@ export default function LeadFormEmbedPage() {
   const [pianoSequence, setPianoSequence] = useState<PianoNote[]>([]);
   const [pianoPassed, setPianoPassed] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
+  const playPianoNote = (note: PianoNote) => {
+    const audioContext = getAudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(
+      noteFrequencies[note],
+      audioContext.currentTime
+    );
+
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(
+      0.08,
+      audioContext.currentTime + 0.02
+    );
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.0001,
+      audioContext.currentTime + 0.7
+    );
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.75);
+  };
 
   const setField = (key: keyof FormState, value: string) => {
     setState((prev) => ({ ...prev, [key]: value }));
@@ -264,6 +317,7 @@ export default function LeadFormEmbedPage() {
 
   const handlePianoClick = (note: PianoNote) => {
     if (pianoPassed) return;
+    playPianoNote(note);
     const nextSequence = [...pianoSequence, note];
     setPianoSequence(nextSequence);
 
@@ -316,7 +370,7 @@ export default function LeadFormEmbedPage() {
           <img
             src="https://app.simplymusic.com/c44a858fa58e03e52efb9ae34349b386.svg"
             alt=""
-            className="pointer-events-none absolute left-0 top-full z-20 h-auto w-[600px] opacity-80"
+            className="pointer-events-none absolute left-0 top-full z-20 h-auto w-[600px] opacity-100"
             style={{
               clipPath: "inset(0 0 50% 0)",
               transform: "translate(-55%, -86%) translateX(10px) scaleX(-1)",
@@ -326,7 +380,7 @@ export default function LeadFormEmbedPage() {
           <img
             src="https://app.simplymusic.com/c44a858fa58e03e52efb9ae34349b386.svg"
             alt=""
-            className="pointer-events-none absolute left-0 top-full z-0 h-auto w-[600px] opacity-80"
+            className="pointer-events-none absolute left-0 top-full z-0 h-auto w-[600px] opacity-100"
             style={{
               clipPath: "inset(50% 0 0 0)",
               transform: "translate(-55%, -86%) translateX(10px) scaleX(-1)",
@@ -337,13 +391,13 @@ export default function LeadFormEmbedPage() {
             <img
               src="https://app.simplymusic.com/5668f9bc9ee0f3f3ac8f.png"
               alt=""
-              className="pointer-events-none absolute right-0 top-0 z-0 h-auto w-auto max-w-[320px] translate-x-[18%] -translate-y-[18%] opacity-40"
-              style={{
-                WebkitMaskImage:
-                  "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.1) 70%, rgba(0,0,0,0) 100%)",
-                maskImage:
-                  "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.1) 70%, rgba(0,0,0,0) 100%)",
-              }}
+              className="balloon-float pointer-events-none absolute right-0 top-0 z-0 h-auto w-auto max-w-[320px] opacity-100"
+              style={
+                {
+                  "--balloon-x": "calc(18% - 25px)",
+                  "--balloon-y": "calc(-18% + 20px)",
+                } as React.CSSProperties
+              }
               aria-hidden
             />
           <div className="relative z-10 mx-auto flex max-w-2xl items-center justify-center gap-4">

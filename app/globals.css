@@ -144,6 +144,21 @@
   }
 }
 
+@keyframes balloon-float {
+  0% {
+    transform: translate(var(--balloon-x), var(--balloon-y));
+  }
+  50% {
+    transform: translate(
+      calc(var(--balloon-x) - 6px),
+      calc(var(--balloon-y) + 8px)
+    );
+  }
+  100% {
+    transform: translate(var(--balloon-x), var(--balloon-y));
+  }
+}
+
 .animate-toast-in {
   animation: toast-in 240ms ease-out;
 }
@@ -158,6 +173,12 @@
 
 .count-bump {
   animation: count-bump 280ms ease-out;
+}
+
+.balloon-float {
+  animation: balloon-float 7s ease-in-out infinite;
+  transform: translate(var(--balloon-x), var(--balloon-y));
+  will-change: transform;
 }
 
 .no-spinner::-webkit-outer-spin-button,

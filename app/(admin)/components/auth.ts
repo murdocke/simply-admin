@@ -61,6 +61,13 @@ export const allowedRoots: Record<UserRole, string[]> = {
     '/account-permissions',
     '/support',
   ],
-  teacher: ['/teachers', '/students/lesson-packs', '/teachers/lesson-packs', '/curriculum', '/checkout'],
-  student: ['/students', '/checkout'],
+  teacher: [
+    '/teachers',
+    '/students/lesson-packs',
+    '/teachers/lesson-packs',
+    '/curriculum',
+    '/checkout',
+    '/lesson-room',
+  ],
+  student: ['/students', '/checkout', '/lesson-room'],
 };

@@ -1,18 +1,19 @@
 {
   "active": {
-    "teacher": {
-      "id": "581081a3-9488-4e65-99ce-120b62fbcd9d",
-      "title": "New Lesson Added",
-      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
-      "cta": "GOT IT",
-      "trigger": "dashboard",
-      "createdAt": "2026-02-13T20:40:01.108Z",
-      "audience": "both",
-      "status": "active"
-    },
+    "teacher": null,
     "student": null
   },
   "history": [
+    {
+      "id": "6408e5b3-facd-4181-b0bb-6b20dde1ebc4",
+      "title": "Quick Studio Update",
+      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
+      "cta": "GOT IT",
+      "trigger": "dashboard",
+      "createdAt": "2026-02-14T01:00:00.461Z",
+      "audience": "both",
+      "status": "active"
+    },
     {
       "id": "581081a3-9488-4e65-99ce-120b62fbcd9d",
       "title": "New Lesson Added",

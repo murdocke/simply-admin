@@ -79,6 +79,7 @@ const RECENT_STUDENTS_KEY = 'sm_recent_students';
 const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
 const COMMUNICATIONS_NOTIFICATIONS_KEY = 'sm_communications_notifications';
 const FEATURES_OVERVIEW_KEY = 'sm_features_overview_active';
+const SIDEBAR_HIDDEN_KEY = 'sm_sidebar_hidden';
 const PRACTICE_TIMER_SETTINGS_KEY = 'sm_practice_timer_settings';
 const PRACTICE_TIMER_STATE_KEY = 'sm_practice_timer_state';
 const PRACTICE_TIMER_SESSIONS_KEY = 'sm_practice_timer_sessions';
@@ -214,6 +215,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [isReady, setIsReady] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [featuresOverviewActive, setFeaturesOverviewActive] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
   const [selectedTeacher, setSelectedTeacher] =
     useState<SelectedTeacher | null>(null);
@@ -252,6 +254,8 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [pipDock, setPipDock] = useState<
     'left-bottom' | 'right-bottom' | 'right-top'
   >('right-bottom');
+  const showLessonRoomCta =
+    pathname === '/teachers/dashboard' || pathname === '/students/dashboard';
   const pipSwipeRef = useRef<{
     active: boolean;
     pointerId: number | null;
@@ -331,6 +335,11 @@ export default function AdminShell({ children }: AdminShellProps) {
     if (!user?.username) return PRACTICE_TIMER_SETTINGS_KEY;
     return `${PRACTICE_TIMER_SETTINGS_KEY}:${user.username}`;
   }, [user?.username]);
+  const sidebarHiddenKey = useMemo(() => {
+    if (!effectiveRole) return null;
+    if (!user?.username) return `${SIDEBAR_HIDDEN_KEY}:${effectiveRole}`;
+    return `${SIDEBAR_HIDDEN_KEY}:${user.username}:${effectiveRole}`;
+  }, [effectiveRole, user?.username]);
   const practiceStateKey = useMemo(() => {
     if (!user?.username) return PRACTICE_TIMER_STATE_KEY;
     return `${PRACTICE_TIMER_STATE_KEY}:${user.username}`;
@@ -1653,6 +1662,28 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [role]);
 
   useEffect(() => {
+    if (!sidebarHiddenKey) return;
+    try {
+      const stored = window.localStorage.getItem(sidebarHiddenKey);
+      setIsSidebarHidden(stored === 'true');
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarHiddenKey]);
+
+  useEffect(() => {
+    if (!sidebarHiddenKey) return;
+    try {
+      window.localStorage.setItem(
+        sidebarHiddenKey,
+        isSidebarHidden ? 'true' : 'false',
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarHiddenKey, isSidebarHidden]);
+
+  useEffect(() => {
     if (!pathname) return;
     const cameFromOverview = searchParams?.get('from') === 'features-overview';
     const onOverviewPage = pathname.startsWith('/company/features-overview');
@@ -2618,18 +2649,41 @@ export default function AdminShell({ children }: AdminShellProps) {
       ) : null}
       <div className="flex min-h-screen">
         <aside
-          className={`hidden w-72 border-r px-6 py-8 lg:block ${sidebarStyles.bg} ${sidebarStyles.border}`}
+          className={`${
+            isSidebarHidden ? 'hidden' : 'hidden lg:block'
+          } w-72 border-r px-6 py-8 ${sidebarStyles.bg} ${sidebarStyles.border}`}
         >
-          <div className="mb-10 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-[var(--c-c8102e)] text-white flex items-center justify-center font-semibold">
-              SM
+          <div className="mb-10 flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-[var(--c-c8102e)] text-white flex items-center justify-center font-semibold">
+                SM
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Admin
+                </p>
+                <h2 className="text-xl font-semibold">Simply Music</h2>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                Admin
-              </p>
-              <h2 className="text-xl font-semibold">Simply Music</h2>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarHidden(true)}
+              aria-label="Hide sidebar"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]/60 transition hover:border-[var(--sidebar-accent-border)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 6 9 12 15 18" />
+              </svg>
+            </button>
           </div>
           <nav className="space-y-2 text-sm">
             {items.map(item => {
@@ -2677,6 +2731,14 @@ export default function AdminShell({ children }: AdminShellProps) {
               );
             })}
           </nav>
+          {showLessonRoomCta ? (
+            <a
+              href="/lesson-room"
+              className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-[var(--c-c8102e)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-md shadow-[var(--sidebar-accent-bg)] transition hover:brightness-110"
+            >
+              Lesson Room
+            </a>
+          ) : null}
           {isStudentSidebar ? (
             <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
@@ -3175,7 +3237,28 @@ export default function AdminShell({ children }: AdminShellProps) {
         ) : null}
       </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 relative">
+          {isSidebarHidden ? (
+            <button
+              type="button"
+              onClick={() => setIsSidebarHidden(false)}
+              aria-label="Show sidebar"
+              className="absolute left-4 top-4 hidden h-9 w-9 items-center justify-center rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 text-[var(--c-6f6c65)]/70 shadow-sm backdrop-blur transition hover:border-[var(--sidebar-accent-border)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] lg:inline-flex"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="9 6 15 12 9 18" />
+              </svg>
+            </button>
+          ) : null}
         <div className="flex items-center justify-between border-b border-[var(--c-ecebe7)] bg-[color:var(--c-ffffff)]/70 px-6 py-4 backdrop-blur lg:hidden">
             <button
               className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--c-c8102e)] text-white shadow-sm transition hover:brightness-110"
@@ -3529,6 +3612,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             );
           })}
         </nav>
+        {showLessonRoomCta ? (
+          <a
+            href="/lesson-room"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-[var(--c-c8102e)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-md shadow-[var(--sidebar-accent-bg)] transition hover:brightness-110"
+            onClick={() => setIsOpen(false)}
+          >
+            Lesson Room
+          </a>
+        ) : null}
         {isStudentSidebar ? (
           <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
