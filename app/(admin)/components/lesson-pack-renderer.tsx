@@ -53,6 +53,22 @@ const renderPdf = (url: string, title: string) => {
   );
 };
 
+const SOUND_SLICE_HEIGHT_DEFAULTS = {
+  header: 420,
+  body: 675,
+} as const;
+
+const resolveSoundSliceHeight = (
+  subject: LessonPackSubject,
+  placement: 'header' | 'body',
+) => {
+  const value = subject.soundSliceHeight;
+  if (Number.isFinite(value)) {
+    return Math.max(240, value);
+  }
+  return SOUND_SLICE_HEIGHT_DEFAULTS[placement];
+};
+
 const withQueryParam = (rawUrl: string, key: string, value: string) => {
   if (!rawUrl) return rawUrl;
   try {
@@ -109,12 +125,14 @@ const renderHeroMedia = (
   }
   if (subject.soundSlicePlacement === 'header' && subject.soundSliceUrl) {
     const embedUrl = withQueryParam(subject.soundSliceUrl, 'keyboard', '1');
+    const height = resolveSoundSliceHeight(subject, 'header');
     return (
       <div className="overflow-hidden rounded-t-2xl border-b border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)]">
         <iframe
           src={embedUrl}
           title={subject.title || 'SoundSlice'}
-          className="h-[420px] w-full"
+          className="w-full"
+          style={{ height: `${height}px` }}
         />
       </div>
     );
@@ -218,6 +236,7 @@ export default function LessonPackRenderer({ lessonPack }: LessonPackRendererPro
                 ? renderSoundSlice(
                     subject.soundSliceUrl,
                     subject.title || 'SoundSlice',
+                    resolveSoundSliceHeight(subject, 'body'),
                   )
                 : null}
 

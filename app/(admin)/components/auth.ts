@@ -21,6 +21,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
     company: [
       { label: 'Dashboard', href: '/dashboard' },
       { label: 'Curriculum', href: '/company/lesson-library' },
+      { label: 'Orders', href: '/company/orders' },
       { label: 'Subscriptions', href: '/subscriptions' },
       { label: 'Royalties', href: '/royalties' },
       { label: 'Accounts', href: '/accounts' },
@@ -49,6 +50,7 @@ export const allowedRoots: Record<UserRole, string[]> = {
   company: [
     '/dashboard',
     '/company',
+    '/company/orders',
     '/lesson-pack-builder',
     '/teachers',
     '/students',

@@ -79,6 +79,36 @@ const RECENT_STUDENTS_KEY = 'sm_recent_students';
 const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
 const COMMUNICATIONS_NOTIFICATIONS_KEY = 'sm_communications_notifications';
 const FEATURES_OVERVIEW_KEY = 'sm_features_overview_active';
+const PRACTICE_TIMER_SETTINGS_KEY = 'sm_practice_timer_settings';
+const PRACTICE_TIMER_STATE_KEY = 'sm_practice_timer_state';
+const PRACTICE_TIMER_SESSIONS_KEY = 'sm_practice_timer_sessions';
+const METRONOME_SETTINGS_KEY = 'sm_metronome_settings';
+
+const METRONOME_PRESETS = [
+  {
+    id: 'dreams-come-true',
+    name: 'Dreams Come True',
+    shortLabel: 'Dreams',
+    tempo: 105,
+    timeSig: '4/4',
+  },
+  {
+    id: 'night-storm',
+    name: 'Night Storm',
+    shortLabel: 'Night Storm',
+    tempo: 122,
+    timeSig: '4/4',
+  },
+  {
+    id: 'alma-mater-blues',
+    name: 'Alma Mater Blues',
+    shortLabel: 'Alma Blues',
+    tempo: 117,
+    timeSig: '4/4',
+  },
+] as const;
+
+type MetronomePreset = (typeof METRONOME_PRESETS)[number];
 const normalizeTeacherStatus = (
   status:
     | 'Licensed'
@@ -93,6 +123,84 @@ const normalizeTeacherStatus = (
 type AdminShellProps = {
   children: React.ReactNode;
 };
+
+type PracticeSession = {
+  id: string;
+  duration: number;
+  completedAt: string;
+};
+
+type MetronomePresetDropdownProps = {
+  value: MetronomePreset | null;
+  onSelect: (preset: MetronomePreset) => void;
+};
+
+function MetronomePresetDropdown({ value, onSelect }: MetronomePresetDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (event.target instanceof Node && wrapperRef.current.contains(event.target)) {
+        return;
+      }
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        aria-expanded={open}
+        className="w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-left"
+      >
+        <span className="block text-xs uppercase tracking-[0.2em] text-[var(--c-3a3935)]">
+          {value?.name ?? 'Song Presets'}
+        </span>
+        <span className="mt-1 block text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+          {value ? `${value.tempo} BPM · ${value.timeSig}` : 'Choose a song'}
+        </span>
+      </button>
+      {open ? (
+        <div className="absolute left-0 right-0 z-40 mt-2 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-1 shadow-lg">
+          {METRONOME_PRESETS.map(preset => {
+            const isSelected = value?.id === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => {
+                  onSelect(preset);
+                  setOpen(false);
+                }}
+                className={`w-full rounded-lg px-3 py-2 text-left transition ${
+                  isSelected
+                    ? 'bg-[var(--c-f7fbf0)] text-[var(--c-3f4a2c)]'
+                    : 'text-[var(--c-3a3935)] hover:bg-[var(--c-f8f7f4)]'
+                }`}
+              >
+                <span className="block text-xs font-semibold uppercase tracking-[0.2em]">
+                  {preset.name}
+                </span>
+                <span className="mt-1 block text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  {preset.tempo} BPM · {preset.timeSig}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
@@ -168,10 +276,35 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
+  const [practiceMinutes, setPracticeMinutes] = useState(20);
+  const [practiceSoundEnabled, setPracticeSoundEnabled] = useState(true);
+  const [practiceRemaining, setPracticeRemaining] = useState(20 * 60);
+  const [practiceRunning, setPracticeRunning] = useState(false);
+  const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
+  const practiceTickRef = useRef<number | null>(null);
+  const practiceLastUpdateRef = useRef<number>(Date.now());
+  const practiceLastCompletionRef = useRef<number | null>(null);
+  const [metronomeOpen, setMetronomeOpen] = useState(false);
+  const [metronomeTempo, setMetronomeTempo] = useState(84);
+  const [metronomeTimeSig, setMetronomeTimeSig] = useState<'4/4' | '3/4' | '2/4'>(
+    '4/4',
+  );
+  const [metronomeAccent, setMetronomeAccent] = useState(true);
+  const [metronomeRunning, setMetronomeRunning] = useState(false);
+  const metronomeBeatRef = useRef(1);
+  const metronomeIntervalRef = useRef<number | null>(null);
+  const metronomeAudioRef = useRef<AudioContext | null>(null);
   const [hoveredNotifications, setHoveredNotifications] = useState<
     Record<string, boolean>
   >({});
   const notificationTimers = useRef<Record<string, number>>({});
+  const effectiveRole =
+    role === 'company'
+      ? viewRole ?? role
+      : role === 'teacher'
+        ? viewRole ?? role
+        : role;
+  const isStudentSidebar = effectiveRole === 'student' || pathname?.startsWith('/students');
   const recentTeachersKey = useMemo(() => {
     if (!user?.username) return RECENT_TEACHERS_KEY;
     return `${RECENT_TEACHERS_KEY}:${user.username}`;
@@ -194,6 +327,22 @@ export default function AdminShell({ children }: AdminShellProps) {
     }
     return `sm_selected_student:${user.username}:${user.username}`;
   }, [role, selectedTeacher?.username, user?.username]);
+  const practiceSettingsKey = useMemo(() => {
+    if (!user?.username) return PRACTICE_TIMER_SETTINGS_KEY;
+    return `${PRACTICE_TIMER_SETTINGS_KEY}:${user.username}`;
+  }, [user?.username]);
+  const practiceStateKey = useMemo(() => {
+    if (!user?.username) return PRACTICE_TIMER_STATE_KEY;
+    return `${PRACTICE_TIMER_STATE_KEY}:${user.username}`;
+  }, [user?.username]);
+  const practiceSessionsKey = useMemo(() => {
+    if (!user?.username) return PRACTICE_TIMER_SESSIONS_KEY;
+    return `${PRACTICE_TIMER_SESSIONS_KEY}:${user.username}`;
+  }, [user?.username]);
+  const metronomeSettingsKey = useMemo(() => {
+    if (!user?.username) return METRONOME_SETTINGS_KEY;
+    return `${METRONOME_SETTINGS_KEY}:${user.username}`;
+  }, [user?.username]);
   const recentStudentsKey = useMemo(() => {
     if (!user?.username) return RECENT_STUDENTS_KEY;
     if (role === 'company' && selectedTeacher?.username) {
@@ -201,6 +350,425 @@ export default function AdminShell({ children }: AdminShellProps) {
     }
     return `sm_recent_selected_students:${user.username}:${user.username}`;
   }, [role, selectedTeacher?.username, user?.username]);
+
+  const practiceTotalSeconds = Math.max(5, practiceMinutes) * 60;
+  const practiceProgress =
+    practiceTotalSeconds === 0
+      ? 0
+      : (practiceTotalSeconds - practiceRemaining) / practiceTotalSeconds;
+  const practiceTimeLabel = useMemo(() => {
+    const minutes = Math.floor(practiceRemaining / 60);
+    const seconds = practiceRemaining % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, [practiceRemaining]);
+  const isPracticeComplete = practiceRemaining === 0;
+  const totalPracticeSeconds = useMemo(
+    () => practiceSessions.reduce((sum, session) => sum + session.duration, 0),
+    [practiceSessions],
+  );
+  const formatPracticeDuration = useCallback((seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remaining = minutes % 60;
+    return remaining === 0 ? `${hours} hr` : `${hours} hr ${remaining} min`;
+  }, []);
+  const metronomePresetMatch = useMemo(() => {
+    return (
+      METRONOME_PRESETS.find(
+        preset => preset.tempo === metronomeTempo && preset.timeSig === metronomeTimeSig,
+      ) ?? null
+    );
+  }, [metronomeTempo, metronomeTimeSig]);
+
+  const playPracticeDing = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioContext = new AudioContextClass();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.0001;
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.2, audioContext.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.6);
+      oscillator.stop(audioContext.currentTime + 0.65);
+    } catch {
+      // ignore audio errors
+    }
+  }, []);
+
+  const handlePracticeStart = useCallback(() => {
+    if (practiceRemaining <= 0) return;
+    practiceLastUpdateRef.current = Date.now();
+    setPracticeRunning(true);
+  }, [practiceRemaining]);
+
+  const handlePracticePause = useCallback(() => {
+    setPracticeRunning(false);
+  }, []);
+
+  const handlePracticeReset = useCallback(() => {
+    setPracticeRunning(false);
+    practiceLastUpdateRef.current = Date.now();
+    setPracticeRemaining(practiceTotalSeconds);
+  }, [practiceTotalSeconds]);
+
+  const appendPracticeSession = useCallback(
+    (duration: number) => {
+      const now = Date.now();
+      if (practiceLastCompletionRef.current && now - practiceLastCompletionRef.current < 1000) {
+        return;
+      }
+      practiceLastCompletionRef.current = now;
+      setPracticeSessions(current => [
+        {
+          id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
+          duration,
+          completedAt: new Date(now).toISOString(),
+        },
+        ...current,
+      ]);
+    },
+    [],
+  );
+
+  const handlePracticeStartNewSession = useCallback(() => {
+    practiceLastUpdateRef.current = Date.now();
+    setPracticeRemaining(practiceTotalSeconds);
+    setPracticeRunning(false);
+  }, [practiceTotalSeconds]);
+
+  const playMetronomeClick = useCallback(
+    (isAccent: boolean) => {
+      if (typeof window === 'undefined') return;
+      try {
+        const AudioContextClass =
+          window.AudioContext ||
+          (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!metronomeAudioRef.current) {
+          metronomeAudioRef.current = new AudioContextClass();
+        }
+        const audioContext = metronomeAudioRef.current;
+        if (audioContext.state === 'suspended') {
+          void audioContext.resume();
+        }
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = isAccent ? 1100 : 760;
+        gain.gain.value = 0.0001;
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start();
+        gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2);
+        oscillator.stop(audioContext.currentTime + 0.25);
+      } catch {
+        // ignore audio errors
+      }
+    },
+    [],
+  );
+
+  const handleMetronomeStart = useCallback(() => {
+    if (metronomeRunning) return;
+    setMetronomeRunning(true);
+  }, [metronomeRunning]);
+
+  const handleMetronomeStop = useCallback(() => {
+    setMetronomeRunning(false);
+  }, []);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceSettingsKey) return;
+    try {
+      const stored = window.localStorage.getItem(practiceSettingsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as {
+          minutes?: number;
+          soundEnabled?: boolean;
+        };
+        if (typeof parsed.minutes === 'number' && !Number.isNaN(parsed.minutes)) {
+          setPracticeMinutes(parsed.minutes);
+        }
+        if (typeof parsed.soundEnabled === 'boolean') {
+          setPracticeSoundEnabled(parsed.soundEnabled);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [effectiveRole, practiceSettingsKey]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceStateKey) return;
+    const totalSeconds = Math.max(5, practiceMinutes) * 60;
+    try {
+      const stored = window.localStorage.getItem(practiceStateKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as {
+          remaining?: number;
+          running?: boolean;
+          lastUpdated?: number;
+          total?: number;
+        };
+        let remaining =
+          typeof parsed.remaining === 'number' ? parsed.remaining : totalSeconds;
+        let running = Boolean(parsed.running);
+        const lastUpdated =
+          typeof parsed.lastUpdated === 'number' ? parsed.lastUpdated : Date.now();
+        if (running) {
+          const elapsed = Math.floor((Date.now() - lastUpdated) / 1000);
+          if (elapsed > 0) {
+            remaining = Math.max(0, remaining - elapsed);
+          }
+          if (remaining === 0) {
+            running = false;
+            appendPracticeSession(totalSeconds);
+            if (practiceSoundEnabled) {
+              playPracticeDing();
+            }
+          }
+        }
+        if (!running && remaining === (parsed.total ?? remaining)) {
+          remaining = totalSeconds;
+        }
+        setPracticeRemaining(remaining);
+        setPracticeRunning(running);
+        practiceLastUpdateRef.current = Date.now();
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    setPracticeRemaining(totalSeconds);
+    setPracticeRunning(false);
+    practiceLastUpdateRef.current = Date.now();
+  }, [
+    appendPracticeSession,
+    effectiveRole,
+    practiceMinutes,
+    practiceSoundEnabled,
+    practiceStateKey,
+    playPracticeDing,
+  ]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceSessionsKey) return;
+    try {
+      const stored = window.localStorage.getItem(practiceSessionsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as PracticeSession[];
+        if (Array.isArray(parsed)) {
+          setPracticeSessions(
+            parsed.filter(
+              session =>
+                session &&
+                typeof session.id === 'string' &&
+                typeof session.duration === 'number' &&
+                typeof session.completedAt === 'string',
+            ),
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [effectiveRole, practiceSessionsKey]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceStateKey) return;
+    try {
+      window.localStorage.setItem(
+        practiceStateKey,
+        JSON.stringify({
+          remaining: practiceRemaining,
+          running: practiceRunning,
+          lastUpdated: practiceLastUpdateRef.current,
+          total: Math.max(5, practiceMinutes) * 60,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [
+    effectiveRole,
+    practiceRemaining,
+    practiceRunning,
+    practiceMinutes,
+    practiceStateKey,
+  ]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceSessionsKey) return;
+    try {
+      window.localStorage.setItem(practiceSessionsKey, JSON.stringify(practiceSessions));
+    } catch {
+      // ignore
+    }
+  }, [effectiveRole, practiceSessions, practiceSessionsKey]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student') return;
+    if (!practiceRunning) {
+      if (practiceTickRef.current) {
+        window.clearInterval(practiceTickRef.current);
+        practiceTickRef.current = null;
+      }
+      return;
+    }
+    practiceLastUpdateRef.current = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      const elapsed = Math.floor((now - practiceLastUpdateRef.current) / 1000);
+      if (elapsed <= 0) return;
+      practiceLastUpdateRef.current = now;
+      setPracticeRemaining(current => {
+        const next = Math.max(0, current - elapsed);
+        if (next === 0) {
+          setPracticeRunning(false);
+          appendPracticeSession(practiceTotalSeconds);
+          if (practiceSoundEnabled) {
+            playPracticeDing();
+          }
+        }
+        return next;
+      });
+    };
+    practiceTickRef.current = window.setInterval(tick, 1000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        tick();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      if (practiceTickRef.current) {
+        window.clearInterval(practiceTickRef.current);
+        practiceTickRef.current = null;
+      }
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [
+    appendPracticeSession,
+    effectiveRole,
+    practiceRunning,
+    practiceSoundEnabled,
+    playPracticeDing,
+    practiceTotalSeconds,
+  ]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !practiceSettingsKey) return;
+    try {
+      window.localStorage.setItem(
+        practiceSettingsKey,
+        JSON.stringify({
+          minutes: practiceMinutes,
+          soundEnabled: practiceSoundEnabled,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [effectiveRole, practiceMinutes, practiceSoundEnabled, practiceSettingsKey]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !metronomeSettingsKey) return;
+    try {
+      const stored = window.localStorage.getItem(metronomeSettingsKey);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as {
+        tempo?: number;
+        timeSig?: '4/4' | '3/4' | '2/4';
+        accent?: boolean;
+        open?: boolean;
+        running?: boolean;
+      };
+      if (typeof parsed.tempo === 'number' && !Number.isNaN(parsed.tempo)) {
+        setMetronomeTempo(Math.min(220, Math.max(40, parsed.tempo)));
+      }
+      if (parsed.timeSig === '4/4' || parsed.timeSig === '3/4' || parsed.timeSig === '2/4') {
+        setMetronomeTimeSig(parsed.timeSig);
+      }
+      if (typeof parsed.accent === 'boolean') {
+        setMetronomeAccent(parsed.accent);
+      }
+      if (typeof parsed.open === 'boolean') {
+        setMetronomeOpen(parsed.open);
+      }
+      if (typeof parsed.running === 'boolean') {
+        setMetronomeRunning(parsed.running);
+      }
+    } catch {
+      // ignore
+    }
+  }, [effectiveRole, metronomeSettingsKey, pathname]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student' || !metronomeSettingsKey) return;
+    try {
+      window.localStorage.setItem(
+        metronomeSettingsKey,
+        JSON.stringify({
+          tempo: metronomeTempo,
+          timeSig: metronomeTimeSig,
+          accent: metronomeAccent,
+          open: metronomeOpen,
+          running: metronomeRunning,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [
+    effectiveRole,
+    metronomeTempo,
+    metronomeTimeSig,
+    metronomeAccent,
+    metronomeOpen,
+    metronomeRunning,
+    metronomeSettingsKey,
+  ]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'student') return;
+    if (!metronomeRunning) {
+      if (metronomeIntervalRef.current) {
+        window.clearInterval(metronomeIntervalRef.current);
+        metronomeIntervalRef.current = null;
+      }
+      metronomeBeatRef.current = 1;
+      return;
+    }
+    const beatsPerBar = metronomeTimeSig === '4/4' ? 4 : metronomeTimeSig === '3/4' ? 3 : 2;
+    const interval = Math.max(250, Math.floor(60000 / Math.max(40, metronomeTempo)));
+    const tick = () => {
+      const beat = metronomeBeatRef.current;
+      const isAccent = metronomeAccent && beat === 1;
+      playMetronomeClick(isAccent);
+      metronomeBeatRef.current = beat >= beatsPerBar ? 1 : beat + 1;
+    };
+    tick();
+    metronomeIntervalRef.current = window.setInterval(tick, interval);
+    return () => {
+      if (metronomeIntervalRef.current) {
+        window.clearInterval(metronomeIntervalRef.current);
+        metronomeIntervalRef.current = null;
+      }
+    };
+  }, [effectiveRole, metronomeRunning, metronomeTempo, metronomeTimeSig, metronomeAccent, playMetronomeClick]);
 
   const resolveStudentFromUser = useCallback(
     (username?: string) => {
@@ -911,13 +1479,6 @@ export default function AdminShell({ children }: AdminShellProps) {
       );
     };
   }, [recentStudentsKey, role, selectedStudentKey, viewStudentKey]);
-
-  const effectiveRole =
-    role === 'company'
-      ? viewRole ?? role
-      : role === 'teacher'
-        ? viewRole ?? role
-        : role;
 
   useEffect(() => {
     if (!effectiveRole || !pathname) return;
@@ -2116,6 +2677,239 @@ export default function AdminShell({ children }: AdminShellProps) {
               );
             })}
           </nav>
+          {isStudentSidebar ? (
+            <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                Practice Timer
+              </p>
+              {isPracticeComplete ? (
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-2xl border border-[var(--c-e7eddc)] bg-[var(--c-f7fbf0)] p-3 text-[var(--c-3f4a2c)]">
+                    <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-3f4a2c)]">
+                      Good Job!
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-[var(--c-3f4a2c)]">
+                      Practice Complete
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--c-3f4a2c)]/80">
+                      You hit your {practiceMinutes} min goal.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePracticeStartNewSession}
+                    className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                  >
+                    Start Another Session
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                        {practiceTimeLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                        {practiceMinutes} min goal
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPracticeSoundEnabled(current => !current)}
+                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                          practiceSoundEnabled
+                            ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                            : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]'
+                        }`}
+                      >
+                        Ding {practiceSoundEnabled ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-[var(--c-f1f1ef)]">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${
+                        practiceRunning ? 'bg-[var(--c-3f4a2c)]' : 'bg-[var(--c-c8102e)]'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, practiceProgress * 100))}%` }}
+                    />
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePracticeStart}
+                      disabled={practiceRunning || practiceRemaining === 0}
+                      className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Start
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePracticePause}
+                      disabled={!practiceRunning}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Pause
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePracticeReset}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </>
+              )}
+              {practiceSessions.length > 0 ? (
+                <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
+                      Sessions
+                    </p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                      Total {formatPracticeDuration(totalPracticeSeconds)}
+                    </p>
+                  </div>
+                  <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1 text-xs">
+                    {practiceSessions.map((session, index) => (
+                      <div
+                        key={session.id}
+                        className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between text-[var(--c-3a3935)]">
+                          <span>Session {practiceSessions.length - index}</span>
+                          <span>{formatPracticeDuration(session.duration)}</span>
+                        </div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          {new Date(session.completedAt).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+          {isStudentSidebar ? (
+        <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <div className="flex w-full items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setMetronomeOpen(current => !current)}
+                className="text-left"
+              >
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Metronome
+                </p>
+              </button>
+              {metronomeOpen ? null : (
+                <button
+                  type="button"
+                  onClick={metronomeRunning ? handleMetronomeStop : handleMetronomeStart}
+                  className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                    metronomeRunning
+                      ? 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                      : 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                  }`}
+                >
+                  {metronomeRunning ? 'Stop' : 'Start'}
+                </button>
+              )}
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  {metronomeTempo} BPM
+                </p>
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                    {metronomeTimeSig} · {metronomeAccent ? 'Accent On' : 'Accent off'}
+                  </p>
+                </div>
+              </div>
+              {metronomeOpen ? (
+            <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['4/4', '3/4', '2/4'] as const).map(sig => (
+                      <button
+                        key={sig}
+                        type="button"
+                        onClick={() => setMetronomeTimeSig(sig)}
+                        className={`rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                          metronomeTimeSig === sig
+                            ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                            : 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                        }`}
+                      >
+                        {sig}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMetronomeTempo(current => Math.max(40, current - 2))}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                    >
+                      −
+                    </button>
+                    <div className="text-sm uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                      Tempo
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMetronomeTempo(current => Math.min(220, current + 2))}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMetronomeAccent(current => !current)}
+                    className={`w-full rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                      metronomeAccent
+                        ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                        : 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                    }`}
+                  >
+                    Accent Beat One
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleMetronomeStart}
+                      disabled={metronomeRunning}
+                      className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Start
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleMetronomeStop}
+                      disabled={!metronomeRunning}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            <div
+              className={`mt-4 ${metronomeOpen ? 'border-t border-[var(--c-ecebe7)] pt-3' : ''}`}
+            >
+              <MetronomePresetDropdown
+                value={metronomePresetMatch}
+                onSelect={preset => {
+                  setMetronomeTempo(preset.tempo);
+                  setMetronomeTimeSig(preset.timeSig);
+                }}
+              />
+            </div>
+          </section>
+        ) : null}
           {user ? (
             <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
               <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
@@ -2366,9 +3160,17 @@ export default function AdminShell({ children }: AdminShellProps) {
         {effectiveRole === 'company' ? (
           <a
             href="/company/features-overview"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
           >
             Features Overview
+          </a>
+        ) : null}
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/what-we-offer"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+          >
+            What We Offer
           </a>
         ) : null}
       </aside>
@@ -2544,6 +3346,59 @@ export default function AdminShell({ children }: AdminShellProps) {
                   placeholder="Set new password"
                 />
               </label>
+              {effectiveRole === 'student' ? (
+                <>
+                  <div className="sm:col-span-2 mt-2">
+                    <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4">
+                      <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                        Practice Timer
+                      </p>
+                      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                        <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          Daily Goal (Minutes)
+                          <input
+                            type="number"
+                            min={5}
+                            max={180}
+                            step={1}
+                            value={practiceMinutes}
+                            onChange={event => {
+                              const next = Number(event.target.value);
+                              if (Number.isNaN(next)) return;
+                              const clamped = Math.min(180, Math.max(5, next));
+                              setPracticeMinutes(clamped);
+                              if (!practiceRunning && practiceRemaining === practiceTotalSeconds) {
+                                setPracticeRemaining(clamped * 60);
+                              }
+                            }}
+                            className="mt-2 w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          Completion Sound
+                          <button
+                            type="button"
+                            onClick={() => setPracticeSoundEnabled(current => !current)}
+                            className={`mt-2 flex w-full items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
+                              practiceSoundEnabled
+                                ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                                : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]'
+                            }`}
+                          >
+                            <span>{practiceSoundEnabled ? 'Ding enabled' : 'Ding disabled'}</span>
+                            <span className="text-xs uppercase tracking-[0.2em]">
+                              {practiceSoundEnabled ? 'On' : 'Off'}
+                            </span>
+                          </button>
+                        </label>
+                      </div>
+                      <p className="mt-3 text-xs text-[var(--c-6f6c65)]">
+                        This timer stays active across your dashboard until you pause or reset it.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             {accountError ? (
@@ -2618,10 +3473,19 @@ export default function AdminShell({ children }: AdminShellProps) {
         {effectiveRole === 'company' ? (
           <a
             href="/company/features-overview"
-            className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-3 text-lg font-semibold text-[var(--c-3a3935)] shadow-sm transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+            className="mb-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-sm font-medium text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
             onClick={() => setIsOpen(false)}
           >
             Features Overview
+          </a>
+        ) : null}
+        {effectiveRole === 'company' ? (
+          <a
+            href="/company/what-we-offer"
+            className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-sm font-medium text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+            onClick={() => setIsOpen(false)}
+          >
+            What We Offer
           </a>
         ) : null}
         <nav className="space-y-2 text-sm">
@@ -2665,6 +3529,251 @@ export default function AdminShell({ children }: AdminShellProps) {
             );
           })}
         </nav>
+        {isStudentSidebar ? (
+          <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              Practice Timer
+            </p>
+            {isPracticeComplete ? (
+              <div className="mt-3 space-y-3">
+                <div className="rounded-2xl border border-[var(--c-e7eddc)] bg-[var(--c-f7fbf0)] p-3 text-[var(--c-3f4a2c)]">
+                  <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-3f4a2c)]">
+                    Good Job!
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--c-3f4a2c)]">
+                    Practice Complete
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--c-3f4a2c)]/80">
+                    You hit your {practiceMinutes} min goal.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePracticeStartNewSession}
+                  className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                >
+                  Start Another Session
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                      {practiceTimeLabel}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                      {practiceMinutes} min goal
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPracticeSoundEnabled(current => !current)}
+                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                        practiceSoundEnabled
+                          ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                          : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] text-[var(--c-6f6c65)]'
+                      }`}
+                    >
+                      Ding {practiceSoundEnabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-[var(--c-f1f1ef)]">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ${
+                      practiceRunning ? 'bg-[var(--c-3f4a2c)]' : 'bg-[var(--c-c8102e)]'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, practiceProgress * 100))}%` }}
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePracticeStart}
+                    disabled={practiceRunning || practiceRemaining === 0}
+                    className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Start
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePracticePause}
+                    disabled={!practiceRunning}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePracticeReset}
+                    className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </>
+            )}
+            {practiceSessions.length > 0 ? (
+              <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
+                    Sessions
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    Total {formatPracticeDuration(totalPracticeSeconds)}
+                  </p>
+                </div>
+                <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1 text-xs">
+                  {practiceSessions.map((session, index) => (
+                    <div
+                      key={session.id}
+                      className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between text-[var(--c-3a3935)]">
+                        <span>Session {practiceSessions.length - index}</span>
+                        <span>{formatPracticeDuration(session.duration)}</span>
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                        {new Date(session.completedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        {isStudentSidebar ? (
+          <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <div className="flex w-full items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setMetronomeOpen(current => !current)}
+                className="text-left"
+              >
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Metronome
+                </p>
+              </button>
+              {metronomeOpen ? null : (
+                <button
+                  type="button"
+                  onClick={metronomeRunning ? handleMetronomeStop : handleMetronomeStart}
+                  className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition ${
+                    metronomeRunning
+                      ? 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                      : 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                  }`}
+                >
+                  {metronomeRunning ? 'Stop' : 'Start'}
+                </button>
+              )}
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  {metronomeTempo} BPM
+                </p>
+                <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                  {metronomeTimeSig} · {metronomeAccent ? 'Accent On' : 'Accent off'}
+                </p>
+              </div>
+            </div>
+            {metronomeOpen ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  {(['4/4', '3/4', '2/4'] as const).map(sig => (
+                    <button
+                      key={sig}
+                      type="button"
+                      onClick={() => setMetronomeTimeSig(sig)}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClickCapture={event => event.stopPropagation()}
+                      className={`rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                        metronomeTimeSig === sig
+                          ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                          : 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                      }`}
+                    >
+                      {sig}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMetronomeTempo(current => Math.max(40, current - 2))}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClickCapture={event => event.stopPropagation()}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                    >
+                      −
+                    </button>
+                  <div className="text-sm uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    Tempo
+                  </div>
+                    <button
+                      type="button"
+                      onClick={() => setMetronomeTempo(current => Math.min(220, current + 2))}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClickCapture={event => event.stopPropagation()}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                    >
+                      +
+                    </button>
+                </div>
+                  <button
+                    type="button"
+                    onClick={() => setMetronomeAccent(current => !current)}
+                    onPointerDown={event => event.stopPropagation()}
+                    onClickCapture={event => event.stopPropagation()}
+                    className={`w-full rounded-full border px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                      metronomeAccent
+                        ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)] text-[var(--c-8f2f3b)]'
+                      : 'border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]'
+                  }`}
+                >
+                  Accent Beat One
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleMetronomeStart}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClickCapture={event => event.stopPropagation()}
+                      disabled={metronomeRunning}
+                      className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Start
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleMetronomeStop}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClickCapture={event => event.stopPropagation()}
+                      disabled={!metronomeRunning}
+                      className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                    Stop
+                  </button>
+                </div>
+              </div>
+              ) : null}
+            <div
+              className={`mt-4 ${metronomeOpen ? 'border-t border-[var(--c-ecebe7)] pt-3' : ''}`}
+            >
+              <MetronomePresetDropdown
+                value={metronomePresetMatch}
+                onSelect={preset => {
+                  setMetronomeTempo(preset.tempo);
+                  setMetronomeTimeSig(preset.timeSig);
+                }}
+              />
+            </div>
+          </section>
+        ) : null}
         {user ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
             <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">

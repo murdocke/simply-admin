@@ -1,15 +1,26 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
   const [now, setNow] = useState(() => new Date());
-  const formatted = useMemo(
+  const time = useMemo(
     () =>
       new Intl.DateTimeFormat('en-US', {
         timeZone,
-        dateStyle: 'medium',
-        timeStyle: 'medium',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(now),
+    [now, timeZone],
+  );
+  const date = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
       }).format(now),
     [now, timeZone],
   );
@@ -21,8 +32,14 @@ function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
   }, []);
 
   return (
-    <div className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 shadow-sm">
-      {label} · {formatted}
+    <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
+      <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+        {time}
+      </p>
+      <p className="mt-1 text-xs text-[var(--c-6f6c65)]">{date}</p>
     </div>
   );
 }
@@ -31,8 +48,17 @@ export default function DashboardPage() {
   const activeTeachers = 845;
   const activeStudents = activeTeachers * 27;
   const monthlyRoyaltiesDue = activeStudents * 9;
+  const newStudentsThisMonth = 612;
+  const outstandingPayments = 18420;
+  const upcomingLessons = 1284;
+  const curriculumIncomeTeachers = 26850;
+  const curriculumIncomeStudents = 19440;
+  const regionsCovered = 14;
+  const churnRate = 3.2;
+  const avgLessonsPerStudent = 4.6;
   const [isPromoOpen, setIsPromoOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [promoTitle, setPromoTitle] = useState('Quick Studio Update');
   const [promoBody, setPromoBody] = useState(
     'New practice tips are live in your dashboard. Check them out before your next lesson.',
@@ -45,7 +71,7 @@ export default function DashboardPage() {
     'Please review the latest studio update before your next lesson.',
   );
   const [alertAudience, setAlertAudience] = useState('both');
-  const [alertColor, setAlertColor] = useState('amber');
+  const [alertColor, setAlertColor] = useState('warning');
   const [alertPersistence, setAlertPersistence] = useState('persist');
   const [isPromoHistoryOpen, setIsPromoHistoryOpen] = useState(false);
   const [isAlertHistoryOpen, setIsAlertHistoryOpen] = useState(false);
@@ -113,10 +139,32 @@ export default function DashboardPage() {
     };
     if (!payload.title || !payload.body) return;
     if (alertAudience === 'teacher' || alertAudience === 'both') {
-      window.localStorage.setItem('sm_company_alert_teacher', JSON.stringify(payload));
+      try {
+        const stored = window.localStorage.getItem('sm_company_alert_teacher');
+        const existing = stored
+          ? (Array.isArray(JSON.parse(stored)) ? JSON.parse(stored) : [JSON.parse(stored)])
+          : [];
+        window.localStorage.setItem(
+          'sm_company_alert_teacher',
+          JSON.stringify([payload, ...existing]),
+        );
+      } catch {
+        window.localStorage.setItem('sm_company_alert_teacher', JSON.stringify(payload));
+      }
     }
     if (alertAudience === 'student' || alertAudience === 'both') {
-      window.localStorage.setItem('sm_company_alert_student', JSON.stringify(payload));
+      try {
+        const stored = window.localStorage.getItem('sm_company_alert_student');
+        const existing = stored
+          ? (Array.isArray(JSON.parse(stored)) ? JSON.parse(stored) : [JSON.parse(stored)])
+          : [];
+        window.localStorage.setItem(
+          'sm_company_alert_student',
+          JSON.stringify([payload, ...existing]),
+        );
+      } catch {
+        window.localStorage.setItem('sm_company_alert_student', JSON.stringify(payload));
+      }
     }
     void fetch('/api/company-alerts', {
       method: 'POST',
@@ -190,69 +238,114 @@ export default function DashboardPage() {
             Choose a workspace to jump into a focused view.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-          <TimeBadge label="Melbourne" timeZone="Australia/Melbourne" />
-          <TimeBadge label="Sacramento" timeZone="America/Los_Angeles" />
+        <div className="w-full rounded-3xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-4 shadow-sm md:w-auto">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TimeBadge label="Melbourne" timeZone="Australia/Melbourne" />
+            <TimeBadge label="Sacramento" timeZone="America/Los_Angeles" />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <a
-          href="/company/lesson-library"
-          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-        >
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Lesson Library
-          </p>
-          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            128 Packs
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Refresh content, uploads, and releases.
-          </p>
-        </a>
-        <a
-          href="/subscriptions"
-          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-        >
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Subscriptions
-          </p>
-          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {activeStudents.toLocaleString('en-US')}
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Students billed at $9 per month.
-          </p>
-        </a>
-        <a
-          href="/accounts"
-          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-        >
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Accounts
-          </p>
-          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {activeTeachers.toLocaleString('en-US')}
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Active teachers across the network.
-          </p>
-        </a>
-        <a
-          href="/company/messages"
-          className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-        >
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Messages
-          </p>
-          <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            24 Threads
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Active teacher conversations.
-          </p>
-        </a>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          {
+            label: 'Total Active Students',
+            value: activeStudents.toLocaleString('en-US'),
+            note: 'Currently enrolled and billing.',
+          },
+          {
+            label: 'New Students This Month',
+            value: newStudentsThisMonth.toLocaleString('en-US'),
+            note: 'First-time activations in the last 30 days.',
+          },
+          {
+            label: 'Active Teachers',
+            value: activeTeachers.toLocaleString('en-US'),
+            note: 'Teaching in the network right now.',
+          },
+          {
+            label: 'Monthly Revenue',
+            value: `$${monthlyRoyaltiesDue.toLocaleString('en-US')}`,
+            note: 'Projected subscriptions for this month.',
+          },
+          {
+            label: 'Curriculum Income (Teachers)',
+            value: `$${curriculumIncomeTeachers.toLocaleString('en-US')}`,
+            note: 'Teacher purchases this month.',
+            href: '/company/orders',
+          },
+          {
+            label: 'Curriculum Income (Students)',
+            value: `$${curriculumIncomeStudents.toLocaleString('en-US')}`,
+            note: 'Student purchases this month.',
+            href: '/company/orders',
+          },
+          {
+            label: 'Outstanding Payments',
+            value: `$${outstandingPayments.toLocaleString('en-US')}`,
+            note: 'Open invoices and unpaid balances.',
+          },
+          {
+            label: 'Upcoming Lessons (Global View)',
+            value: upcomingLessons.toLocaleString('en-US'),
+            note: 'Next 7 days, all studios combined.',
+          },
+          {
+            label: 'Geographic Distribution',
+            value: `${regionsCovered} regions`,
+            note: 'Active locations with learners.',
+          },
+          {
+            label: 'Student Churn Rate',
+            value: `${churnRate.toFixed(1)}%`,
+            note: 'Rolling 30-day cancellations.',
+          },
+          {
+            label: 'Avg Lesson Per Student',
+            value: avgLessonsPerStudent.toFixed(1),
+            note: 'Average lessons per learner this month.',
+          },
+          {
+            label: 'Revenue Trend',
+            value: '+6.2%',
+            note: '$128,430 over the last 6 months.',
+            href: '/company/financial-layer',
+          },
+        ].map(metric =>
+          metric.href ? (
+            <Link
+              key={metric.label}
+              href={metric.href}
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {metric.label}
+              </p>
+              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+                {metric.value}
+              </p>
+              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+                {metric.note}
+              </p>
+            </Link>
+          ) : (
+            <button
+              key={metric.label}
+              type="button"
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {metric.label}
+              </p>
+              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+                {metric.value}
+              </p>
+              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+                {metric.note}
+              </p>
+            </button>
+          ),
+        )}
       </div>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -322,63 +415,461 @@ export default function DashboardPage() {
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Company Workstreams
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Growth Workspace
             </p>
             <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-              Jump Back Into Key Areas
+              Teacher Acquisition & Onboarding
             </h2>
             <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-              Prioritize the next action across content, billing, accounts, and messaging.
+              Capture instructor leads, manage follow-ups, and convert prospects
+              into active teachers.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsLeadFormOpen(true)}
+            className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+          >
+            Open Lead Form
+          </button>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Lead Capture
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              New teacher leads this week
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-[var(--c-1f1f1d)]">
+              186
+            </p>
+            <div className="mt-4 grid gap-2 text-sm text-[var(--c-6f6c65)]">
+              <div className="flex items-center justify-between">
+                <span>Web inquiry form</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">62</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Teacher referral</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">41</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Social campaigns</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">53</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Partner listings</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">30</span>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Add Intake Form
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Sync CRM
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Auto-Reply
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Follow-Up Tracking
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              Follow-ups due today
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-[var(--c-1f1f1d)]">
+              24
+            </p>
+            <div className="mt-4 grid gap-2 text-sm text-[var(--c-6f6c65)]">
+              <div className="flex items-center justify-between">
+                <span>Overdue</span>
+                <span className="font-semibold text-[var(--c-c8102e)]">6</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Next 24 hours</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">18</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Automated sequences</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">9</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Needs owner</span>
+                <span className="font-semibold text-[var(--c-1f1f1d)]">4</span>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Assign Owners
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                SMS Reminders
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Call Scripts
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Tags & Status
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              Segment teacher prospects with lifecycle tags.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              {[
+                { label: 'Prospect', count: 402, tone: 'bg-[var(--c-ffffff)]' },
+                { label: 'Training', count: 128, tone: 'bg-[var(--c-ffffff)]' },
+                { label: 'Certified', count: 214, tone: 'bg-[var(--c-ffffff)]' },
+                { label: 'Active', count: 845, tone: 'bg-[var(--c-ffffff)]' },
+                { label: 'Dropped', count: 96, tone: 'bg-[var(--c-ffffff)]' },
+              ].map(tag => (
+                <span
+                  key={tag.label}
+                  className={`flex items-center gap-2 rounded-full border border-[var(--c-ecebe7)] ${tag.tone} px-3 py-1 text-[var(--c-6f6c65)]`}
+                >
+                  <span className="uppercase tracking-[0.2em] text-xs text-[var(--c-6f6c65)]">
+                    {tag.label}
+                  </span>
+                  <span className="font-semibold text-[var(--c-1f1f1d)]">
+                    {tag.count.toLocaleString('en-US')}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Auto-Tag Rules
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Tag Audits
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Segments
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Pipeline Stages
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              Track movement from first inquiry to teaching activation.
+            </p>
+            <div className="mt-4 grid gap-3 text-sm text-[var(--c-6f6c65)]">
+              {[
+                { label: 'New Inquiry', value: 124 },
+                { label: 'Screening Call', value: 62 },
+                { label: 'Training Enrolled', value: 38 },
+                { label: 'Certified', value: 29 },
+                { label: 'Activated', value: 18 },
+              ].map(stage => (
+                <div
+                  key={stage.label}
+                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="uppercase tracking-[0.2em] text-xs text-[var(--c-6f6c65)]">
+                      {stage.label}
+                    </span>
+                    <span className="font-semibold text-[var(--c-1f1f1d)]">
+                      {stage.value}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--c-ecebe7)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--c-c8102e)]/70"
+                      style={{ width: `${Math.min(100, stage.value * 1.2)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Stage SLAs
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Win/Loss Notes
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Bottleneck Alerts
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Conversion Tracking
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              Measure drop-off across the teacher acquisition funnel.
+            </p>
+            <div className="mt-4 grid gap-3 text-sm text-[var(--c-6f6c65)]">
+              {[
+                { label: 'Lead → Screen', value: 48 },
+                { label: 'Screen → Training', value: 61 },
+                { label: 'Training → Certified', value: 39 },
+                { label: '90-Day Activation', value: 72 },
+              ].map(step => (
+                <div
+                  key={step.label}
+                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="uppercase tracking-[0.2em] text-xs text-[var(--c-6f6c65)]">
+                      {step.label}
+                    </span>
+                    <span className="font-semibold text-[var(--c-1f1f1d)]">
+                      {step.value}%
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--c-ecebe7)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--c-1f1f1d)]/70"
+                      style={{ width: `${step.value}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Cohort Views
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Source Attribution
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Goal Targets
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Support Command
+            </p>
+            <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+              Live Chats & Ticket Triage
+            </h2>
+            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+              Resolve issues faster with a unified inbox, priority queues, and
+              quick actions.
             </p>
           </div>
           <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
-            Updated today
+            9 friendly check-ins
           </span>
         </div>
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           {[
             {
-              label: 'Lesson Library',
-              note: 'Review new uploads and release dates.',
-              href: '/company/lesson-library',
+              label: 'Live Chats',
+              value: '6',
+              note: 'Active right now',
+              detail: 'Avg response: 4m 05s',
             },
             {
-              label: 'Subscriptions',
-              note: 'Monitor student counts and next billing.',
-              href: '/subscriptions',
+              label: 'Open Tickets',
+              value: '18',
+              note: 'Friendly questions',
+              detail: 'Ready to reply: 7',
             },
             {
-              label: 'Accounts',
-              note: 'Teacher roster, statuses, and student lists.',
-              href: '/accounts',
+              label: 'SLA Health',
+              value: '97%',
+              note: 'Responses on track',
+              detail: 'Warm touch today: 3',
             },
-            {
-              label: 'Messages',
-              note: 'Respond to teacher outreach.',
-              href: '/company/messages',
-            },
-            {
-              label: 'Message Review',
-              note: 'Audit sentiment and response times.',
-              href: '/company/messages',
-            },
-          ].map(card => (
-            <a
-              key={card.label}
-              href={card.href}
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5 text-left transition hover:border-[color:var(--c-c8102e)]/30 hover:bg-[var(--c-ffffff)]"
+          ].map(stat => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
             >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                {card.label}
+              <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {stat.label}
               </p>
-              <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
-                {card.note}
+              <p className="mt-3 text-sm text-[var(--c-6f6c65)]">{stat.note}</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--c-1f1f1d)]">
+                {stat.value}
               </p>
-            </a>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">{stat.detail}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                  Auto-Assign
+                </span>
+                <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                  Escalations
+                </span>
+              </div>
+            </div>
           ))}
         </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_1fr]">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Priority Queue
+              </p>
+              <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                6 urgent
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {[
+                {
+                  title: 'Help choosing the right program',
+                  owner: 'Assigned: K. Torres',
+                  status: 'Simple',
+                  time: 'Waiting 18m',
+                },
+                {
+                  title: 'Scheduling a first call',
+                  owner: 'Assigned: M. Zhao',
+                  status: 'Simple',
+                  time: 'Waiting 44m',
+                },
+                {
+                  title: 'Curious about training dates',
+                  owner: 'Assigned: A. Rhodes',
+                  status: 'Simple',
+                  time: 'Waiting 1h 12m',
+                },
+                {
+                  title: 'Materials included with onboarding',
+                  owner: 'Assigned: R. Patel',
+                  status: 'Simple',
+                  time: 'Waiting 2h 06m',
+                },
+              ].map(item => (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      {item.title}
+                    </p>
+                    <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--c-6f6c65)]">
+                    <span>{item.owner}</span>
+                    <span>{item.time}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Quick Actions
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              Standardize replies and resolve tickets fast.
+            </p>
+            <div className="mt-4 grid gap-3 text-sm text-[var(--c-6f6c65)]">
+              {[
+                {
+                  title: 'Send welcome info',
+                  detail: 'Template · New lead',
+                },
+                {
+                  title: 'Offer a short intro call',
+                  detail: 'Schedule + reminder',
+                },
+                {
+                  title: 'Share training overview',
+                  detail: 'Program guide link',
+                },
+                {
+                  title: 'Request more details',
+                  detail: 'Friendly follow-up',
+                },
+              ].map(action => (
+                <div
+                  key={action.title}
+                  className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                    {action.title}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                    {action.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Canned Replies
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Macros
+              </span>
+              <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+                Knowledge Base
+              </span>
+            </div>
+          </div>
+        </div>
       </section>
+
+      {isLeadFormOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-3 py-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsLeadFormOpen(false)}
+          />
+          <div className="relative h-[90vh] w-full max-w-[95vw] overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--c-ecebe7)] px-5 py-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Teacher Lead Form
+                </p>
+                <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                  Preview the full lead capture experience.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLeadFormOpen(false)}
+                className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              >
+                Close
+              </button>
+            </div>
+            <div className="h-[calc(90vh-72px)] w-full bg-[var(--c-fcfcfb)]">
+              <iframe
+                title="Lead form preview"
+                src="/embed/lead-form"
+                className="h-full w-full border-0"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isPromoOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
@@ -533,9 +1024,9 @@ export default function DashboardPage() {
                     onChange={event => setAlertColor(event.target.value)}
                     className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
                   >
-                    <option value="amber">Warm Amber</option>
-                    <option value="blue">Soft Blue</option>
-                    <option value="sage">Sage</option>
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="update">Update</option>
                   </select>
                 </label>
               </div>
@@ -701,88 +1192,123 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Billing Outlook
+            Brand Compliance
           </p>
           <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-            Monthly Royalties Snapshot
+            Logo & Curriculum Integrity
           </h2>
           <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Estimated from current student counts under the new subscription model.
+            Keep materials aligned with Simply Music brand standards.
           </p>
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Total Due
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                {monthlyRoyaltiesDue.toLocaleString('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  maximumFractionDigits: 0,
-                })}
-              </p>
-            </div>
-            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Billing Date
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                Mar 1, 2026
-              </p>
-            </div>
-            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Active Students
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                {activeStudents.toLocaleString('en-US')}
-              </p>
-            </div>
-            <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                At-Risk Accounts
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                14
-              </p>
-            </div>
+          <div className="mt-6 space-y-3">
+            {[
+              { label: 'Logo usage checks', value: '6' },
+              { label: 'Curriculum audits', value: '4' },
+              { label: 'Pending approvals', value: '3' },
+            ].map(item => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between text-sm text-[var(--c-6f6c65)]">
+                  <span>{item.label}</span>
+                  <span className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    {item.value}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Review Requests
+            </span>
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Usage Guidelines
+            </span>
           </div>
         </section>
 
         <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Communications
+            Required Training
           </p>
           <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-            Teacher Messaging Focus
+            Completion Readiness
           </h2>
           <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            Keep tabs on response times and outbound reminders.
+            Track teacher training progress and upcoming milestones.
           </p>
-          <div className="mt-6 space-y-3">
+          <div className="mt-6 grid grid-cols-1 gap-3">
             {[
-              '12 unresolved billing questions',
-              '8 onboarding follow-ups needed',
-              '6 lesson library updates to announce',
-              '4 VIP teachers awaiting response',
+              { label: 'On track to complete', value: '22' },
+              { label: 'Needs follow-up', value: '7' },
+              { label: 'Overdue modules', value: '4' },
+              { label: 'Upcoming cohorts', value: '3' },
             ].map(item => (
               <div
-                key={item}
-                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
+                key={item.label}
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3"
               >
-                {item}
+                <div className="flex items-center justify-between text-sm text-[var(--c-6f6c65)]">
+                  <span>{item.label}</span>
+                  <span className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    {item.value}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
-          <a
-            href="/company/messages"
-            className="mt-4 inline-flex rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Open Message Center
-          </a>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Send Reminders
+            </span>
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Cohort View
+            </span>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Certification Tracking
+          </p>
+          <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+            Active Credentials
+          </h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Monitor certification status and renewal windows.
+          </p>
+          <div className="mt-6 space-y-3">
+            {[
+              { label: 'Certified this month', value: '9' },
+              { label: 'Renewals coming up', value: '5' },
+              { label: 'Pending assessments', value: '4' },
+            ].map(item => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between text-sm text-[var(--c-6f6c65)]">
+                  <span>{item.label}</span>
+                  <span className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    {item.value}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Renewal Alerts
+            </span>
+            <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1">
+              Export Roster
+            </span>
+          </div>
         </section>
       </div>
     </div>

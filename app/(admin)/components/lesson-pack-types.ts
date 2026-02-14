@@ -16,6 +16,7 @@ export type LessonPackSubject = {
   links: LessonPackSubjectLink[];
   soundSliceUrl: string;
   soundSlicePlacement: 'header' | 'body';
+  soundSliceHeight: number;
   order: number;
 };
 
@@ -56,6 +57,7 @@ export const createLessonSubject = (
   links: createEmptyLinks(),
   soundSliceUrl: '',
   soundSlicePlacement: 'header',
+  soundSliceHeight: 420,
   order,
 });
 

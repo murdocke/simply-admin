@@ -1,7 +1,47 @@
 {
   "active": {
-    "teacher": null,
+    "teacher": {
+      "id": "581081a3-9488-4e65-99ce-120b62fbcd9d",
+      "title": "New Lesson Added",
+      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
+      "cta": "GOT IT",
+      "trigger": "dashboard",
+      "createdAt": "2026-02-13T20:40:01.108Z",
+      "audience": "both",
+      "status": "active"
+    },
     "student": null
   },
-  "history": []
+  "history": [
+    {
+      "id": "581081a3-9488-4e65-99ce-120b62fbcd9d",
+      "title": "New Lesson Added",
+      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
+      "cta": "GOT IT",
+      "trigger": "dashboard",
+      "createdAt": "2026-02-13T20:40:01.108Z",
+      "audience": "both",
+      "status": "active"
+    },
+    {
+      "id": "45f406df-8380-46ed-9643-89aeff9cf90a",
+      "title": "Quick Studio Update",
+      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
+      "cta": "GOT IT",
+      "trigger": "instant",
+      "createdAt": "2026-02-13T16:04:00.461Z",
+      "audience": "both",
+      "status": "removed"
+    },
+    {
+      "id": "06268f4f-7cc1-4fad-9f71-426de33f98d4",
+      "title": "Quick Studio Update",
+      "body": "New practice tips are live in your dashboard. Check them out before your next lesson.",
+      "cta": "GOT IT",
+      "trigger": "instant",
+      "createdAt": "2026-02-13T16:00:07.352Z",
+      "audience": "both",
+      "status": "removed"
+    }
+  ]
 }

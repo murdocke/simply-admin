@@ -1,7 +1,120 @@
 {
   "active": {
-    "teacher": null,
-    "student": null
+    "teacher": [
+      {
+        "id": "7d9293d8-8ed6-4a17-ad39-339e8d8c243c",
+        "title": "Important Reminder",
+        "body": "Please review the latest studio update before your next lesson.",
+        "color": "info",
+        "persistence": "persist",
+        "createdAt": "2026-02-13T16:14:44.314Z",
+        "audience": "both",
+        "status": "active"
+      },
+      {
+        "id": "1cd9655b-4b83-45e2-8891-ef22f7e54d36",
+        "title": "Important Reminder",
+        "body": "Please review the latest studio update before your next lesson.",
+        "color": "warning",
+        "persistence": "persist",
+        "createdAt": "2026-02-13T16:14:29.663Z",
+        "audience": "both",
+        "status": "active"
+      }
+    ],
+    "student": [
+      {
+        "id": "7d9293d8-8ed6-4a17-ad39-339e8d8c243c",
+        "title": "Important Reminder",
+        "body": "Please review the latest studio update before your next lesson.",
+        "color": "info",
+        "persistence": "persist",
+        "createdAt": "2026-02-13T16:14:44.314Z",
+        "audience": "both",
+        "status": "active"
+      },
+      {
+        "id": "1cd9655b-4b83-45e2-8891-ef22f7e54d36",
+        "title": "Important Reminder",
+        "body": "Please review the latest studio update before your next lesson.",
+        "color": "warning",
+        "persistence": "persist",
+        "createdAt": "2026-02-13T16:14:29.663Z",
+        "audience": "both",
+        "status": "active"
+      }
+    ]
   },
-  "history": []
+  "history": [
+    {
+      "id": "5596ddca-9a89-4bd5-b352-a8a50a69d0de",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "info",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T20:42:52.922Z",
+      "audience": "both",
+      "status": "removed"
+    },
+    {
+      "id": "7d9293d8-8ed6-4a17-ad39-339e8d8c243c",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "info",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:14:44.314Z",
+      "audience": "both",
+      "status": "active"
+    },
+    {
+      "id": "1cd9655b-4b83-45e2-8891-ef22f7e54d36",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "warning",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:14:29.663Z",
+      "audience": "both",
+      "status": "active"
+    },
+    {
+      "id": "98590acf-6856-478f-8b76-23f07d5f21c6",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "warning",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:08:30.188Z",
+      "audience": "both",
+      "status": "active"
+    },
+    {
+      "id": "9b700003-a787-469b-be9b-d260fe2940fd",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "sage",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:06:39.033Z",
+      "audience": "both",
+      "status": "removed"
+    },
+    {
+      "id": "633900ae-ed07-44bf-af74-9105d04c8801",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "amber",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:03:21.925Z",
+      "audience": "both",
+      "status": "removed"
+    },
+    {
+      "id": "b8718a03-7b0c-4b29-a0de-d8f0ba8993f8",
+      "title": "Important Reminder",
+      "body": "Please review the latest studio update before your next lesson.",
+      "color": "blue",
+      "persistence": "persist",
+      "createdAt": "2026-02-13T16:00:27.486Z",
+      "audience": "both",
+      "status": "removed"
+    }
+  ]
 }

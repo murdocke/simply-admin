@@ -128,12 +128,15 @@ export default function TeacherDashboardPage() {
     cta?: string;
   } | null>(null);
   const [isPromoOpen, setIsPromoOpen] = useState(false);
-  const [alertPayload, setAlertPayload] = useState<{
-    title: string;
-    body: string;
-    color: string;
-    persistence: string;
-  } | null>(null);
+  const [alertPayloads, setAlertPayloads] = useState<
+    {
+      id?: string;
+      title: string;
+      body: string;
+      color: string;
+      persistence: string;
+    }[]
+  >([]);
   const [onlineStudents, setOnlineStudents] = useState<
     (StudentRecord & { activity?: StudentPresenceActivity | null })[]
   >([]);
@@ -169,7 +172,11 @@ export default function TeacherDashboardPage() {
       channel = new BroadcastChannel('sm-company-alerts');
       channel.onmessage = event => {
         if (event?.data?.type === 'alert-removed') {
-          setAlertPayload(null);
+          if (event?.data?.id) {
+            setAlertPayloads(current => current.filter(item => item.id !== event.data.id));
+          } else {
+            setAlertPayloads([]);
+          }
         }
       };
     } catch {
@@ -181,6 +188,16 @@ export default function TeacherDashboardPage() {
   }, []);
   useEffect(() => {
     try {
+      const readDismissedIds = (key: string) => {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return [] as string[];
+        try {
+          const parsed = JSON.parse(raw) as string[] | string;
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          return [raw];
+        }
+      };
       const storedPromo = window.localStorage.getItem('sm_company_promo_teacher');
       if (storedPromo) {
         const parsed = JSON.parse(storedPromo) as {
@@ -198,14 +215,35 @@ export default function TeacherDashboardPage() {
       }
       const storedAlert = window.localStorage.getItem('sm_company_alert_teacher');
       if (storedAlert) {
-        const parsed = JSON.parse(storedAlert) as {
-          title: string;
-          body: string;
-          color: string;
-          persistence: string;
-        };
-        setAlertPayload(parsed);
-        if (parsed.persistence !== 'persist') {
+        const parsed = JSON.parse(storedAlert) as
+          | {
+              title: string;
+              body: string;
+              color: string;
+              persistence: string;
+              id?: string;
+            }
+          | {
+              title: string;
+              body: string;
+              color: string;
+              persistence: string;
+              id?: string;
+            }[];
+        const dismissedIds = readDismissedIds('sm_company_alert_teacher_dismissed');
+        const nextAlerts = (Array.isArray(parsed) ? parsed : [parsed]).filter(
+          alert => !alert.id || !dismissedIds.includes(alert.id),
+        );
+        if (nextAlerts.length > 0) {
+          setAlertPayloads(nextAlerts);
+        }
+        const persistAlerts = nextAlerts.filter(alert => alert.persistence === 'persist');
+        if (persistAlerts.length > 0) {
+          window.localStorage.setItem(
+            'sm_company_alert_teacher',
+            JSON.stringify(persistAlerts),
+          );
+        } else {
           window.localStorage.removeItem('sm_company_alert_teacher');
         }
       }
@@ -276,26 +314,56 @@ export default function TeacherDashboardPage() {
         const data = (await response.json()) as {
           alerts?: {
             active?: {
-              teacher?: {
-              title: string;
-              body: string;
-              color: string;
-              persistence: string;
-              id?: string;
-              audience?: string;
-            } | null;
+              teacher?:
+                | {
+                    title: string;
+                    body: string;
+                    color: string;
+                    persistence: string;
+                    id?: string;
+                    audience?: string;
+                  }
+                | {
+                    title: string;
+                    body: string;
+                    color: string;
+                    persistence: string;
+                    id?: string;
+                    audience?: string;
+                  }[];
             };
           };
         };
-        const alert = data.alerts?.active?.teacher ?? null;
-        if (!alert && isActive && alertPayload) {
-          setAlertPayload(null);
+        const rawAlerts = data.alerts?.active?.teacher ?? [];
+        const normalizedAlerts = Array.isArray(rawAlerts) ? rawAlerts : [rawAlerts];
+        if (normalizedAlerts.length === 0 && isActive) {
+          setAlertPayloads([]);
         }
-        if (alert && isActive) {
-          setAlertPayload(alert);
-          if (alert.persistence !== 'persist') {
-            await fetch('/api/company-alerts?audience=teacher', { method: 'DELETE' });
+        if (normalizedAlerts.length > 0 && isActive) {
+          const dismissedIdsRaw = window.localStorage.getItem(
+            'sm_company_alert_teacher_dismissed',
+          );
+          let dismissedIds: string[] = [];
+          if (dismissedIdsRaw) {
+            try {
+              const parsed = JSON.parse(dismissedIdsRaw) as string[] | string;
+              dismissedIds = Array.isArray(parsed) ? parsed : [parsed];
+            } catch {
+              dismissedIds = [dismissedIdsRaw];
+            }
           }
+          const visibleAlerts = normalizedAlerts.filter(
+            alert => !alert.id || !dismissedIds.includes(alert.id),
+          );
+          setAlertPayloads(visibleAlerts);
+          const nonPersistent = normalizedAlerts.filter(
+            alert => alert.persistence !== 'persist' && alert.id,
+          );
+          await Promise.all(
+            nonPersistent.map(alert =>
+              fetch(`/api/company-alerts?id=${alert.id}`, { method: 'DELETE' }),
+            ),
+          );
         }
       } catch {
         // ignore
@@ -312,19 +380,53 @@ export default function TeacherDashboardPage() {
     };
   }, []);
 
-  const dismissAlert = () => {
-    setAlertPayload(null);
+  const dismissAlert = (alertId?: string) => {
+    if (alertId) {
+      try {
+        const raw = window.localStorage.getItem('sm_company_alert_teacher_dismissed');
+        let dismissed: string[] = [];
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as string[] | string;
+            dismissed = Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            dismissed = [raw];
+          }
+        }
+        if (!dismissed.includes(alertId)) {
+          dismissed = [alertId, ...dismissed];
+        }
+        window.localStorage.setItem(
+          'sm_company_alert_teacher_dismissed',
+          JSON.stringify(dismissed),
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }
+    setAlertPayloads(current => current.filter(item => item.id !== alertId));
     try {
-      window.localStorage.removeItem('sm_company_alert_teacher');
+      const stored = window.localStorage.getItem('sm_company_alert_teacher');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { id?: string } | { id?: string }[];
+        const next = (Array.isArray(parsed) ? parsed : [parsed]).filter(
+          item => item.id !== alertId,
+        );
+        if (next.length > 0) {
+          window.localStorage.setItem('sm_company_alert_teacher', JSON.stringify(next));
+        } else {
+          window.localStorage.removeItem('sm_company_alert_teacher');
+        }
+      }
     } catch {
       // ignore storage errors
     }
   };
 
-  const alertStyles =
-    alertPayload?.color === 'blue'
+  const getAlertStyles = (color?: string) =>
+    color === 'info' || color === 'blue'
       ? 'border-[var(--c-d9e2ef)] bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]'
-      : alertPayload?.color === 'sage'
+      : color === 'update' || color === 'sage'
         ? 'border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] text-[var(--c-3f4f3b)]'
         : 'border-[var(--c-f2dac5)] bg-[var(--c-fff7e8)] text-[var(--c-7a4a17)]';
 
@@ -814,27 +916,34 @@ export default function TeacherDashboardPage() {
           </p>
         </header>
       </div>
-      {alertPayload ? (
-        <div className={`rounded-2xl border px-5 py-4 text-[15px] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${alertStyles}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em]">
-                {alertPayload.title}
-              </p>
-              <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
-                {alertPayload.body}
-              </p>
+      {alertPayloads.length > 0 ? (
+        <div className="space-y-3">
+          {alertPayloads.map(alert => (
+            <div
+              key={alert.id ?? `${alert.title}-${alert.body}`}
+              className={`rounded-2xl border px-5 py-4 text-[15px] shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${getAlertStyles(alert.color)}`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em]">
+                    {alert.title}
+                  </p>
+                  <p className="mt-2 text-[17px] font-semibold text-[var(--c-1f1f1d)]">
+                    {alert.body}
+                  </p>
+                </div>
+                {alert.persistence === 'persist' ? (
+                  <button
+                    type="button"
+                    onClick={() => dismissAlert(alert.id)}
+                    className="rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em]"
+                  >
+                    Dismiss
+                  </button>
+                ) : null}
+              </div>
             </div>
-            {alertPayload.persistence === 'persist' ? (
-              <button
-                type="button"
-                onClick={dismissAlert}
-                className="rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em]"
-              >
-                Dismiss
-              </button>
-            ) : null}
-          </div>
+          ))}
         </div>
       ) : null}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.6fr] lg:items-start">
@@ -1421,7 +1530,7 @@ export default function TeacherDashboardPage() {
             <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
               {promoPayload.title}
             </h2>
-            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+            <p className="mt-3 text-base text-[var(--c-6f6c65)]">
               {promoPayload.body}
             </p>
             <div className="mt-6">

@@ -9,6 +9,11 @@ import {
   type LessonPackSubject,
 } from '../components/lesson-pack-types';
 
+const SOUND_SLICE_HEIGHT_DEFAULTS = {
+  header: 420,
+  body: 675,
+} as const;
+
 const updateSubjectOrder = (subjects: LessonPackSubject[]) =>
   subjects.map((subject, index) => ({ ...subject, order: index }));
 
@@ -67,12 +72,28 @@ export default function LessonPackBuilderPage() {
       0,
     );
     const subjects = sorted.map((subject, index) => {
+      const placement = subject.soundSlicePlacement ?? 'header';
+      const hasHeight = Number.isFinite(subject.soundSliceHeight);
       if (Number.isFinite(subject.subjectNumber)) {
+        if (!hasHeight) {
+          didUpdate = true;
+          return {
+            ...subject,
+            soundSliceHeight: SOUND_SLICE_HEIGHT_DEFAULTS[placement],
+          };
+        }
         return subject;
       }
       didUpdate = true;
       nextNumber += 1;
-      return { ...subject, subjectNumber: nextNumber, order: index };
+      return {
+        ...subject,
+        subjectNumber: nextNumber,
+        order: index,
+        soundSliceHeight: hasHeight
+          ? subject.soundSliceHeight
+          : SOUND_SLICE_HEIGHT_DEFAULTS[placement],
+      };
     });
 
     const subjectCount =
@@ -749,16 +770,56 @@ export default function LessonPackBuilderPage() {
                     <select
                       value={selectedSubject.soundSlicePlacement}
                       onChange={event =>
-                        handleSubjectUpdate(selectedSubject.id, {
-                          soundSlicePlacement: event.target
-                            .value as LessonPackSubject['soundSlicePlacement'],
-                        })
+                        {
+                          const nextPlacement = event.target
+                            .value as LessonPackSubject['soundSlicePlacement'];
+                          const prevDefault =
+                            SOUND_SLICE_HEIGHT_DEFAULTS[selectedSubject.soundSlicePlacement];
+                          const nextDefault = SOUND_SLICE_HEIGHT_DEFAULTS[nextPlacement];
+                          const shouldUpdateHeight =
+                            !Number.isFinite(selectedSubject.soundSliceHeight) ||
+                            selectedSubject.soundSliceHeight === prevDefault;
+                          handleSubjectUpdate(selectedSubject.id, {
+                            soundSlicePlacement: nextPlacement,
+                            soundSliceHeight: shouldUpdateHeight
+                              ? nextDefault
+                              : selectedSubject.soundSliceHeight,
+                          });
+                        }
                       }
                       className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
                     >
                       <option value="header">Header</option>
                       <option value="body">Above Body</option>
                     </select>
+                  </label>
+
+                  <label className="flex flex-col gap-2">
+                    SoundSlice Height (px)
+                    <input
+                      type="number"
+                      min={240}
+                      max={900}
+                      step={10}
+                      value={
+                        Number.isFinite(selectedSubject.soundSliceHeight)
+                          ? selectedSubject.soundSliceHeight
+                          : SOUND_SLICE_HEIGHT_DEFAULTS[
+                              selectedSubject.soundSlicePlacement
+                            ]
+                      }
+                      onChange={event => {
+                        const nextValue = Number(event.target.value);
+                        handleSubjectUpdate(selectedSubject.id, {
+                          soundSliceHeight: Number.isNaN(nextValue)
+                            ? SOUND_SLICE_HEIGHT_DEFAULTS[
+                                selectedSubject.soundSlicePlacement
+                              ]
+                            : nextValue,
+                        });
+                      }}
+                      className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
+                    />
                   </label>
 
                   <div className="space-y-2">

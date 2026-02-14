@@ -15,8 +15,8 @@ type AlertPayload = {
 
 type AlertStore = {
   active?: {
-    teacher?: AlertPayload | null;
-    student?: AlertPayload | null;
+    teacher?: AlertPayload[];
+    student?: AlertPayload[];
   };
   history?: AlertPayload[];
 };
@@ -27,14 +27,27 @@ async function readAlerts(): Promise<AlertStore> {
   try {
     const raw = await fs.readFile(alertsFile, 'utf-8');
     const parsed = JSON.parse(raw) as AlertStore;
+    const normalizeList = (value?: AlertPayload[] | AlertPayload | null) => {
+      if (!value) return [];
+      return Array.isArray(value) ? value : [value];
+    };
     if ('teacher' in (parsed as Record<string, unknown>)) {
       const legacy = parsed as { teacher?: AlertPayload | null; student?: AlertPayload | null };
       return {
         active: {
-          teacher: legacy.teacher ?? null,
-          student: legacy.student ?? null,
+          teacher: normalizeList(legacy.teacher),
+          student: normalizeList(legacy.student),
         },
         history: [],
+      };
+    }
+    if (parsed?.active) {
+      return {
+        ...parsed,
+        active: {
+          teacher: normalizeList(parsed.active.teacher as AlertPayload[] | AlertPayload | null),
+          student: normalizeList(parsed.active.student as AlertPayload[] | AlertPayload | null),
+        },
       };
     }
     return parsed ?? {};
@@ -84,10 +97,12 @@ export async function POST(request: Request) {
     status: 'active',
   };
   if (body.audience === 'teacher' || body.audience === 'both') {
-    next.active = { ...(next.active ?? {}), teacher: payload };
+    const teacher = Array.isArray(next.active?.teacher) ? next.active?.teacher : [];
+    next.active = { ...(next.active ?? {}), teacher: [payload, ...teacher] };
   }
   if (body.audience === 'student' || body.audience === 'both') {
-    next.active = { ...(next.active ?? {}), student: payload };
+    const student = Array.isArray(next.active?.student) ? next.active?.student : [];
+    next.active = { ...(next.active ?? {}), student: [payload, ...student] };
   }
   next.history = [{ ...payload }, ...(next.history ?? [])];
   await writeAlerts(next);
@@ -108,25 +123,18 @@ export async function DELETE(request: Request) {
     next.history = (next.history ?? []).map(item =>
       item.id === id ? { ...item, status: 'removed' } : item,
     );
-    if (next.active?.teacher?.id === id) {
-      next.active.teacher = null;
+    if (next.active?.teacher) {
+      next.active.teacher = next.active.teacher.filter(item => item.id !== id);
     }
-    if (next.active?.student?.id === id) {
-      next.active.student = null;
+    if (next.active?.student) {
+      next.active.student = next.active.student.filter(item => item.id !== id);
     }
-    if (historyItem && historyItem.audience) {
-      if (historyItem.audience === 'teacher' || historyItem.audience === 'both') {
-        next.active = { ...(next.active ?? {}), teacher: null };
-      }
-      if (historyItem.audience === 'student' || historyItem.audience === 'both') {
-        next.active = { ...(next.active ?? {}), student: null };
-      }
-    }
+    void historyItem;
   } else if (audience) {
-    if (audience === 'teacher') next.active = { ...(next.active ?? {}), teacher: null };
-    if (audience === 'student') next.active = { ...(next.active ?? {}), student: null };
+    if (audience === 'teacher') next.active = { ...(next.active ?? {}), teacher: [] };
+    if (audience === 'student') next.active = { ...(next.active ?? {}), student: [] };
     if (audience === 'both') {
-      next.active = { ...(next.active ?? {}), teacher: null, student: null };
+      next.active = { ...(next.active ?? {}), teacher: [], student: [] };
     }
   } else {
     return NextResponse.json({ error: 'audience or id required.' }, { status: 400 });

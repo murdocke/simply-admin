@@ -5,7 +5,7 @@
       "role": "company",
       "name": "Neil Moore",
       "email": "neil@simplymusic.com",
-      "lastLogin": "2026-02-13T14:29:49.236Z",
+      "lastLogin": "2026-02-13T21:08:27.388Z",
       "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -15,7 +15,7 @@
       "role": "teacher",
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
-      "lastLogin": "2026-02-12T22:09:17.379Z",
+      "lastLogin": "2026-02-13T20:35:51.185Z",
       "password": "Coffee@Sunrise@2026",
       "teacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
       "goesBy": "Mr. Brian",
@@ -92,10 +92,11 @@
       "role": "student",
       "name": "Quinn",
       "email": "dawnfrancour@gmail.com",
-      "lastLogin": "2026-02-12T21:46:48.005Z",
+      "lastLogin": "2026-02-13T23:28:34.911Z",
       "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
-      "accountStatus": "Active"
+      "accountStatus": "Active",
+      "goesBy": ""
     }
   ]
 }

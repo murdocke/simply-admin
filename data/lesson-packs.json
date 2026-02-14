@@ -15,13 +15,13 @@
       "subjectCount": 2,
       "status": "draft",
       "createdAt": "2026-02-11T00:00:00.000Z",
-      "updatedAt": "2026-02-11T18:55:55.187Z",
+      "updatedAt": "2026-02-13T19:17:25.501Z",
       "subjects": [
         {
           "id": "subject-piano-2",
           "title": "Simple Hand Shifts",
           "body": "Shifting positions smoothly is one of the foundations of confident playing. Focus on moving your entire hand as one relaxed unit rather than stretching individual fingers to reach new notes. Keep your thumb light on the back of the neck and avoid squeezing.\n\nPractice sliding between two nearby positions slowly, listening for clean tone with no buzzing or gaps. Keep fingers close to the strings to reduce wasted motion. The goal is controlled, quiet movement — not speed.\n\nAs you improve, begin shifting without looking at your hand. Build trust in your muscle memory and develop consistency across all strings.",
-          "headerImageUrl": "https://images.unsplash.com/photo-1445985543470-41fba5c3144a?auto=format&fit=crop&w=1200&q=80",
+          "headerImageUrl": "",
           "headerVideoUrl": "",
           "inlineVideoUrl": "",
           "inlinePdfUrl": "",
@@ -40,15 +40,16 @@
             }
           ],
           "soundSliceUrl": "https://www.soundslice.com/slices/HZnfc/embed/",
-          "soundSlicePlacement": "body",
+          "soundSlicePlacement": "header",
           "order": 0,
-          "subjectNumber": 1
+          "subjectNumber": 1,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-piano-1",
           "title": "Even Finger Strikes",
           "body": "Balanced finger strength creates a clean, professional sound. When playing five-finger patterns, aim for consistent tone, volume, and timing across every note. Avoid letting stronger fingers overpower weaker ones.\n\nKeep wrists level and relaxed. Each finger should lift only slightly before striking — no exaggerated motion. Focus on control over force.\n\nUse a slow metronome setting and listen carefully. If one note sounds louder or weaker, isolate that finger and repeat short patterns until it matches the others. Consistency is more important than speed.",
-          "headerImageUrl": "https://images.unsplash.com/photo-1477233534935-f5e6fe7c1159?auto=format&fit=crop&w=1200&q=80",
+          "headerImageUrl": "",
           "headerVideoUrl": "",
           "inlineVideoUrl": "",
           "inlinePdfUrl": "",
@@ -66,10 +67,11 @@
               "url": "https://www.musictheory.net/lessons"
             }
           ],
-          "soundSliceUrl": "",
+          "soundSliceUrl": "https://www.soundslice.com/slices/HZnfc/embed/",
           "soundSlicePlacement": "header",
           "order": 1,
-          "subjectNumber": 2
+          "subjectNumber": 2,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-9rzgnmgo",
@@ -96,7 +98,8 @@
           ],
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
-          "order": 2
+          "order": 2,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-r2xezcv2",
@@ -123,7 +126,8 @@
           ],
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
-          "order": 3
+          "order": 3,
+          "soundSliceHeight": 420
         }
       ]
     },
@@ -169,7 +173,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 0,
-          "subjectNumber": 1
+          "subjectNumber": 1,
+          "soundSliceHeight": 420
         }
       ]
     },
@@ -215,7 +220,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 0,
-          "subjectNumber": 1
+          "subjectNumber": 1,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-piano-5",
@@ -242,7 +248,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "body",
           "order": 1,
-          "subjectNumber": 2
+          "subjectNumber": 2,
+          "soundSliceHeight": 675
         },
         {
           "id": "subject-piano-6",
@@ -269,7 +276,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 2,
-          "subjectNumber": 3
+          "subjectNumber": 3,
+          "soundSliceHeight": 420
         }
       ]
     },
@@ -315,7 +323,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 0,
-          "subjectNumber": 1
+          "subjectNumber": 1,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-piano-8",
@@ -342,7 +351,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "body",
           "order": 1,
-          "subjectNumber": 2
+          "subjectNumber": 2,
+          "soundSliceHeight": 675
         }
       ]
     },
@@ -388,7 +398,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 0,
-          "subjectNumber": 1
+          "subjectNumber": 1,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-piano-10",
@@ -415,7 +426,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "body",
           "order": 1,
-          "subjectNumber": 2
+          "subjectNumber": 2,
+          "soundSliceHeight": 675
         },
         {
           "id": "subject-piano-11",
@@ -442,7 +454,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "header",
           "order": 2,
-          "subjectNumber": 3
+          "subjectNumber": 3,
+          "soundSliceHeight": 420
         },
         {
           "id": "subject-piano-12",
@@ -469,7 +482,8 @@
           "soundSliceUrl": "",
           "soundSlicePlacement": "body",
           "order": 3,
-          "subjectNumber": 4
+          "subjectNumber": 4,
+          "soundSliceHeight": 675
         }
       ]
     }
