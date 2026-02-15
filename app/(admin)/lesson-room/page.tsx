@@ -640,14 +640,25 @@ export default function LessonRoomPage(): ReactElement {
     return label === "undefined" || label.trim() === "" ? "unknown" : label;
   };
 
-  const isLocalSignalActive = (source: CameraSource) => {
-    if (cameraPermission !== "granted" || livekitState !== "connected") {
-      return false;
-    }
+  const isSignalActiveForSource = (source: CameraSource) => {
     if (activeRole === "teacher") {
-      return source === "teacher1" || source === "teacher2";
+      const isLocal = source === "teacher1" || source === "teacher2";
+      if (isLocal) {
+        return cameraPermission === "granted" && livekitState === "connected";
+      }
+      return Boolean(remoteStudentTrackRef.current) && livekitState === "connected";
     }
-    return source === "student";
+    const isLocal = source === "student";
+    if (isLocal) {
+      return cameraPermission === "granted" && livekitState === "connected";
+    }
+    return (
+      Boolean(
+        source === "teacher1"
+          ? remoteTeacherTracksRef.current[0]
+          : remoteTeacherTracksRef.current[1],
+      ) && livekitState === "connected"
+    );
   };
 
   useEffect(() => {
@@ -1203,7 +1214,7 @@ export default function LessonRoomPage(): ReactElement {
                     onSwap={() => handleSwap(0)}
                     videoRef={teacherOneVideoRef}
                     labelSize="sm"
-                    signalActive={isLocalSignalActive(layoutSources.compact.small[0])}
+                    signalActive={isSignalActiveForSource(layoutSources.compact.small[0])}
                   />
                   <CameraFrame
                     label={getLabelForSource(layoutSources.compact.small[1], false)}
@@ -1211,7 +1222,7 @@ export default function LessonRoomPage(): ReactElement {
                     onSwap={() => handleSwap(1)}
                     videoRef={teacherTwoVideoRef}
                     labelSize="sm"
-                    signalActive={isLocalSignalActive(layoutSources.compact.small[1])}
+                    signalActive={isSignalActiveForSource(layoutSources.compact.small[1])}
                   />
               </div>
             </section>
@@ -1226,7 +1237,7 @@ export default function LessonRoomPage(): ReactElement {
                       label={getLabelForSource(layoutSources.compact.main, true)}
                       className="max-w-full"
                       videoRef={mainVideoRef}
-                      signalActive={isLocalSignalActive(layoutSources.compact.main)}
+                      signalActive={isSignalActiveForSource(layoutSources.compact.main)}
                     />
                   {controlsMinimized ? (
                     <button
@@ -1310,7 +1321,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
-                  signalActive={isLocalSignalActive(layoutSources.middle.small[0])}
+                  signalActive={isSignalActiveForSource(layoutSources.middle.small[0])}
                 />
                 <CameraFrame
                   label={getLabelForSource(layoutSources.middle.small[1], false)}
@@ -1318,7 +1329,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
-                  signalActive={isLocalSignalActive(layoutSources.middle.small[1])}
+                  signalActive={isSignalActiveForSource(layoutSources.middle.small[1])}
                 />
               </section>
               <section className="flex flex-1 flex-col gap-3">
@@ -1330,7 +1341,7 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.middle.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
-                    signalActive={isLocalSignalActive(layoutSources.middle.main)}
+                    signalActive={isSignalActiveForSource(layoutSources.middle.main)}
                   />
                   {controlsMinimized ? (
                     <button
@@ -1414,7 +1425,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
-                  signalActive={isLocalSignalActive(layoutSources.ultra.small[0])}
+                  signalActive={isSignalActiveForSource(layoutSources.ultra.small[0])}
                 />
               </section>
               <section className="flex flex-col gap-3">
@@ -1426,7 +1437,7 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.ultra.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
-                    signalActive={isLocalSignalActive(layoutSources.ultra.main)}
+                    signalActive={isSignalActiveForSource(layoutSources.ultra.main)}
                   />
                   {controlsMinimized ? (
                     <button
@@ -1492,7 +1503,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
-                  signalActive={isLocalSignalActive(layoutSources.ultra.small[1])}
+                  signalActive={isSignalActiveForSource(layoutSources.ultra.small[1])}
                 />
               </section>
               <aside className="space-y-4 pt-[29px]">
