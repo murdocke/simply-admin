@@ -20,6 +20,8 @@ type VideoPlaceholderProps = {
   showSwapButton?: boolean;
   onSwap?: () => void;
   videoRef?: React.RefObject<HTMLVideoElement>;
+  labelSize?: "sm" | "md";
+  signalActive?: boolean;
 };
 
 type CameraFrameProps = {
@@ -28,6 +30,8 @@ type CameraFrameProps = {
   showSwapButton?: boolean;
   onSwap?: () => void;
   videoRef?: React.RefObject<HTMLVideoElement>;
+  labelSize?: "sm" | "md";
+  signalActive?: boolean;
 };
 
 type DragPosition = {
@@ -74,7 +78,13 @@ const VideoPlaceholder = ({
   showSwapButton = false,
   onSwap,
   videoRef,
+  labelSize = "md",
+  signalActive = false,
 }: VideoPlaceholderProps): ReactElement => {
+  const labelClasses =
+    labelSize === "sm"
+      ? "px-3 py-1.5 text-[11px] rounded-full"
+      : "px-4 py-2 text-sm rounded-full";
   return (
     <div
       className={[
@@ -96,29 +106,34 @@ const VideoPlaceholder = ({
         />
       ) : null}
       <div className="relative flex items-center justify-between px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/80">
-        <span className="rounded-full bg-white/15 px-4 py-1.5 text-[11px] font-semibold">
+        <span className="select-none rounded-full bg-white/20 px-4 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
           Live View
         </span>
-        <span className="flex items-center gap-2">
+        <span className="select-none flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
           <span className="h-2 w-2 rounded-full bg-red-500" />
           Recording In Progress
         </span>
       </div>
-      <div className="relative flex flex-1 items-center justify-center">
-        <span className="rounded-full border border-white/20 bg-black/30 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white/90">
-          {label}
-        </span>
-      </div>
+      <div className="relative flex flex-1" />
       <div className="relative flex items-center justify-between px-4 py-3 text-xs text-white/70">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-          Signal Status
+        <div
+          className={`select-none flex items-center gap-2 bg-white/20 font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm ${labelClasses}`}
+          style={{
+            clipPath: "inset(0 round 999px)",
+          }}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              signalActive ? "bg-emerald-400" : "bg-red-500"
+            }`}
+          />
+          {label}
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-full border border-white/20 px-3 py-1">
+          <span className="rounded-full border border-white/25 px-3 py-1 backdrop-blur-sm bg-white/10">
             16:9
           </span>
-          <span className="rounded-full border border-white/20 px-3 py-1">
+          <span className="rounded-full border border-white/25 px-3 py-1 backdrop-blur-sm bg-white/10">
             HD
           </span>
           {showSwapButton ? (
@@ -150,6 +165,8 @@ const CameraFrame = ({
   showSwapButton = false,
   onSwap,
   videoRef,
+  labelSize,
+  signalActive,
 }: CameraFrameProps): ReactElement => {
   return (
     <div className={`w-full aspect-video ${className}`}>
@@ -159,6 +176,8 @@ const CameraFrame = ({
         showSwapButton={showSwapButton}
         onSwap={onSwap}
         videoRef={videoRef}
+        labelSize={labelSize}
+        signalActive={signalActive}
       />
     </div>
   );
@@ -613,6 +632,24 @@ export default function LessonRoomPage(): ReactElement {
     }
   };
 
+  const normalizeStateLabel = (value: unknown) => {
+    if (value === undefined || value === null) {
+      return "unknown";
+    }
+    const label = String(value);
+    return label === "undefined" || label.trim() === "" ? "unknown" : label;
+  };
+
+  const isLocalSignalActive = (source: CameraSource) => {
+    if (cameraPermission !== "granted" || livekitState !== "connected") {
+      return false;
+    }
+    if (activeRole === "teacher") {
+      return source === "teacher1" || source === "teacher2";
+    }
+    return source === "student";
+  };
+
   useEffect(() => {
     if (activeRole !== "teacher") {
       stopTrack(teacherTrackOne);
@@ -813,8 +850,8 @@ export default function LessonRoomPage(): ReactElement {
           setLivekitState("connected");
           updateParticipants();
           setConnectionDebug({
-            roomState: String(room.state),
-            connectionState: String(room.connectionState),
+            roomState: normalizeStateLabel(room.state),
+            connectionState: normalizeStateLabel(room.connectionState),
             remoteCount: room.remoteParticipants.size,
             roomName: room.name || "unknown",
           });
@@ -823,8 +860,8 @@ export default function LessonRoomPage(): ReactElement {
           setLivekitState("disconnected");
           updateParticipants();
           setConnectionDebug({
-            roomState: String(room.state),
-            connectionState: String(room.connectionState),
+            roomState: normalizeStateLabel(room.state),
+            connectionState: normalizeStateLabel(room.connectionState),
             remoteCount: room.remoteParticipants.size,
             roomName: room.name || "unknown",
           });
@@ -874,8 +911,8 @@ export default function LessonRoomPage(): ReactElement {
         setLivekitState(room.state === "connected" ? "connected" : "connecting");
         updateParticipants();
         setConnectionDebug({
-          roomState: String(room.state),
-          connectionState: String(room.connectionState),
+          roomState: normalizeStateLabel(room.state),
+          connectionState: normalizeStateLabel(room.connectionState),
           remoteCount: room.remoteParticipants.size,
           roomName: room.name || "unknown",
         });
@@ -1165,12 +1202,16 @@ export default function LessonRoomPage(): ReactElement {
                     showSwapButton
                     onSwap={() => handleSwap(0)}
                     videoRef={teacherOneVideoRef}
+                    labelSize="sm"
+                    signalActive={isLocalSignalActive(layoutSources.compact.small[0])}
                   />
                   <CameraFrame
                     label={getLabelForSource(layoutSources.compact.small[1], false)}
                     showSwapButton
                     onSwap={() => handleSwap(1)}
                     videoRef={teacherTwoVideoRef}
+                    labelSize="sm"
+                    signalActive={isLocalSignalActive(layoutSources.compact.small[1])}
                   />
               </div>
             </section>
@@ -1185,12 +1226,13 @@ export default function LessonRoomPage(): ReactElement {
                       label={getLabelForSource(layoutSources.compact.main, true)}
                       className="max-w-full"
                       videoRef={mainVideoRef}
+                      signalActive={isLocalSignalActive(layoutSources.compact.main)}
                     />
                   {controlsMinimized ? (
                     <button
                       type="button"
                       onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/20 bg-white/10 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
+                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
                         minimizedSide === "left"
                           ? "rounded-r-lg border-l-0"
                           : "rounded-l-lg border-r-0"
@@ -1203,7 +1245,7 @@ export default function LessonRoomPage(): ReactElement {
                     </button>
                   ) : (
                     <div
-                      className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/15 bg-white/10 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[2px]"
+                      className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
                       style={{ left: controlPosition.x, top: controlPosition.y }}
                       onPointerDown={handleControlsPointerDown}
                       role="presentation"
@@ -1267,12 +1309,16 @@ export default function LessonRoomPage(): ReactElement {
                   showSwapButton
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
+                  labelSize="sm"
+                  signalActive={isLocalSignalActive(layoutSources.middle.small[0])}
                 />
                 <CameraFrame
                   label={getLabelForSource(layoutSources.middle.small[1], false)}
                   showSwapButton
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
+                  labelSize="sm"
+                  signalActive={isLocalSignalActive(layoutSources.middle.small[1])}
                 />
               </section>
               <section className="flex flex-1 flex-col gap-3">
@@ -1284,12 +1330,13 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.middle.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
+                    signalActive={isLocalSignalActive(layoutSources.middle.main)}
                   />
                   {controlsMinimized ? (
                     <button
                       type="button"
                       onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/20 bg-white/10 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
+                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
                         minimizedSide === "left"
                           ? "rounded-r-lg border-l-0"
                           : "rounded-l-lg border-r-0"
@@ -1302,7 +1349,7 @@ export default function LessonRoomPage(): ReactElement {
                     </button>
                   ) : (
                     <div
-                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/15 bg-white/10 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[2px]"
+                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
                       style={{ left: controlPosition.x, top: controlPosition.y }}
                       onPointerDown={handleControlsPointerDown}
                       role="presentation"
@@ -1366,6 +1413,8 @@ export default function LessonRoomPage(): ReactElement {
                   showSwapButton
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
+                  labelSize="sm"
+                  signalActive={isLocalSignalActive(layoutSources.ultra.small[0])}
                 />
               </section>
               <section className="flex flex-col gap-3">
@@ -1377,12 +1426,13 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.ultra.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
+                    signalActive={isLocalSignalActive(layoutSources.ultra.main)}
                   />
                   {controlsMinimized ? (
                     <button
                       type="button"
                       onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/20 bg-white/10 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
+                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
                         minimizedSide === "left"
                           ? "rounded-r-lg border-l-0"
                           : "rounded-l-lg border-r-0"
@@ -1395,7 +1445,7 @@ export default function LessonRoomPage(): ReactElement {
                     </button>
                   ) : (
                     <div
-                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/15 bg-white/10 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[2px]"
+                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
                       style={{ left: controlPosition.x, top: controlPosition.y }}
                       onPointerDown={handleControlsPointerDown}
                       role="presentation"
@@ -1441,6 +1491,8 @@ export default function LessonRoomPage(): ReactElement {
                   showSwapButton
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
+                  labelSize="sm"
+                  signalActive={isLocalSignalActive(layoutSources.ultra.small[1])}
                 />
               </section>
               <aside className="space-y-4 pt-[29px]">
