@@ -43,6 +43,7 @@ type DragState = {
 
 type DockSide = "left" | "right";
 type UserRole = "teacher" | "student" | "company";
+type CameraSource = "teacher1" | "teacher2" | "student";
 
 const CONTROL_PANEL_WIDTH = 300;
 const CONTROL_PANEL_HEIGHT = 88;
@@ -54,6 +55,11 @@ const CONTROL_PANEL_BOTTOM_OFFSET = 24;
 const AUTH_STORAGE_KEY = "sm_user";
 const VIEW_ROLE_STORAGE_KEY = "sm_view_role";
 const DEFAULT_ROOM_NAME = "lesson-room";
+const SOURCE_LABELS: Record<CameraSource, string> = {
+  teacher1: "Teacher Camera 1",
+  teacher2: "Teacher Camera 2",
+  student: "Student Camera",
+};
 
 const videoBackdropStyle: CSSProperties = {
   backgroundImage:
@@ -176,6 +182,35 @@ const PanelButton = ({
   );
 };
 
+const CameraSelect = ({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: MediaDeviceInfo[];
+  onChange: (value: string) => void;
+}): ReactElement => {
+  return (
+    <label className="space-y-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-xs text-[var(--c-3a3935)]"
+      >
+        {options.map((device) => (
+          <option key={device.deviceId} value={device.deviceId}>
+            {device.label || `Camera ${device.deviceId.slice(0, 4)}`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+};
+
 const PanelSection = ({
   title,
   children,
@@ -196,9 +231,19 @@ const PanelSection = ({
 const RightSidebar = ({
   role,
   onRequestPermission,
+  devices,
+  teacherCamOneId,
+  teacherCamTwoId,
+  onChangeTeacherCamOne,
+  onChangeTeacherCamTwo,
 }: {
   role: UserRole;
   onRequestPermission: () => void;
+  devices: MediaDeviceInfo[];
+  teacherCamOneId: string;
+  teacherCamTwoId: string;
+  onChangeTeacherCamOne: (value: string) => void;
+  onChangeTeacherCamTwo: (value: string) => void;
 }): ReactElement => {
   if (role === "student") {
     return (
@@ -273,6 +318,21 @@ const RightSidebar = ({
         <PanelButton label="Open Student Profile" />
         <PanelButton label="Assign Practice" />
         <PanelButton label="Request Student Permission" onClick={onRequestPermission} />
+      </PanelSection>
+
+      <PanelSection title="Camera Inputs">
+        <CameraSelect
+          label="Teacher Camera 1"
+          value={teacherCamOneId}
+          options={devices}
+          onChange={onChangeTeacherCamOne}
+        />
+        <CameraSelect
+          label="Teacher Camera 2"
+          value={teacherCamTwoId}
+          options={devices}
+          onChange={onChangeTeacherCamTwo}
+        />
       </PanelSection>
 
       <PanelSection title="Session Notes">
@@ -406,17 +466,30 @@ export default function LessonRoomPage(): ReactElement {
     null,
   );
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const layoutWidth = viewportSize.width || 0;
+  const isUltraWide = layoutWidth >= 3500;
+  const isWide = layoutWidth >= 2000 && layoutWidth < 3500;
+  const layoutKey = isUltraWide ? "ultra" : isWide ? "middle" : "compact";
   const [activeRole, setActiveRole] = useState<UserRole>("teacher");
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionTermsAgreed, setPermissionTermsAgreed] = useState(false);
-  const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(
+  const [teacherTrackOne, setTeacherTrackOne] = useState<LocalVideoTrack | null>(
     null,
   );
+  const [teacherTrackTwo, setTeacherTrackTwo] = useState<LocalVideoTrack | null>(
+    null,
+  );
+  const [studentTrack, setStudentTrack] = useState<LocalVideoTrack | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [teacherCamOneId, setTeacherCamOneId] = useState<string>("");
+  const [teacherCamTwoId, setTeacherCamTwoId] = useState<string>("");
+  const [studentCamId, setStudentCamId] = useState<string>("");
   const [livekitError, setLivekitError] = useState<string | null>(null);
   const [livekitState, setLivekitState] = useState<
     "disconnected" | "connecting" | "connected"
   >("disconnected");
   const [participantCount, setParticipantCount] = useState(1);
+  const [remoteTracksVersion, setRemoteTracksVersion] = useState(0);
   const [connectionDebug, setConnectionDebug] = useState({
     roomState: "unknown",
     connectionState: "unknown",
@@ -431,19 +504,15 @@ export default function LessonRoomPage(): ReactElement {
   const teacherTwoVideoRef = useRef<HTMLVideoElement | null>(null);
   const mainVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteTracksRef = useRef<RemoteVideoTrack[]>([]);
-  const [layoutLabels, setLayoutLabels] = useState({
-    compact: {
-      main: "Student Camera",
-      small: ["Teacher Camera 1", "Teacher Camera 2"],
-    },
-    middle: {
-      main: "Teacher Camera Focus",
-      small: ["Teacher Camera 1", "Teacher Camera 2"],
-    },
-    ultra: {
-      main: "Student Camera",
-      small: ["Teacher Camera 1", "Teacher Camera 2"],
-    },
+  const remoteTeacherTracksRef = useRef<Array<RemoteVideoTrack | null>>([
+    null,
+    null,
+  ]);
+  const remoteStudentTrackRef = useRef<RemoteVideoTrack | null>(null);
+  const [layoutSources, setLayoutSources] = useState({
+    compact: { main: "student" as CameraSource, small: ["teacher1", "teacher2"] as CameraSource[] },
+    middle: { main: "student" as CameraSource, small: ["teacher1", "teacher2"] as CameraSource[] },
+    ultra: { main: "student" as CameraSource, small: ["teacher1", "teacher2"] as CameraSource[] },
   });
   const dragStateRef = useRef<DragState>({
     dragging: false,
@@ -482,6 +551,20 @@ export default function LessonRoomPage(): ReactElement {
   }, []);
 
   useEffect(() => {
+    if (controlsMinimized || !cameraAreaRef.current) {
+      return;
+    }
+    const bounds = cameraAreaRef.current.getBoundingClientRect();
+    setControlPosition({
+      x: Math.max(0, bounds.width - CONTROL_PANEL_WIDTH - CONTROL_MARGIN),
+      y: Math.max(
+        0,
+        bounds.height - CONTROL_PANEL_HEIGHT - CONTROL_MARGIN - CONTROL_PANEL_BOTTOM_OFFSET,
+      ),
+    });
+  }, [layoutKey, controlsMinimized]);
+
+  useEffect(() => {
     const updatePermission = async () => {
       if (!("permissions" in navigator)) {
         setCameraPermission("unknown");
@@ -502,28 +585,131 @@ export default function LessonRoomPage(): ReactElement {
     updatePermission();
   }, []);
 
-  const layoutWidth = viewportSize.width || 0;
-  const isUltraWide = layoutWidth >= 3500;
-  const isWide = layoutWidth >= 2000 && layoutWidth < 3500;
-  const layoutKey = isUltraWide ? "ultra" : isWide ? "middle" : "compact";
+  useEffect(() => {
+    const loadDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((device) => device.kind === "videoinput");
+        setVideoDevices(videoInputs);
+        if (!teacherCamOneId && videoInputs[0]) {
+          setTeacherCamOneId(videoInputs[0].deviceId);
+        }
+        if (!teacherCamTwoId && videoInputs[1]) {
+          setTeacherCamTwoId(videoInputs[1].deviceId);
+        }
+        if (!studentCamId && videoInputs[0]) {
+          setStudentCamId(videoInputs[0].deviceId);
+        }
+      } catch {
+        setVideoDevices([]);
+      }
+    };
+    loadDevices();
+  }, [teacherCamOneId, teacherCamTwoId, studentCamId]);
 
-  const getLocalTargets = () =>
-    activeRole === "student"
-      ? [mainVideoRef.current]
-      : [teacherOneVideoRef.current, teacherTwoVideoRef.current];
+  const stopTrack = (track: LocalVideoTrack | null) => {
+    if (track) {
+      track.stop();
+    }
+  };
 
-  const getRemoteTargets = () =>
-    activeRole === "student"
-      ? [teacherOneVideoRef.current, teacherTwoVideoRef.current]
-      : [mainVideoRef.current];
+  useEffect(() => {
+    if (activeRole !== "teacher") {
+      stopTrack(teacherTrackOne);
+      stopTrack(teacherTrackTwo);
+      setTeacherTrackOne(null);
+      setTeacherTrackTwo(null);
+      return;
+    }
+    let mounted = true;
+    const initTeacherTracks = async () => {
+      if (!teacherCamOneId || !teacherCamTwoId) return;
+      try {
+        const trackOne = await createLocalVideoTrack({
+          deviceId: { exact: teacherCamOneId },
+        });
+        const trackTwo =
+          teacherCamTwoId === teacherCamOneId
+            ? trackOne
+            : await createLocalVideoTrack({
+                deviceId: { exact: teacherCamTwoId },
+              });
+        if (!mounted) {
+          trackOne.stop();
+          if (trackTwo !== trackOne) trackTwo.stop();
+          return;
+        }
+        stopTrack(teacherTrackOne);
+        stopTrack(teacherTrackTwo);
+        setTeacherTrackOne(trackOne);
+        setTeacherTrackTwo(trackTwo);
+      } catch (error) {
+        setLivekitError(
+          error instanceof Error ? error.message : "Camera init failed.",
+        );
+      }
+    };
+    initTeacherTracks();
+    return () => {
+      mounted = false;
+    };
+  }, [activeRole, teacherCamOneId, teacherCamTwoId]);
+
+  useEffect(() => {
+    if (activeRole !== "student") {
+      stopTrack(studentTrack);
+      setStudentTrack(null);
+      return;
+    }
+    let mounted = true;
+    const initStudentTrack = async () => {
+      if (!studentCamId) return;
+      try {
+        const track = await createLocalVideoTrack({
+          deviceId: { exact: studentCamId },
+        });
+        if (!mounted) {
+          track.stop();
+          return;
+        }
+        stopTrack(studentTrack);
+        setStudentTrack(track);
+      } catch (error) {
+        setLivekitError(
+          error instanceof Error ? error.message : "Camera init failed.",
+        );
+      }
+    };
+    initStudentTrack();
+    return () => {
+      mounted = false;
+    };
+  }, [activeRole, studentCamId]);
+
+  const getTrackForSource = (source: CameraSource) => {
+    if (activeRole === "student") {
+      if (source === "student") return studentTrack;
+      const teacherIndex = source === "teacher1" ? 0 : 1;
+      return remoteTeacherTracksRef.current[teacherIndex];
+    }
+    if (source === "student") return remoteStudentTrackRef.current;
+    return source === "teacher1" ? teacherTrackOne : teacherTrackTwo;
+  };
+
+  const getLabelForSource = (source: CameraSource, isMain: boolean) => {
+    if (layoutKey === "middle" && isMain && source.startsWith("teacher")) {
+      return "Teacher Camera Focus";
+    }
+    return SOURCE_LABELS[source];
+  };
 
   const handleSwap = (index: number) => {
-    setLayoutLabels((current) => {
+    setLayoutSources((current) => {
       const next = { ...current };
       const active = { ...next[layoutKey], small: [...next[layoutKey].small] };
-      const targetLabel = active.small[index];
+      const targetSource = active.small[index];
       active.small[index] = active.main;
-      active.main = targetLabel;
+      active.main = targetSource;
       next[layoutKey] = active;
       return next;
     });
@@ -561,34 +747,10 @@ export default function LessonRoomPage(): ReactElement {
 
   useEffect(() => {
     let mounted = true;
-    const ensureLocalPreview = async () => {
-      try {
-        const track = await createLocalVideoTrack();
-        if (!mounted) {
-          track.stop();
-          return;
-        }
-        setLocalVideoTrack(track);
-      } catch (error) {
-        setLivekitError(
-          error instanceof Error ? error.message : "Camera preview failed.",
-        );
-      }
-    };
-    ensureLocalPreview();
-    return () => {
-      mounted = false;
-      if (localVideoTrack) {
-        localVideoTrack.stop();
-      }
-      setLocalVideoTrack(null);
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
     const connectRoom = async () => {
-      if (!process.env.NEXT_PUBLIC_LIVEKIT_URL || !localVideoTrack) {
+      const publishTrack =
+        activeRole === "student" ? studentTrack : teacherTrackOne;
+      if (!process.env.NEXT_PUBLIC_LIVEKIT_URL || !publishTrack) {
         return;
       }
       setLivekitError(null);
@@ -614,7 +776,10 @@ export default function LessonRoomPage(): ReactElement {
         }
         const room = new Room();
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, data.token);
-        await room.localParticipant.publishTrack(localVideoTrack);
+        await room.localParticipant.publishTrack(publishTrack);
+        if (activeRole === "teacher" && teacherTrackTwo && teacherTrackTwo !== publishTrack) {
+          await room.localParticipant.publishTrack(teacherTrackTwo);
+        }
         if (!mounted) {
           room.disconnect();
           return;
@@ -630,11 +795,19 @@ export default function LessonRoomPage(): ReactElement {
               if (!track || track.kind !== Track.Kind.Video) return;
               if (remoteTracksRef.current.includes(track)) return;
               remoteTracksRef.current = [...remoteTracksRef.current, track];
-              getRemoteTargets()
-                .filter((element): element is HTMLVideoElement => Boolean(element))
-                .forEach((element) => track.attach(element));
+              if (activeRole === "student") {
+                const firstEmpty = remoteTeacherTracksRef.current.findIndex(
+                  (entry) => !entry,
+                );
+                if (firstEmpty >= 0) {
+                  remoteTeacherTracksRef.current[firstEmpty] = track;
+                }
+              } else {
+                remoteStudentTrackRef.current = track;
+              }
             });
           });
+          setRemoteTracksVersion((v) => v + 1);
         };
         const handleConnected = () => {
           setLivekitState("connected");
@@ -661,18 +834,33 @@ export default function LessonRoomPage(): ReactElement {
           if (track.kind !== Track.Kind.Video) return;
           if (remoteTracksRef.current.includes(track)) return;
           remoteTracksRef.current = [...remoteTracksRef.current, track];
-          getRemoteTargets()
-            .filter((element): element is HTMLVideoElement => Boolean(element))
-            .forEach((element) => track.attach(element));
+          if (activeRole === "student") {
+            const firstEmpty = remoteTeacherTracksRef.current.findIndex(
+              (entry) => !entry,
+            );
+            if (firstEmpty >= 0) {
+              remoteTeacherTracksRef.current[firstEmpty] = track;
+            }
+          } else {
+            remoteStudentTrackRef.current = track;
+          }
+          setRemoteTracksVersion((v) => v + 1);
         };
         const handleTrackUnsubscribed = (track: RemoteVideoTrack) => {
           if (track.kind !== Track.Kind.Video) return;
           const index = remoteTracksRef.current.indexOf(track);
           if (index >= 0) {
             remoteTracksRef.current = remoteTracksRef.current.filter(t => t !== track);
-            getRemoteTargets()
-              .filter((element): element is HTMLVideoElement => Boolean(element))
-              .forEach((element) => track.detach(element));
+            if (remoteStudentTrackRef.current === track) {
+              remoteStudentTrackRef.current = null;
+            }
+            const teacherIndex = remoteTeacherTracksRef.current.findIndex(
+              (entry) => entry === track,
+            );
+            if (teacherIndex >= 0) {
+              remoteTeacherTracksRef.current[teacherIndex] = null;
+            }
+            setRemoteTracksVersion((v) => v + 1);
           }
         };
 
@@ -714,6 +902,9 @@ export default function LessonRoomPage(): ReactElement {
         track.detach();
       });
       remoteTracksRef.current = [];
+      remoteTeacherTracksRef.current = [null, null];
+      remoteStudentTrackRef.current = null;
+      setRemoteTracksVersion((v) => v + 1);
       if (roomRef.current) {
         roomRef.current.disconnect();
         roomRef.current = null;
@@ -725,39 +916,45 @@ export default function LessonRoomPage(): ReactElement {
         roomName: "unknown",
       });
     };
-  }, [activeRole, localVideoTrack]);
-
-  useEffect(() => {
-    if (!localVideoTrack) {
-      return;
-    }
-    const targets = getLocalTargets().filter(
-      (element): element is HTMLVideoElement => Boolean(element),
-    );
-    targets.forEach((element) => {
-      localVideoTrack.attach(element);
-    });
-    return () => {
-      targets.forEach((element) => {
-        localVideoTrack.detach(element);
-      });
-    };
-  }, [localVideoTrack, activeRole, layoutKey]);
+  }, [activeRole, studentTrack, teacherTrackOne, teacherTrackTwo]);
 
   useEffect(() => {
     if (!roomRef.current) {
       return;
     }
-    const targets = getRemoteTargets().filter(
-      (element): element is HTMLVideoElement => Boolean(element),
-    );
-    remoteTracksRef.current.forEach((track) => {
-      targets.forEach((element) => {
-        track.detach(element);
+    const slotSources = layoutSources[layoutKey];
+    const slots = [
+      { ref: teacherOneVideoRef, source: slotSources.small[0], isMain: false },
+      { ref: teacherTwoVideoRef, source: slotSources.small[1], isMain: false },
+      { ref: mainVideoRef, source: slotSources.main, isMain: true },
+    ];
+    const allTracks = [
+      teacherTrackOne,
+      teacherTrackTwo,
+      studentTrack,
+      remoteStudentTrackRef.current,
+      remoteTeacherTracksRef.current[0],
+      remoteTeacherTracksRef.current[1],
+    ].filter((track): track is LocalVideoTrack | RemoteVideoTrack => Boolean(track));
+
+    slots.forEach(({ ref, source, isMain }) => {
+      const element = ref.current;
+      if (!element) return;
+      allTracks.forEach((track) => track.detach(element));
+      const track = getTrackForSource(source);
+      if (track) {
         track.attach(element);
-      });
+      }
     });
-  }, [layoutKey, activeRole]);
+  }, [
+    layoutKey,
+    activeRole,
+    remoteTracksVersion,
+    teacherTrackOne,
+    teacherTrackTwo,
+    studentTrack,
+    layoutSources,
+  ]);
 
   useEffect(() => {
     if (!showPermissionModal) {
@@ -964,13 +1161,13 @@ export default function LessonRoomPage(): ReactElement {
               </h2>
               <div className="grid min-h-[220px] grid-cols-1 gap-4 md:grid-cols-2">
                   <CameraFrame
-                    label={layoutLabels.compact.small[0]}
+                    label={getLabelForSource(layoutSources.compact.small[0], false)}
                     showSwapButton
                     onSwap={() => handleSwap(0)}
                     videoRef={teacherOneVideoRef}
                   />
                   <CameraFrame
-                    label={layoutLabels.compact.small[1]}
+                    label={getLabelForSource(layoutSources.compact.small[1], false)}
                     showSwapButton
                     onSwap={() => handleSwap(1)}
                     videoRef={teacherTwoVideoRef}
@@ -985,7 +1182,7 @@ export default function LessonRoomPage(): ReactElement {
                 </h2>
                 <div ref={cameraAreaRef} className="relative w-full overflow-hidden">
                     <CameraFrame
-                      label={layoutLabels.compact.main}
+                      label={getLabelForSource(layoutSources.compact.main, true)}
                       className="max-w-full"
                       videoRef={mainVideoRef}
                     />
@@ -1047,6 +1244,11 @@ export default function LessonRoomPage(): ReactElement {
                   <RightSidebar
                     role={activeRole}
                     onRequestPermission={() => setShowPermissionModal(true)}
+                    devices={videoDevices}
+                    teacherCamOneId={teacherCamOneId}
+                    teacherCamTwoId={teacherCamTwoId}
+                    onChangeTeacherCamOne={setTeacherCamOneId}
+                    onChangeTeacherCamTwo={setTeacherCamTwoId}
                   />
                 </aside>
             </section>
@@ -1061,13 +1263,13 @@ export default function LessonRoomPage(): ReactElement {
                   Teacher Cameras
                 </h2>
                 <CameraFrame
-                  label={layoutLabels.middle.small[0]}
+                  label={getLabelForSource(layoutSources.middle.small[0], false)}
                   showSwapButton
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
                 />
                 <CameraFrame
-                  label={layoutLabels.middle.small[1]}
+                  label={getLabelForSource(layoutSources.middle.small[1], false)}
                   showSwapButton
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
@@ -1079,7 +1281,7 @@ export default function LessonRoomPage(): ReactElement {
                 </h2>
                 <div ref={cameraAreaRef} className="relative w-full overflow-hidden">
                   <CameraFrame
-                    label={layoutLabels.middle.main}
+                    label={getLabelForSource(layoutSources.middle.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
                   />
@@ -1141,6 +1343,11 @@ export default function LessonRoomPage(): ReactElement {
                 <RightSidebar
                   role={activeRole}
                   onRequestPermission={() => setShowPermissionModal(true)}
+                  devices={videoDevices}
+                  teacherCamOneId={teacherCamOneId}
+                  teacherCamTwoId={teacherCamTwoId}
+                  onChangeTeacherCamOne={setTeacherCamOneId}
+                  onChangeTeacherCamTwo={setTeacherCamTwoId}
                 />
               </aside>
             </div>
@@ -1155,7 +1362,7 @@ export default function LessonRoomPage(): ReactElement {
                   Teacher Camera 1
                 </h2>
                 <CameraFrame
-                  label={layoutLabels.ultra.small[0]}
+                  label={getLabelForSource(layoutSources.ultra.small[0], false)}
                   showSwapButton
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
@@ -1167,7 +1374,7 @@ export default function LessonRoomPage(): ReactElement {
                 </h2>
                 <div ref={cameraAreaRef} className="relative w-full overflow-hidden">
                   <CameraFrame
-                    label={layoutLabels.ultra.main}
+                    label={getLabelForSource(layoutSources.ultra.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
                   />
@@ -1230,7 +1437,7 @@ export default function LessonRoomPage(): ReactElement {
                   Teacher Camera 2
                 </h2>
                 <CameraFrame
-                  label={layoutLabels.ultra.small[1]}
+                  label={getLabelForSource(layoutSources.ultra.small[1], false)}
                   showSwapButton
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
@@ -1240,6 +1447,11 @@ export default function LessonRoomPage(): ReactElement {
                 <RightSidebar
                   role={activeRole}
                   onRequestPermission={() => setShowPermissionModal(true)}
+                  devices={videoDevices}
+                  teacherCamOneId={teacherCamOneId}
+                  teacherCamTwoId={teacherCamTwoId}
+                  onChangeTeacherCamOne={setTeacherCamOneId}
+                  onChangeTeacherCamTwo={setTeacherCamTwoId}
                 />
             </aside>
             </div>
