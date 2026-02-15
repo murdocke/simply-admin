@@ -222,7 +222,10 @@ const CameraSelect = ({
       >
         {options.map((device) => (
           <option key={device.deviceId} value={device.deviceId}>
-            {device.label || `Camera ${device.deviceId.slice(0, 4)}`}
+            {(device.label || `Camera ${device.deviceId.slice(0, 4)}`).replace(
+              /\s*\([^)]*\)\s*/g,
+              " ",
+            ).trim()}
           </option>
         ))}
       </select>
@@ -1204,9 +1207,7 @@ export default function LessonRoomPage(): ReactElement {
           {layoutWidth < 2000 || layoutWidth === 0 ? (
             <div className="flex flex-1 flex-col gap-6 min-[3500px]:hidden">
             <section className="flex flex-col gap-4 min-[2000px]:hidden">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-7a776f)]">
-                Teacher Cameras
-              </h2>
+              <h2 className="sr-only">Teacher Cameras</h2>
               <div className="grid min-h-[220px] grid-cols-1 gap-4 md:grid-cols-2">
                   <CameraFrame
                     label={getLabelForSource(layoutSources.compact.small[0], false)}
@@ -1239,58 +1240,29 @@ export default function LessonRoomPage(): ReactElement {
                       videoRef={mainVideoRef}
                       signalActive={isSignalActiveForSource(layoutSources.compact.main)}
                     />
-                  {controlsMinimized ? (
-                    <button
-                      type="button"
-                      onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
-                        minimizedSide === "left"
-                          ? "rounded-r-lg border-l-0"
-                          : "rounded-l-lg border-r-0"
-                      }`}
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      title="Restore controls"
-                      aria-label="Restore controls"
-                    >
-                      <span className="h-6 w-1 rounded-sm bg-white/70" />
-                    </button>
-                  ) : (
-                    <div
-                      className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      onPointerDown={handleControlsPointerDown}
-                      role="presentation"
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70 select-none">
-                        Student Controls
-                        <button
-                          type="button"
-                          onClick={handleMinimizeControls}
-                          className="rounded-full border border-white/25 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/70"
-                          title="Minimize"
-                          aria-label="Minimize controls"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden="true">
-                            <path d="M6 12h12" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="mt-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-                        {controlButtons.map((button) => (
-                          <button
-                            key={button.label}
-                            type="button"
-                            disabled
-                            title={button.label}
-                            aria-label={button.label}
-                            className="group cursor-not-allowed rounded-full border border-white/15 bg-white/5 px-2 py-1.5 text-white/70 transition hover:bg-white/10"
-                          >
-                            <span className="text-white/85">{controlIcons[button.label]}</span>
-                          </button>
-                        ))}
+                  <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
+                    <div className="group/controls relative flex flex-col items-center">
+                      <div className="absolute left-0 top-0 h-[36px] w-full" aria-hidden="true" />
+                      <div className="w-full rounded-2xl border border-white/15 bg-black/35 px-3 py-2 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)] backdrop-blur-[8px] opacity-0 max-h-0 overflow-hidden transition-all duration-200 group-hover/controls:opacity-100 group-hover/controls:max-h-24">
+                        <div className="flex flex-nowrap items-center justify-center gap-2">
+                          {controlButtons.map((button) => (
+                            <button
+                              key={button.label}
+                              type="button"
+                              title={button.label}
+                              aria-label={button.label}
+                              className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/90 transition hover:bg-white/20"
+                            >
+                              <span className="text-white/95">{controlIcons[button.label]}</span>
+                              <span className="hidden text-[9px] tracking-[0.2em] text-white/80 sm:inline">
+                                {button.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
                 <aside className="flex flex-col gap-4 pt-[32px]">
@@ -1312,9 +1284,7 @@ export default function LessonRoomPage(): ReactElement {
           <div className="w-full flex-1 gap-8">
             <div className="grid w-full flex-1 grid-cols-[minmax(300px,0.3fr)_minmax(0,0.7fr)_260px] gap-6">
               <section className="flex flex-col gap-4">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-7a776f)]">
-                  Teacher Cameras
-                </h2>
+                <h2 className="sr-only">Teacher Cameras</h2>
                 <CameraFrame
                   label={getLabelForSource(layoutSources.middle.small[0], false)}
                   showSwapButton
@@ -1333,9 +1303,7 @@ export default function LessonRoomPage(): ReactElement {
                 />
               </section>
               <section className="flex flex-1 flex-col gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-7a776f)]">
-                  Teacher Camera Focus
-                </h2>
+                <h2 className="sr-only">Teacher Camera Focus</h2>
                 <div ref={cameraAreaRef} className="relative w-full overflow-hidden">
                   <CameraFrame
                     label={getLabelForSource(layoutSources.middle.main, true)}
@@ -1343,58 +1311,29 @@ export default function LessonRoomPage(): ReactElement {
                     videoRef={mainVideoRef}
                     signalActive={isSignalActiveForSource(layoutSources.middle.main)}
                   />
-                  {controlsMinimized ? (
-                    <button
-                      type="button"
-                      onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
-                        minimizedSide === "left"
-                          ? "rounded-r-lg border-l-0"
-                          : "rounded-l-lg border-r-0"
-                      }`}
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      title="Restore controls"
-                      aria-label="Restore controls"
-                    >
-                      <span className="h-6 w-1 rounded-sm bg-white/70" />
-                    </button>
-                  ) : (
-                    <div
-                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      onPointerDown={handleControlsPointerDown}
-                      role="presentation"
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70 select-none">
-                        Teacher Controls
-                        <button
-                          type="button"
-                          onClick={handleMinimizeControls}
-                          className="rounded-full border border-white/25 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/70"
-                          title="Minimize"
-                          aria-label="Minimize controls"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden="true">
-                            <path d="M6 12h12" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="mt-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-                        {controlButtons.map((button) => (
-                          <button
-                            key={button.label}
-                            type="button"
-                            disabled
-                            title={button.label}
-                            aria-label={button.label}
-                            className="group cursor-not-allowed rounded-full border border-white/15 bg-white/5 px-2 py-1.5 text-white/70 transition hover:bg-white/10"
-                          >
-                            <span className="text-white/85">{controlIcons[button.label]}</span>
-                          </button>
-                        ))}
+                  <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
+                    <div className="group/controls relative flex flex-col items-center">
+                      <div className="absolute left-0 top-0 h-[36px] w-full" aria-hidden="true" />
+                      <div className="w-full rounded-2xl border border-white/15 bg-black/35 px-3 py-2 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)] backdrop-blur-[8px] opacity-0 max-h-0 overflow-hidden transition-all duration-200 group-hover/controls:opacity-100 group-hover/controls:max-h-24">
+                        <div className="flex flex-nowrap items-center justify-center gap-2">
+                          {controlButtons.map((button) => (
+                            <button
+                              key={button.label}
+                              type="button"
+                              title={button.label}
+                              aria-label={button.label}
+                              className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/90 transition hover:bg-white/20"
+                            >
+                              <span className="text-white/95">{controlIcons[button.label]}</span>
+                              <span className="hidden text-[9px] tracking-[0.2em] text-white/80 sm:inline">
+                                {button.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </section>
               <aside className="flex flex-col gap-4 pt-[29px]">
@@ -1416,9 +1355,7 @@ export default function LessonRoomPage(): ReactElement {
           <div className="w-full flex-1 gap-8 items-center justify-center">
             <div className="grid w-full flex-1 grid-cols-[minmax(240px,1fr)_minmax(420px,1.5fr)_minmax(240px,1fr)_minmax(260px,320px)] gap-6">
               <section className="flex flex-col gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-7a776f)]">
-                  Teacher Camera 1
-                </h2>
+                <h2 className="sr-only">Teacher Camera 1</h2>
                 <CameraFrame
                   label={getLabelForSource(layoutSources.ultra.small[0], false)}
                   showSwapButton
@@ -1439,64 +1376,33 @@ export default function LessonRoomPage(): ReactElement {
                     videoRef={mainVideoRef}
                     signalActive={isSignalActiveForSource(layoutSources.ultra.main)}
                   />
-                  {controlsMinimized ? (
-                    <button
-                      type="button"
-                      onClick={handleRestoreControls}
-                      className={`absolute z-10 flex h-[64px] w-[20px] cursor-pointer items-center justify-center border border-white/25 bg-white/15 text-white/80 shadow-[0_18px_35px_-28px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
-                        minimizedSide === "left"
-                          ? "rounded-r-lg border-l-0"
-                          : "rounded-l-lg border-r-0"
-                      }`}
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      title="Restore controls"
-                      aria-label="Restore controls"
-                    >
-                      <span className="h-6 w-1 rounded-sm bg-white/70" />
-                    </button>
-                  ) : (
-                    <div
-                    className="absolute z-10 w-[min(300px,92vw)] cursor-move rounded-2xl border border-white/25 bg-white/15 px-3 py-2 shadow-[0_20px_40px_-30px_rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-                      style={{ left: controlPosition.x, top: controlPosition.y }}
-                      onPointerDown={handleControlsPointerDown}
-                      role="presentation"
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70 select-none">
-                        Student Controls
-                        <button
-                          type="button"
-                          onClick={handleMinimizeControls}
-                          className="rounded-full border border-white/25 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/70"
-                          title="Minimize"
-                          aria-label="Minimize controls"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden="true">
-                            <path d="M6 12h12" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="mt-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-                        {controlButtons.map((button) => (
-                          <button
-                            key={button.label}
-                            type="button"
-                            disabled
-                            title={button.label}
-                            aria-label={button.label}
-                            className="group cursor-not-allowed rounded-full border border-white/15 bg-white/5 px-2 py-1.5 text-white/70 transition hover:bg-white/10"
-                          >
-                            <span className="text-white/85">{controlIcons[button.label]}</span>
-                          </button>
-                        ))}
+                  <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
+                    <div className="group/controls relative flex flex-col items-center">
+                      <div className="absolute left-0 top-0 h-[36px] w-full" aria-hidden="true" />
+                      <div className="w-full rounded-2xl border border-white/15 bg-black/35 px-3 py-2 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)] backdrop-blur-[8px] opacity-0 max-h-0 overflow-hidden transition-all duration-200 group-hover/controls:opacity-100 group-hover/controls:max-h-24">
+                        <div className="flex flex-nowrap items-center justify-center gap-2">
+                          {controlButtons.map((button) => (
+                            <button
+                              key={button.label}
+                              type="button"
+                              title={button.label}
+                              aria-label={button.label}
+                              className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/90 transition hover:bg-white/20"
+                            >
+                              <span className="text-white/95">{controlIcons[button.label]}</span>
+                              <span className="hidden text-[9px] tracking-[0.2em] text-white/80 sm:inline">
+                                {button.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </section>
               <section className="flex flex-col gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-7a776f)]">
-                  Teacher Camera 2
-                </h2>
+                <h2 className="sr-only">Teacher Camera 2</h2>
                 <CameraFrame
                   label={getLabelForSource(layoutSources.ultra.small[1], false)}
                   showSwapButton
