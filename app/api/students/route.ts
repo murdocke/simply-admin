@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { randomUUID } from 'crypto';
+import { getDb } from '@/lib/db';
 
 type StudentRecord = {
   id: string;
@@ -23,41 +22,43 @@ type StudentRecord = {
   updatedAt: string;
 };
 
-type StudentsFile = {
-  students: StudentRecord[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'students.json');
-
-async function readStudentsFile(): Promise<StudentsFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as StudentsFile;
-    if (!parsed.students) {
-      return { students: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { students: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeStudentsFile(data: StudentsFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const teacher = searchParams.get('teacher');
-  const data = await readStudentsFile();
-  const filtered = teacher
-    ? data.students.filter(student => student.teacher === teacher)
-    : data.students;
-  return NextResponse.json({ students: filtered });
+  const db = getDb();
+  const rows = teacher
+    ? (db
+        .prepare('SELECT * FROM students WHERE teacher = ?')
+        .all(teacher) as Array<Record<string, string | null>>)
+    : (db.prepare('SELECT * FROM students').all() as Array<
+        Record<string, string | null>
+      >);
+
+  const students = rows.map(row => ({
+    id: row.id ?? '',
+    teacher: row.teacher ?? '',
+    name: row.name ?? '',
+    email: row.email ?? '',
+    username: row.username ?? undefined,
+    password: row.password ?? undefined,
+    level: row.level ?? '',
+    status: (row.status ?? 'Active') as StudentRecord['status'],
+    lessonFeeAmount: row.lesson_fee_amount ?? '',
+    lessonFeePeriod: row.lesson_fee_period as StudentRecord['lessonFeePeriod'],
+    lessonDay: row.lesson_day ?? '',
+    lessonTime: row.lesson_time ?? '',
+    lessonDuration: row.lesson_duration as StudentRecord['lessonDuration'],
+    lessonType: row.lesson_type as StudentRecord['lessonType'],
+    lessonLocation: row.lesson_location as StudentRecord['lessonLocation'],
+    lessonNotes: row.lesson_notes ?? '',
+    studentAlert: row.student_alert ?? '',
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
+  }));
+
+  return NextResponse.json({ students });
 }
 
 export async function POST(request: Request) {
@@ -85,7 +86,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = await readStudentsFile();
   const now = new Date().toISOString();
   const record: StudentRecord = {
     id: randomUUID(),
@@ -107,8 +107,72 @@ export async function POST(request: Request) {
     updatedAt: now,
   };
 
-  data.students.unshift(record);
-  await writeStudentsFile(data);
+  const db = getDb();
+  db.prepare(
+    `
+      INSERT INTO students (
+        id,
+        teacher,
+        name,
+        email,
+        username,
+        password,
+        level,
+        status,
+        lesson_fee_amount,
+        lesson_fee_period,
+        lesson_day,
+        lesson_time,
+        lesson_duration,
+        lesson_type,
+        lesson_location,
+        lesson_notes,
+        student_alert,
+        created_at,
+        updated_at
+      ) VALUES (
+        @id,
+        @teacher,
+        @name,
+        @email,
+        @username,
+        @password,
+        @level,
+        @status,
+        @lessonFeeAmount,
+        @lessonFeePeriod,
+        @lessonDay,
+        @lessonTime,
+        @lessonDuration,
+        @lessonType,
+        @lessonLocation,
+        @lessonNotes,
+        @studentAlert,
+        @createdAt,
+        @updatedAt
+      )
+    `,
+  ).run({
+    id: record.id,
+    teacher: record.teacher,
+    name: record.name,
+    email: record.email,
+    username: (record as Record<string, string>).username ?? '',
+    password: (record as Record<string, string>).password ?? '',
+    level: record.level,
+    status: record.status,
+    lessonFeeAmount: record.lessonFeeAmount ?? '',
+    lessonFeePeriod: record.lessonFeePeriod ?? '',
+    lessonDay: record.lessonDay ?? '',
+    lessonTime: record.lessonTime ?? '',
+    lessonDuration: record.lessonDuration ?? '',
+    lessonType: record.lessonType ?? '',
+    lessonLocation: record.lessonLocation ?? '',
+    lessonNotes: record.lessonNotes ?? '',
+    studentAlert: record.studentAlert ?? '',
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  });
 
   return NextResponse.json({ student: record }, { status: 201 });
 }

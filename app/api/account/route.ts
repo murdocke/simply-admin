@@ -1,44 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
-type AccountRecord = {
-  username: string;
-  role: string;
-  name: string;
-  email: string;
-  goesBy?: string;
-  status: string;
-  lastLogin: string | null;
-  password?: string;
-};
-
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function readAccountsFile(): Promise<AccountsFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as AccountsFile;
-    if (!parsed.accounts) {
-      return { accounts: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { accounts: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeAccountsFile(data: AccountsFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -52,19 +15,57 @@ export async function GET(request: Request) {
     );
   }
 
-  const data = await readAccountsFile();
-  const account = data.accounts.find(
-    record =>
-      record.username.toLowerCase() === username.toLowerCase() &&
-      record.role === role,
-  );
+  const db = getDb();
+  const account = db
+    .prepare(
+      `
+        SELECT
+          username,
+          role,
+          name,
+          email,
+          status,
+          goes_by,
+          last_login,
+          password,
+          teacher_id,
+          membership_status,
+          account_status
+        FROM accounts
+        WHERE LOWER(username) = ? AND role = ?
+      `,
+    )
+    .get(username.toLowerCase(), role) as
+    | {
+        username: string;
+        role: string;
+        name: string;
+        email: string;
+        status: string | null;
+        goes_by: string | null;
+        last_login: string | null;
+        password: string | null;
+        teacher_id: string | null;
+        membership_status: string | null;
+        account_status: string | null;
+      }
+    | undefined;
 
   if (!account) {
     return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
   }
 
   const { password: _password, ...safe } = account;
-  return NextResponse.json({ account: safe });
+  return NextResponse.json({
+    account: {
+      ...safe,
+      goesBy: account.goes_by ?? undefined,
+      lastLogin: account.last_login ?? null,
+      teacherId: account.teacher_id ?? undefined,
+      membershipStatus: account.membership_status ?? undefined,
+      accountStatus: account.account_status ?? undefined,
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -80,24 +81,46 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = await readAccountsFile();
-  const index = data.accounts.findIndex(
-    record =>
-      record.username.toLowerCase() === body.username!.toLowerCase() &&
-      record.role === body.role,
-  );
+  const db = getDb();
+  const existing = db
+    .prepare(
+      `
+        SELECT username, role, name, email, status, goes_by, last_login, password
+        FROM accounts
+        WHERE LOWER(username) = ? AND role = ?
+      `,
+    )
+    .get(body.username.toLowerCase(), body.role) as
+    | {
+        username: string;
+        role: string;
+        name: string;
+        email: string;
+        status: string | null;
+        goes_by: string | null;
+        last_login: string | null;
+        password: string | null;
+      }
+    | undefined;
 
-  if (index === -1) {
+  if (!existing) {
     return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
   }
 
-  const updated: AccountRecord = {
-    ...data.accounts[index],
-    lastLogin: new Date().toISOString(),
-  };
+  const updatedLastLogin = new Date().toISOString();
+  db.prepare(
+    `
+      UPDATE accounts
+      SET last_login = ?
+      WHERE LOWER(username) = ? AND role = ?
+    `,
+  ).run(updatedLastLogin, body.username.toLowerCase(), body.role);
 
-  data.accounts[index] = updated;
-  await writeAccountsFile(data);
-
-  return NextResponse.json({ account: updated });
+  return NextResponse.json({
+    account: {
+      ...existing,
+      goesBy: existing.goes_by ?? undefined,
+      lastLogin: updatedLastLogin,
+    },
+  });
 }

@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import studentsData from "@/data/students.json";
-import teachersData from "@/data/teachers.json";
 import {
   AUTH_STORAGE_KEY,
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
   type AuthUser,
 } from "../../components/auth";
+import { useApiData } from "../../components/use-api-data";
 
 type RecipientType = "student" | "corporate";
 
@@ -73,9 +72,17 @@ const parseStudentIdFromThread = (threadId: string) => {
 
 export default function TeacherMessagesPage() {
   const searchParams = useSearchParams();
+  const { data: teachersData } = useApiData<{ teachers: Teacher[] }>(
+    "/api/teachers",
+    { teachers: [] }
+  );
+  const { data: studentsData } = useApiData<{ students: Student[] }>(
+    "/api/students",
+    { students: [] }
+  );
   const teachers = useMemo(
     () => (teachersData.teachers as Teacher[]) ?? [],
-    []
+    [teachersData]
   );
   const [activeTeacher, setActiveTeacher] = useState<Teacher | null>(null);
   const [viewerRole, setViewerRole] = useState<string | null>(null);
@@ -139,7 +146,7 @@ export default function TeacherMessagesPage() {
       .filter((student) => student.status !== "Archived")
       .sort((a, b) => a.name.localeCompare(b.name));
     return list;
-  }, []);
+  }, [studentsData]);
 
   const [recipientType, setRecipientType] = useState<RecipientType>("student");
   const [studentQuery, setStudentQuery] = useState("");

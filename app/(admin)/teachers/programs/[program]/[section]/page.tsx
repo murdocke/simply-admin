@@ -1,8 +1,10 @@
-import lessonTypes from '../../../students/lesson-data/lesson-types.json';
-import lessonSections from '../../../students/lesson-data/lesson-sections.json';
-import lessonMaterials from '../../../students/lesson-data/lesson-materials.json';
 import MaterialsGrid from '../../../../components/materials/materials-grid';
 import LessonSectionGate from '../../../../components/lesson-section-gate';
+import {
+  getLessonMaterials,
+  getLessonSections,
+  getLessonTypes,
+} from '@/lib/lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -17,6 +19,9 @@ export default async function TeacherProgramSectionPage({
   params: Promise<{ program: string; section: string }>;
   searchParams?: Promise<{ mode?: string }>;
 }) {
+  const lessonTypes = getLessonTypes();
+  const lessonSections = getLessonSections();
+  const lessonMaterials = getLessonMaterials();
   const { program, section } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const teacherMode =
@@ -25,7 +30,9 @@ export default async function TeacherProgramSectionPage({
     lessonTypes.find(type => toProgramSlug(type) === program) ?? null;
   const sectionData =
     programName && lessonSections[programName as keyof typeof lessonSections]
-      ? lessonSections[programName as keyof typeof lessonSections]
+      ? (lessonSections[programName as keyof typeof lessonSections] as
+          | string[]
+          | Record<string, string[]>)
       : [];
   const availableSections = Array.isArray(sectionData)
     ? sectionData

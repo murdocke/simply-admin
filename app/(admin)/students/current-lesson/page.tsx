@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import studentsData from '@/data/students.json';
-import teachersData from '@/data/teachers.json';
 import {
   AUTH_STORAGE_KEY,
   VIEW_ROLE_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
 } from '../../components/auth';
+import { useApiData } from '../../components/use-api-data';
 
 type StudentRecord = {
   id: string;
@@ -90,13 +89,21 @@ const getLessonDateForPlan = (lessonDay?: string, baseDate = new Date()) => {
 };
 
 export default function StudentCurrentLessonPage() {
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { data: teachersData } = useApiData<{ teachers: TeacherRecord[] }>(
+    '/api/teachers',
+    { teachers: [] },
+  );
   const students = useMemo(
     () => (studentsData.students as StudentRecord[]) ?? [],
-    [],
+    [studentsData],
   );
   const teachers = useMemo(
     () => (teachersData.teachers as TeacherRecord[]) ?? [],
-    [],
+    [teachersData],
   );
   const [activeStudent, setActiveStudent] = useState<StudentRecord | null>(null);
   const [lessonPlan, setLessonPlan] = useState<LessonPlan | null>(null);

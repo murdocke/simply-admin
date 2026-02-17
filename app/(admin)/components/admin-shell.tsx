@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import teachersData from '@/data/teachers.json';
-import studentsData from '@/data/students.json';
 import {
   AUTH_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -20,12 +18,13 @@ import {
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from '../../components/theme';
-import lessonParts from '../teachers/students/lesson-data/lesson-parts.json';
 import {
   COMMUNICATIONS_UPDATE_EVENT,
   readCommunications,
   type CommunicationEntry,
 } from './communications-store';
+import { useApiData } from './use-api-data';
+import { useLessonData } from './use-lesson-data';
 
 type TeacherRecord = {
   id: string;
@@ -40,6 +39,7 @@ type TeacherRecord = {
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active';
 };
@@ -50,6 +50,14 @@ type StudentRecord = {
   name: string;
   email: string;
   status: 'Active' | 'Paused' | 'Archived';
+};
+
+type ParentRecord = {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  students: string[];
 };
 
 type SelectedTeacher = {
@@ -66,18 +74,34 @@ type SelectedStudent = {
 
 type NotificationMessage = {
   id: string;
+  kind?: 'message' | 'notification';
+  kicker?: string;
   sender: string;
   text: string;
   subject?: string;
   threadId: string;
   timestamp: string;
+  route?: string;
   leaving?: boolean;
+};
+
+type NotificationEvent = {
+  id: string;
+  type: 'email' | 'push';
+  to: string;
+  source?: string;
+  subject?: string;
+  title?: string;
+  body: string;
+  createdAt: string;
+  data?: Record<string, unknown> | null;
 };
 
 const RECENT_TEACHERS_KEY = 'sm_recent_teachers';
 const RECENT_STUDENTS_KEY = 'sm_recent_students';
 const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
 const COMMUNICATIONS_NOTIFICATIONS_KEY = 'sm_communications_notifications';
+const ADMIN_PUSH_NOTIFICATIONS_KEY = 'sm_admin_push_notifications';
 const FEATURES_OVERVIEW_KEY = 'sm_features_overview_active';
 const SIDEBAR_HIDDEN_KEY = 'sm_sidebar_hidden';
 const PRACTICE_TIMER_SETTINGS_KEY = 'sm_practice_timer_settings';
@@ -117,6 +141,7 @@ const normalizeTeacherStatus = (
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active',
 ) => (status === 'Active' ? 'Licensed' : status);
@@ -207,6 +232,19 @@ export default function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { data: teachersData } = useApiData<{ teachers: TeacherRecord[] }>(
+    '/api/teachers',
+    { teachers: [] },
+  );
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { data: parentsData } = useApiData<{ parents: ParentRecord[] }>(
+    '/api/parents',
+    { parents: [] },
+  );
+  const { lessonParts } = useLessonData();
   const [isOpen, setIsOpen] = useState(false);
   const [role, setRole] = useState<UserRole | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -216,6 +254,8 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [featuresOverviewActive, setFeaturesOverviewActive] = useState(false);
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
   const [selectedTeacher, setSelectedTeacher] =
     useState<SelectedTeacher | null>(null);
@@ -256,6 +296,34 @@ export default function AdminShell({ children }: AdminShellProps) {
   >('right-bottom');
   const showLessonRoomCta =
     pathname === '/teachers/dashboard' || pathname === '/students/dashboard';
+  const backToTopOpacity = Math.min(1, Math.max(0, (scrollY - 80) / 240));
+  const handleBackToTop = useCallback(() => {
+    const startY = window.scrollY;
+    const duration = 1400;
+    const startTime = performance.now();
+    const easeOutExpo = (t: number) =>
+      t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+
+    const tick = (now: number) => {
+      const elapsed = Math.min(1, (now - startTime) / duration);
+      const eased = easeOutExpo(elapsed);
+      window.scrollTo(0, Math.round(startY * (1 - eased)));
+      if (elapsed < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const nextScrollY = window.scrollY;
+      setScrollY(nextScrollY);
+      setShowBackToTop(nextScrollY > 40);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   const pipSwipeRef = useRef<{
     active: boolean;
     pointerId: number | null;
@@ -308,7 +376,63 @@ export default function AdminShell({ children }: AdminShellProps) {
       : role === 'teacher'
         ? viewRole ?? role
         : role;
-  const isStudentSidebar = effectiveRole === 'student' || pathname?.startsWith('/students');
+  const sidebarRoleLabel =
+    (effectiveRole === 'company' && 'Admin') ||
+    (effectiveRole === 'studio' && 'Studio') ||
+    (effectiveRole === 'teacher' && 'Teacher') ||
+    (effectiveRole === 'parent' && 'Parent') ||
+    (effectiveRole === 'student' && 'Student') ||
+    'Admin';
+  const isStudentSidebar =
+    effectiveRole === 'student' || pathname?.startsWith('/students');
+  const isParentSidebar =
+    effectiveRole === 'parent' || pathname?.startsWith('/parents');
+  const parentRecord = useMemo(() => {
+    const parentsList = (parentsData.parents as ParentRecord[]) ?? [];
+    if (!parentsList.length) return null;
+    const normalized = user?.username?.toLowerCase();
+    if (normalized) {
+      const match = parentsList.find(
+        parent => parent.username.toLowerCase() === normalized,
+      );
+      if (match) return match;
+    }
+    return parentsList[0] ?? null;
+  }, [parentsData, user?.username]);
+  const parentStudents = useMemo(() => {
+    if (!parentRecord) return [] as StudentRecord[];
+    const studentsList = studentsData.students as StudentRecord[];
+    return parentRecord.students
+      .map(id => studentsList.find(student => student.id === id))
+      .filter((student): student is StudentRecord => Boolean(student));
+  }, [parentRecord, studentsData]);
+  const parentPracticeSummary = useMemo(
+    () =>
+      parentStudents.map((student, index) => ({
+        name: student.name,
+        minutes: 40 + index * 20,
+        goal: 90,
+      })),
+    [parentStudents],
+  );
+  const parentPracticeSessions = useMemo(
+    () =>
+      parentStudents.flatMap((student, index) => [
+        {
+          id: `${student.id}-session-1`,
+          name: student.name,
+          minutes: 25 + index * 10,
+          time: 'Today · 4:15 PM',
+        },
+        {
+          id: `${student.id}-session-2`,
+          name: student.name,
+          minutes: 20 + index * 8,
+          time: 'Yesterday · 6:05 PM',
+        },
+      ]),
+    [parentStudents],
+  );
   const recentTeachersKey = useMemo(() => {
     if (!user?.username) return RECENT_TEACHERS_KEY;
     return `${RECENT_TEACHERS_KEY}:${user.username}`;
@@ -798,25 +922,28 @@ export default function AdminShell({ children }: AdminShellProps) {
         null
       );
     },
-    [],
+    [studentsData],
   );
 
-  const resolveTeacherFromUser = useCallback((username?: string) => {
-    if (!username) return null;
-    const normalized = username.toLowerCase();
-    const teachersList = teachersData.teachers as TeacherRecord[];
-    return (
-      teachersList.find(
-        teacher => teacher.username?.toLowerCase() === normalized,
-      ) ??
-      teachersList.find(teacher => teacher.email.toLowerCase() === normalized) ??
-      teachersList.find(teacher => teacher.name.toLowerCase() === normalized) ??
-      teachersList.find(teacher =>
-        teacher.name.toLowerCase().startsWith(normalized),
-      ) ??
-      null
-    );
-  }, []);
+  const resolveTeacherFromUser = useCallback(
+    (username?: string) => {
+      if (!username) return null;
+      const normalized = username.toLowerCase();
+      const teachersList = teachersData.teachers as TeacherRecord[];
+      return (
+        teachersList.find(
+          teacher => teacher.username?.toLowerCase() === normalized,
+        ) ??
+        teachersList.find(teacher => teacher.email.toLowerCase() === normalized) ??
+        teachersList.find(teacher => teacher.name.toLowerCase() === normalized) ??
+        teachersList.find(teacher =>
+          teacher.name.toLowerCase().startsWith(normalized),
+        ) ??
+        null
+      );
+    },
+    [teachersData],
+  );
 
   const scheduleNotificationDismiss = useCallback((id: string) => {
     const timers = notificationTimers.current;
@@ -1104,7 +1231,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         method: 'DELETE',
       }).catch(() => {});
     };
-  }, [role, user?.username]);
+  }, [role, user?.username, teachersData]);
 
   useEffect(() => {
     if (role !== 'student' || !user?.username) return;
@@ -1568,7 +1695,15 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!(role === 'student' || viewRole === 'student')) return;
+    if (
+      !(
+        role === 'student' ||
+        role === 'parent' ||
+        viewRole === 'student' ||
+        viewRole === 'parent'
+      )
+    )
+      return;
     let lastNotified = window.localStorage.getItem(
       COMMUNICATIONS_NOTIFICATIONS_KEY,
     );
@@ -1625,6 +1760,108 @@ export default function AdminShell({ children }: AdminShellProps) {
     };
   }, [role, viewRole, scheduleNotificationDismiss]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (role !== 'company') return;
+    if (!user?.username) return;
+
+    const notificationKey = `${ADMIN_PUSH_NOTIFICATIONS_KEY}:${user.username}`;
+    let lastNotified = window.localStorage.getItem(notificationKey);
+
+    const resolveAdminEmails = () => {
+      const fallback = `${user.username}@simplymusic.com`;
+      return new Set(
+        [accountInfo?.email, user.username, fallback]
+          .filter(Boolean)
+          .map(value => value.toLowerCase().trim()),
+      );
+    };
+
+    const isAdminRecipient = (target: string, identifiers: Set<string>) => {
+      const normalized = target.toLowerCase().trim();
+      if (identifiers.has(normalized)) return true;
+      return Array.from(identifiers).some(value =>
+        value.includes('@') ? normalized === value : normalized.includes(value),
+      );
+    };
+
+    const pollNotifications = async () => {
+      try {
+        const response = await fetch('/api/notifications', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as { events?: NotificationEvent[] };
+        const events = data.events ?? [];
+        const adminIdentifiers = resolveAdminEmails();
+        const lastSeen = lastNotified ? new Date(lastNotified) : null;
+        const incoming = events.filter(event => {
+          if (event.type !== 'push') return false;
+          if (!event.to) return false;
+          return isAdminRecipient(event.to, adminIdentifiers);
+        });
+        const sortedIncoming = [...incoming].sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return aTime - bTime;
+        });
+        const fresh = lastSeen
+          ? sortedIncoming.filter(event => {
+              const eventTime = event.createdAt
+                ? new Date(event.createdAt)
+                : null;
+              if (!eventTime || Number.isNaN(eventTime.getTime())) return false;
+              return eventTime > lastSeen;
+            })
+          : sortedIncoming.slice(-1);
+
+        if (fresh.length === 0) return;
+
+        const notificationsToAdd: NotificationMessage[] = fresh.map(event => ({
+          id: crypto.randomUUID(),
+          kind: 'notification',
+          kicker: event.source === 'Teacher Interest' ? 'Teacher Interest' : 'Admin Push',
+          sender:
+            event.title ||
+            event.subject ||
+            event.source ||
+            'Admin Notification',
+          text: event.body || 'New push notification delivered.',
+          subject: event.source ? `Source: ${event.source}` : undefined,
+          threadId: event.id,
+          timestamp: event.createdAt,
+          route:
+            event.source === 'Teacher Interest' &&
+            typeof event.data?.alertId === 'string'
+              ? `/teacher-interest?alertId=${event.data.alertId}`
+              : '/notifications',
+        }));
+
+        setNotifications(prev => {
+          const combined = [...notificationsToAdd, ...prev].slice(0, 3);
+          combined.forEach(note => scheduleNotificationDismiss(note.id));
+          return combined;
+        });
+
+        const latestTime = fresh.reduce((latest, event) => {
+          const eventTime = event.createdAt ? new Date(event.createdAt) : null;
+          if (!eventTime || Number.isNaN(eventTime.getTime())) return latest;
+          if (!latest) return eventTime;
+          return eventTime > latest ? eventTime : latest;
+        }, lastSeen);
+
+        if (latestTime) {
+          lastNotified = latestTime.toISOString();
+          window.localStorage.setItem(notificationKey, lastNotified);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    pollNotifications();
+    const interval = window.setInterval(pollNotifications, 8000);
+    return () => window.clearInterval(interval);
+  }, [role, user?.username, accountInfo?.email, scheduleNotificationDismiss]);
+
   const items = useMemo(() => {
     if (!effectiveRole) return [];
     return navItems[effectiveRole];
@@ -1637,7 +1874,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         border: 'border-[var(--c-dfe6d2)]',
       };
     }
-    if (effectiveRole === 'student') {
+    if (effectiveRole === 'student' || effectiveRole === 'parent') {
       return {
         bg: 'bg-[var(--c-e6f4ff)]',
         border: 'border-[var(--c-d9e2ef)]',
@@ -1734,7 +1971,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       pipState.material?.startsWith(prefix),
     );
     return matchedKey ? partsMap[matchedKey] ?? [] : [];
-  }, [pipState.material]);
+  }, [lessonParts, pipState.material]);
 
   const pipPartIndex = pipState.part
     ? pipParts.indexOf(pipState.part)
@@ -2214,6 +2451,11 @@ export default function AdminShell({ children }: AdminShellProps) {
                 notification.leaving ? 'animate-toast-out pointer-events-none' : 'animate-toast-in'
               }`}
               onClick={() => {
+                if (notification.kind === 'notification') {
+                  router.push(notification.route ?? '/notifications');
+                  dismissNotification(notification.id);
+                  return;
+                }
                 if (role === 'teacher') {
                   router.push(
                     `/teachers/messages?thread=${encodeURIComponent(
@@ -2260,7 +2502,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                 </svg>
               </button>
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
-                New Message
+                {notification.kicker ?? 'New Message'}
               </p>
               <p className="mt-1 text-sm font-semibold text-[var(--c-1f1f1d)]">
                 {notification.sender}
@@ -2651,39 +2893,43 @@ export default function AdminShell({ children }: AdminShellProps) {
         <aside
           className={`${
             isSidebarHidden ? 'hidden' : 'hidden lg:block'
-          } w-72 border-r px-6 py-8 ${sidebarStyles.bg} ${sidebarStyles.border}`}
+          } relative w-72 border-r px-6 py-8 ${sidebarStyles.bg} ${sidebarStyles.border}`}
         >
+          <button
+            type="button"
+            onClick={() => setIsSidebarHidden(true)}
+            aria-label="Hide sidebar"
+            className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--c-ecebe7)] bg-white text-[var(--c-6f6c65)] transition hover:border-[var(--c-d9d6ce)] hover:bg-[var(--c-fafafa)]"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="15 6 9 12 15 18" />
+            </svg>
+          </button>
           <div className="mb-10 flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-[var(--c-c8102e)] text-white flex items-center justify-center font-semibold">
-                SM
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--c-c8102e)]">
+                <img
+                  src="https://simplymusic.com/wp-content/uploads/2024/02/simply-music-logo.svg"
+                  alt="Simply Music"
+                  className="h-[3.4rem] w-[3.4rem] rounded-xl"
+                />
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                  Admin
+                  {sidebarRoleLabel}
                 </p>
                 <h2 className="text-xl font-semibold">Simply Music</h2>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsSidebarHidden(true)}
-              aria-label="Hide sidebar"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--c-ecebe7)] text-[var(--c-6f6c65)]/60 transition hover:border-[var(--sidebar-accent-border)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="15 6 9 12 15 18" />
-              </svg>
-            </button>
           </div>
           <nav className="space-y-2 text-sm">
             {items.map(item => {
@@ -2731,6 +2977,36 @@ export default function AdminShell({ children }: AdminShellProps) {
               );
             })}
           </nav>
+          {effectiveRole === 'parent' ? (
+            <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                Family Quick Actions
+              </p>
+              <div className="mt-3 grid gap-2">
+                <a
+                  href="/parents/messages"
+                  className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                >
+                  Message Teacher
+                </a>
+                <a
+                  href="/parents/schedule"
+                  className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-center text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+                >
+                  Request Reschedule
+                </a>
+                <a
+                  href="/parents/billing"
+                  className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-center text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+                >
+                  Update Payment
+                </a>
+              </div>
+              <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
+                Quick Actions
+              </div>
+            </section>
+          ) : null}
           {showLessonRoomCta ? (
             <a
               href="/lesson-room"
@@ -2972,6 +3248,71 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           </section>
         ) : null}
+        {isParentSidebar ? (
+          <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              My Kids Practiced
+            </p>
+            {parentStudents.length === 0 ? (
+              <div className="mt-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-3 text-xs text-[var(--c-6f6c65)]">
+                No students linked yet. Add students to see practice activity.
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2">
+                  {parentPracticeSummary.map(student => {
+                    const progress = Math.min(
+                      100,
+                      Math.round((student.minutes / student.goal) * 100),
+                    );
+                    return (
+                      <div
+                        key={student.name}
+                        className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[var(--c-1f1f1d)]">
+                            {student.name}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            {student.minutes}/{student.goal} min
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--c-f1f1ef)]">
+                          <div
+                            className="h-full rounded-full bg-[var(--c-3f4a2c)]"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
+                    Recent Sessions
+                  </p>
+                  <div className="mt-3 space-y-2 text-xs">
+                    {parentPracticeSessions.slice(0, 4).map(session => (
+                      <div
+                        key={session.id}
+                        className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between text-[var(--c-3a3935)]">
+                          <span>{session.name}</span>
+                          <span>{session.minutes} min</span>
+                        </div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          {session.time}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+        ) : null}
           {user ? (
             <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
               <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
@@ -3137,7 +3478,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}
@@ -3243,7 +3584,7 @@ export default function AdminShell({ children }: AdminShellProps) {
               type="button"
               onClick={() => setIsSidebarHidden(false)}
               aria-label="Show sidebar"
-              className="absolute left-4 top-4 hidden h-9 w-9 items-center justify-center rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 text-[var(--c-6f6c65)]/70 shadow-sm backdrop-blur transition hover:border-[var(--sidebar-accent-border)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] lg:inline-flex"
+              className="fixed left-4 top-4 z-40 hidden h-9 w-9 items-center justify-center rounded-lg border border-white/60 bg-white/35 text-[var(--c-6f6c65)] backdrop-blur-[1px] transition hover:border-white/80 hover:bg-white/50 lg:inline-flex"
             >
               <svg
                 width="16"
@@ -3285,6 +3626,33 @@ export default function AdminShell({ children }: AdminShellProps) {
           </div>
         </div>
         <main className="p-6 md:p-10">{children}</main>
+        {showBackToTop ? (
+          <button
+            type="button"
+            onClick={handleBackToTop}
+            aria-label="Back to top"
+            className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-lg border border-white/60 bg-white/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--c-6f6c65)] backdrop-blur-[1px] transition hover:border-white/80 hover:bg-white/50"
+            style={{
+              opacity: backToTopOpacity,
+              pointerEvents: backToTopOpacity < 0.1 ? 'none' : 'auto',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              className="block"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+            <span>Back To Top</span>
+          </button>
+        ) : null}
         {role === 'company' &&
         featuresOverviewActive &&
         !pathname?.startsWith('/company/features-overview') ? (
@@ -3612,6 +3980,39 @@ export default function AdminShell({ children }: AdminShellProps) {
             );
           })}
         </nav>
+        {effectiveRole === 'parent' ? (
+          <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              Family Quick Actions
+            </p>
+            <div className="mt-3 grid gap-2">
+              <a
+                href="/parents/messages"
+                onClick={() => setIsOpen(false)}
+                className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              >
+                Message Teacher
+              </a>
+              <a
+                href="/parents/schedule"
+                onClick={() => setIsOpen(false)}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-center text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                Request Reschedule
+              </a>
+              <a
+                href="/parents/billing"
+                onClick={() => setIsOpen(false)}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-center text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                Update Payment
+              </a>
+            </div>
+            <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
+              Quick Actions
+            </div>
+          </section>
+        ) : null}
         {showLessonRoomCta ? (
           <a
             href="/lesson-room"
@@ -3866,6 +4267,71 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           </section>
         ) : null}
+        {isParentSidebar ? (
+          <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+              My Kids Practiced
+            </p>
+            {parentStudents.length === 0 ? (
+              <div className="mt-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-3 text-xs text-[var(--c-6f6c65)]">
+                No students linked yet. Add students to see practice activity.
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2">
+                  {parentPracticeSummary.map(student => {
+                    const progress = Math.min(
+                      100,
+                      Math.round((student.minutes / student.goal) * 100),
+                    );
+                    return (
+                      <div
+                        key={student.name}
+                        className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[var(--c-1f1f1d)]">
+                            {student.name}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            {student.minutes}/{student.goal} min
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--c-f1f1ef)]">
+                          <div
+                            className="h-full rounded-full bg-[var(--c-3f4a2c)]"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
+                    Recent Sessions
+                  </p>
+                  <div className="mt-3 space-y-2 text-xs">
+                    {parentPracticeSessions.slice(0, 4).map(session => (
+                      <div
+                        key={session.id}
+                        className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between text-[var(--c-3a3935)]">
+                          <span>{session.name}</span>
+                          <span>{session.minutes} min</span>
+                        </div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          {session.time}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+        ) : null}
         {user ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 text-xs text-[var(--c-7a776f)]">
             <p className="mt-2 text-base font-semibold text-[var(--c-1f1f1d)]">
@@ -3960,7 +4426,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[color:var(--c-ffffff)]/80 p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}

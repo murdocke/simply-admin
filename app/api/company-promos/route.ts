@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type PromoPayload = {
   id: string;
@@ -13,6 +12,8 @@ type PromoPayload = {
   status?: 'active' | 'removed';
 };
 
+export const runtime = 'nodejs';
+
 type PromoStore = {
   active?: {
     teacher?: PromoPayload | null;
@@ -21,38 +22,54 @@ type PromoStore = {
   history?: PromoPayload[];
 };
 
-const promosFile = path.join(process.cwd(), 'data', 'company-promos.json');
-
-async function readPromos(): Promise<PromoStore> {
-  try {
-    const raw = await fs.readFile(promosFile, 'utf-8');
-    const parsed = JSON.parse(raw) as PromoStore;
-    if ('teacher' in (parsed as Record<string, unknown>)) {
-      const legacy = parsed as { teacher?: PromoPayload | null; student?: PromoPayload | null };
-      return {
-        active: {
-          teacher: legacy.teacher ?? null,
-          student: legacy.student ?? null,
-        },
-        history: [],
-      };
-    }
-    return parsed ?? {};
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return {};
-    }
-    throw error;
-  }
-}
-
-async function writePromos(payload: PromoStore) {
-  await fs.writeFile(promosFile, JSON.stringify(payload, null, 2));
-}
-
 export async function GET() {
-  const data = await readPromos();
-  return NextResponse.json({ promos: data });
+  const db = getDb();
+  const historyRows = db
+    .prepare(
+      `
+        SELECT id, title, body, cta, trigger, created_at, audience, status
+        FROM company_promos
+        ORDER BY created_at DESC
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const history = historyRows.map(row => ({
+    id: row.id ?? '',
+    title: row.title ?? '',
+    body: row.body ?? '',
+    cta: row.cta ?? undefined,
+    trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+    createdAt: row.created_at ?? '',
+    audience: (row.audience ?? 'both') as PromoPayload['audience'],
+    status: (row.status ?? 'active') as PromoPayload['status'],
+  }));
+
+  const activeRows = db
+    .prepare(
+      `
+        SELECT a.audience, p.id, p.title, p.body, p.cta, p.trigger, p.created_at, p.audience as promo_audience, p.status
+        FROM company_promos_active a
+        JOIN company_promos p ON p.id = a.promo_id
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const active: PromoStore['active'] = { teacher: null, student: null };
+  activeRows.forEach(row => {
+    const payload: PromoPayload = {
+      id: row.id ?? '',
+      title: row.title ?? '',
+      body: row.body ?? '',
+      cta: row.cta ?? undefined,
+      trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+      createdAt: row.created_at ?? '',
+      audience: (row.promo_audience ?? 'both') as PromoPayload['audience'],
+      status: (row.status ?? 'active') as PromoPayload['status'],
+    };
+    if (row.audience === 'teacher') active.teacher = payload;
+    if (row.audience === 'student') active.student = payload;
+  });
+
+  return NextResponse.json({ promos: { active, history } });
 }
 
 export async function POST(request: Request) {
@@ -72,64 +89,201 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const data = await readPromos();
-  const next: PromoStore = {
-    active: { ...(data.active ?? {}) },
-    history: [...(data.history ?? [])],
-  };
+  const db = getDb();
   const payload: PromoPayload = {
     ...body.payload,
     audience: body.audience ?? body.payload.audience ?? 'both',
     status: 'active',
   };
+  db.prepare(
+    `
+      INSERT INTO company_promos (
+        id,
+        title,
+        body,
+        cta,
+        trigger,
+        created_at,
+        audience,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        body = excluded.body,
+        cta = excluded.cta,
+        trigger = excluded.trigger,
+        created_at = excluded.created_at,
+        audience = excluded.audience,
+        status = excluded.status
+    `,
+  ).run(
+    payload.id,
+    payload.title,
+    payload.body,
+    payload.cta ?? '',
+    payload.trigger,
+    payload.createdAt,
+    payload.audience,
+    payload.status ?? 'active',
+  );
+
+  const updateActive = (audience: 'teacher' | 'student') => {
+    db.prepare(
+      `
+        INSERT INTO company_promos_active (audience, promo_id, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(audience) DO UPDATE SET
+          promo_id = excluded.promo_id,
+          updated_at = excluded.updated_at
+      `,
+    ).run(audience, payload.id, payload.createdAt);
+  };
   if (body.audience === 'teacher' || body.audience === 'both') {
-    next.active = { ...(next.active ?? {}), teacher: payload };
+    updateActive('teacher');
   }
   if (body.audience === 'student' || body.audience === 'both') {
-    next.active = { ...(next.active ?? {}), student: payload };
+    updateActive('student');
   }
-  next.history = [{ ...payload }, ...(next.history ?? [])];
-  await writePromos(next);
-  return NextResponse.json({ promos: next });
+
+  const historyRows = db
+    .prepare(
+      `
+        SELECT id, title, body, cta, trigger, created_at, audience, status
+        FROM company_promos
+        ORDER BY created_at DESC
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const history = historyRows.map(row => ({
+    id: row.id ?? '',
+    title: row.title ?? '',
+    body: row.body ?? '',
+    cta: row.cta ?? undefined,
+    trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+    createdAt: row.created_at ?? '',
+    audience: (row.audience ?? 'both') as PromoPayload['audience'],
+    status: (row.status ?? 'active') as PromoPayload['status'],
+  }));
+
+  const activeRows = db
+    .prepare(
+      `
+        SELECT a.audience, p.id, p.title, p.body, p.cta, p.trigger, p.created_at, p.audience as promo_audience, p.status
+        FROM company_promos_active a
+        JOIN company_promos p ON p.id = a.promo_id
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const active: PromoStore['active'] = { teacher: null, student: null };
+  activeRows.forEach(row => {
+    const nextPayload: PromoPayload = {
+      id: row.id ?? '',
+      title: row.title ?? '',
+      body: row.body ?? '',
+      cta: row.cta ?? undefined,
+      trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+      createdAt: row.created_at ?? '',
+      audience: (row.promo_audience ?? 'both') as PromoPayload['audience'],
+      status: (row.status ?? 'active') as PromoPayload['status'],
+    };
+    if (row.audience === 'teacher') active.teacher = nextPayload;
+    if (row.audience === 'student') active.student = nextPayload;
+  });
+
+  return NextResponse.json({ promos: { active, history } });
 }
 
 export async function DELETE(request: Request) {
-  const data = await readPromos();
   const { searchParams } = new URL(request.url);
   const audience = searchParams.get('audience');
   const id = searchParams.get('id');
-  const next: PromoStore = {
-    active: { ...(data.active ?? {}) },
-    history: [...(data.history ?? [])],
-  };
+  const db = getDb();
   if (id) {
-    const historyItem = (next.history ?? []).find(item => item.id === id) ?? null;
-    next.history = (next.history ?? []).map(item =>
-      item.id === id ? { ...item, status: 'removed' } : item,
-    );
-    if (next.active?.teacher?.id === id) {
-      next.active.teacher = null;
+    const historyItem = db
+      .prepare(
+        `
+          SELECT id, audience
+          FROM company_promos
+          WHERE id = ?
+        `,
+      )
+      .get(id) as { id: string; audience: PromoPayload['audience'] } | undefined;
+    db.prepare(
+      `
+        UPDATE company_promos
+        SET status = 'removed'
+        WHERE id = ?
+      `,
+    ).run(id);
+    db.prepare(
+      `
+        DELETE FROM company_promos_active
+        WHERE promo_id = ?
+      `,
+    ).run(id);
+    if (historyItem?.audience === 'teacher' || historyItem?.audience === 'both') {
+      db.prepare(`DELETE FROM company_promos_active WHERE audience = 'teacher' AND promo_id = ?`).run(id);
     }
-    if (next.active?.student?.id === id) {
-      next.active.student = null;
-    }
-    if (historyItem && historyItem.audience) {
-      if (historyItem.audience === 'teacher' || historyItem.audience === 'both') {
-        next.active = { ...(next.active ?? {}), teacher: null };
-      }
-      if (historyItem.audience === 'student' || historyItem.audience === 'both') {
-        next.active = { ...(next.active ?? {}), student: null };
-      }
+    if (historyItem?.audience === 'student' || historyItem?.audience === 'both') {
+      db.prepare(`DELETE FROM company_promos_active WHERE audience = 'student' AND promo_id = ?`).run(id);
     }
   } else if (audience) {
-    if (audience === 'teacher') next.active = { ...(next.active ?? {}), teacher: null };
-    if (audience === 'student') next.active = { ...(next.active ?? {}), student: null };
+    if (audience === 'teacher') {
+      db.prepare(`DELETE FROM company_promos_active WHERE audience = 'teacher'`).run();
+    }
+    if (audience === 'student') {
+      db.prepare(`DELETE FROM company_promos_active WHERE audience = 'student'`).run();
+    }
     if (audience === 'both') {
-      next.active = { ...(next.active ?? {}), teacher: null, student: null };
+      db.prepare(`DELETE FROM company_promos_active WHERE audience IN ('teacher', 'student')`).run();
     }
   } else {
     return NextResponse.json({ error: 'audience or id required.' }, { status: 400 });
   }
-  await writePromos(next);
-  return NextResponse.json({ promos: next });
+
+  const historyRows = db
+    .prepare(
+      `
+        SELECT id, title, body, cta, trigger, created_at, audience, status
+        FROM company_promos
+        ORDER BY created_at DESC
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const history = historyRows.map(row => ({
+    id: row.id ?? '',
+    title: row.title ?? '',
+    body: row.body ?? '',
+    cta: row.cta ?? undefined,
+    trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+    createdAt: row.created_at ?? '',
+    audience: (row.audience ?? 'both') as PromoPayload['audience'],
+    status: (row.status ?? 'active') as PromoPayload['status'],
+  }));
+  const activeRows = db
+    .prepare(
+      `
+        SELECT a.audience, p.id, p.title, p.body, p.cta, p.trigger, p.created_at, p.audience as promo_audience, p.status
+        FROM company_promos_active a
+        JOIN company_promos p ON p.id = a.promo_id
+      `,
+    )
+    .all() as Array<Record<string, string | null>>;
+  const active: PromoStore['active'] = { teacher: null, student: null };
+  activeRows.forEach(row => {
+    const nextPayload: PromoPayload = {
+      id: row.id ?? '',
+      title: row.title ?? '',
+      body: row.body ?? '',
+      cta: row.cta ?? undefined,
+      trigger: (row.trigger ?? 'dashboard') as PromoPayload['trigger'],
+      createdAt: row.created_at ?? '',
+      audience: (row.promo_audience ?? 'both') as PromoPayload['audience'],
+      status: (row.status ?? 'active') as PromoPayload['status'],
+    };
+    if (row.audience === 'teacher') active.teacher = nextPayload;
+    if (row.audience === 'student') active.student = nextPayload;
+  });
+
+  return NextResponse.json({ promos: { active, history } });
 }

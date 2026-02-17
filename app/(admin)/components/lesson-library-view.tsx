@@ -2,8 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import lessonTypes from '../teachers/students/lesson-data/lesson-types.json';
-import lessonSections from '../teachers/students/lesson-data/lesson-sections.json';
 import LockedSectionCard from './locked-section-card';
 import LessonCartPurchaseButton from './lesson-cart-actions';
 import {
@@ -13,6 +11,7 @@ import {
   hydrateSectionPriceOverrides,
 } from './lesson-pricing';
 import { AUTH_STORAGE_KEY, VIEW_ROLE_STORAGE_KEY } from './auth';
+import { useLessonData } from './use-lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -78,6 +77,7 @@ export default function LessonLibraryView({
   showCartButton = false,
   showPricing = false,
 }: LessonLibraryViewProps) {
+  const { lessonTypes, lessonSections } = useLessonData();
   const [actionLabel, setActionLabel] = useState('Update');
   const [showSpecialActions, setShowSpecialActions] = useState(true);
   const [, setPricingVersion] = useState(0);
@@ -177,7 +177,10 @@ export default function LessonLibraryView({
           )
           .map(type => {
             const sectionData =
-              lessonSections[type as keyof typeof lessonSections];
+              (lessonSections[type as keyof typeof lessonSections] as
+                | string[]
+                | Record<string, string[]>
+                | undefined) ?? [];
             const sections = Array.isArray(sectionData)
               ? sectionData
               : sectionData

@@ -5,7 +5,7 @@
       "role": "company",
       "name": "Neil Moore",
       "email": "neil@simplymusic.com",
-      "lastLogin": "2026-02-14T04:19:50.015Z",
+      "lastLogin": "2026-02-16T00:56:58.946Z",
       "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active"
@@ -15,10 +15,21 @@
       "role": "teacher",
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
-      "lastLogin": "2026-02-14T22:45:26.495Z",
+      "lastLogin": "2026-02-16T00:50:26.682Z",
       "password": "Coffee@Sunrise@2026",
       "teacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
       "goesBy": "Mr. Brian",
+      "membershipStatus": "Licensed",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "jason",
+      "role": "teacher",
+      "name": "Jason Stillwell",
+      "email": "jason@riffsandchops.com",
+      "lastLogin": null,
+      "password": "Coffee@Sunrise@2026",
+      "teacherId": "7f4a1c9b-6c3d-4f1b-9f93-6e6f4f8b8c12",
       "membershipStatus": "Licensed",
       "accountStatus": "Active"
     },
@@ -66,14 +77,33 @@
       "accountStatus": "Active"
     },
     {
-      "username": "kim",
-      "role": "teacher",
-      "name": "Kim Nelson",
-      "email": "kim.n@gmail.com",
+      "username": "jacksons",
+      "role": "parent",
+      "name": "Kim Jackson",
+      "email": "kimluerssen@hotmail.com",
+      "lastLogin": "2026-02-15T22:57:15.436Z",
+      "password": "Coffee@Sunrise@2026",
+      "membershipStatus": "Family",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "kenzie",
+      "role": "student",
+      "name": "Kenzie",
+      "email": "kimluerssen@hotmail.com",
       "lastLogin": null,
       "password": "Coffee@Sunrise@2026",
-      "teacherId": "515494fa-3f01-43cb-b63f-9f5e788327b0",
-      "membershipStatus": "Licensed",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
+      "username": "keira",
+      "role": "student",
+      "name": "Keira",
+      "email": "kimluerssen@hotmail.com",
+      "lastLogin": null,
+      "password": "Coffee@Sunrise@2026",
+      "membershipStatus": "Active",
       "accountStatus": "Active"
     },
     {
@@ -92,11 +122,21 @@
       "role": "student",
       "name": "Quinn",
       "email": "dawnfrancour@gmail.com",
-      "lastLogin": "2026-02-14T23:12:58.276Z",
+      "lastLogin": "2026-02-15T22:56:41.366Z",
       "password": "Coffee@Sunrise@2026",
       "membershipStatus": "Active",
       "accountStatus": "Active",
       "goesBy": ""
+    },
+    {
+      "username": "riffsandchops",
+      "role": "teacher",
+      "name": "Ashyln Gray",
+      "email": "riffsandchops@gmail.com",
+      "status": "Interested",
+      "lastLogin": null,
+      "password": "",
+      "teacherId": "688ce2b6-224c-4eb5-ba80-e51dc47a7b44"
     }
   ]
 }

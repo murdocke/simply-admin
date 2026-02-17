@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type TeacherRecord = {
   id: string;
@@ -15,19 +14,18 @@ type TeacherRecord = {
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active';
   createdAt: string;
   updatedAt: string;
   password?: string;
+  goesBy?: string;
+  studioId?: string;
+  studioRole?: string;
 };
 
-type TeachersFile = {
-  teachers: TeacherRecord[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'teachers.json');
-const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
+export const runtime = 'nodejs';
 
 const normalizeStatus = (
   status:
@@ -36,35 +34,15 @@ const normalizeStatus = (
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active'
     | undefined,
 ) => (status === 'Active' || !status ? 'Licensed' : status);
 
-async function readTeachersFile(): Promise<TeachersFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as TeachersFile;
-    if (!parsed.teachers) {
-      return { teachers: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { teachers: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeTeachersFile(data: TeachersFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student';
+  role: 'company' | 'teacher' | 'student' | 'parent';
   name: string;
   email: string;
   status: string;
@@ -72,31 +50,6 @@ type AccountRecord = {
   password?: string;
   teacherId?: string;
 };
-
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-async function readAccountsFile(): Promise<AccountsFile> {
-  try {
-    const raw = await fs.readFile(accountsFile, 'utf-8');
-    const parsed = JSON.parse(raw) as AccountsFile;
-    if (!parsed.accounts) {
-      return { accounts: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { accounts: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeAccountsFile(data: AccountsFile) {
-  await fs.mkdir(path.dirname(accountsFile), { recursive: true });
-  await fs.writeFile(accountsFile, JSON.stringify(data, null, 2), 'utf-8');
-}
 
 export async function PATCH(
   request: Request,
@@ -115,6 +68,7 @@ export async function PATCH(
       | 'Advanced'
       | 'Master'
       | 'Onboarding'
+      | 'Interested'
       | 'Inactive'
       | 'Active';
     password?: string;
@@ -124,35 +78,40 @@ export async function PATCH(
     return NextResponse.json({ error: 'Company is required.' }, { status: 400 });
   }
 
-  const data = await readTeachersFile();
-  const index = data.teachers.findIndex(
-    teacher => teacher.id === id && teacher.company === body.company,
-  );
+  const db = getDb();
+  const current = db
+    .prepare('SELECT * FROM teachers WHERE id = ? AND company = ?')
+    .get(id, body.company) as Record<string, string | null> | undefined;
 
-  if (index === -1) {
+  if (!current) {
     return NextResponse.json({ error: 'Teacher not found.' }, { status: 404 });
   }
 
-  const current = data.teachers[index];
   const normalizedUsername = body.username?.trim().toLowerCase();
   if (normalizedUsername) {
-    const usernameTaken = data.teachers.some(
-      teacher =>
-        teacher.id !== id &&
-        teacher.username?.trim().toLowerCase() === normalizedUsername,
-    );
+    const usernameTaken = db
+      .prepare(
+        `
+          SELECT id FROM teachers
+          WHERE id != ? AND LOWER(username) = ?
+        `,
+      )
+      .get(id, normalizedUsername);
     if (usernameTaken) {
       return NextResponse.json(
         { error: 'Username already in use.' },
         { status: 409 },
       );
     }
-    const accountsData = await readAccountsFile();
-    const accountConflict = accountsData.accounts.some(
-      account =>
-        account.username.toLowerCase() === normalizedUsername &&
-        account.teacherId !== id,
-    );
+    const accountConflict = db
+      .prepare(
+        `
+          SELECT username
+          FROM accounts
+          WHERE LOWER(username) = ? AND (teacher_id IS NULL OR teacher_id != ?)
+        `,
+      )
+      .get(normalizedUsername, id);
     if (accountConflict) {
       return NextResponse.json(
         { error: 'Username already in use.' },
@@ -161,49 +120,119 @@ export async function PATCH(
     }
   }
   const updated: TeacherRecord = {
-    ...current,
+    id: current.id ?? id,
+    company: current.company ?? body.company,
     username: normalizedUsername ?? current.username ?? '',
-    name: body.name ?? current.name,
-    email: body.email ?? current.email,
-    region: body.region ?? current.region,
-    status: normalizeStatus(body.status ?? current.status),
+    name: body.name ?? (current.name ?? ''),
+    email: body.email ?? (current.email ?? ''),
+    region: body.region ?? (current.region ?? ''),
+    status: normalizeStatus(
+      body.status ?? (current.status as TeacherRecord['status']),
+    ),
     password:
       body.password !== undefined
         ? body.password.trim()
         : current.password ?? '',
     updatedAt: new Date().toISOString(),
+    createdAt: current.created_at ?? '',
   };
 
-  data.teachers[index] = updated;
-  await writeTeachersFile(data);
-
-  const accountsData = await readAccountsFile();
-  const accountIndex = accountsData.accounts.findIndex(
-    account =>
-      account.role === 'teacher' &&
-      (account.teacherId === updated.id ||
-        account.username.toLowerCase() === updated.username.toLowerCase()),
+  db.prepare(
+    `
+      UPDATE teachers
+      SET
+        username = ?,
+        name = ?,
+        email = ?,
+        region = ?,
+        status = ?,
+        password = ?,
+        updated_at = ?
+      WHERE id = ? AND company = ?
+    `,
+  ).run(
+    updated.username,
+    updated.name,
+    updated.email,
+    updated.region,
+    updated.status,
+    updated.password ?? '',
+    updated.updatedAt,
+    updated.id,
+    body.company,
   );
+
+  const existingAccount = db
+    .prepare(
+      `
+        SELECT username, last_login, password
+        FROM accounts
+        WHERE role = 'teacher' AND teacher_id = ?
+      `,
+    )
+    .get(updated.id) as
+    | { username: string; last_login: string | null; password: string | null }
+    | undefined;
   const nextAccount: AccountRecord = {
     username: updated.username,
     role: 'teacher',
     name: updated.name,
     email: updated.email,
     status: updated.status,
-    lastLogin:
-      accountIndex === -1 ? null : accountsData.accounts[accountIndex].lastLogin,
+    lastLogin: existingAccount?.last_login ?? null,
     password:
       body.password !== undefined
         ? body.password.trim()
-        : accountsData.accounts[accountIndex]?.password ?? '',
+        : existingAccount?.password ?? '',
     teacherId: updated.id,
   };
-  if (accountIndex === -1) {
-    accountsData.accounts.push(nextAccount);
+  if (existingAccount) {
+    db.prepare(
+      `
+        UPDATE accounts
+        SET
+          username = ?,
+          name = ?,
+          email = ?,
+          status = ?,
+          last_login = ?,
+          password = ?
+        WHERE role = 'teacher' AND teacher_id = ?
+      `,
+    ).run(
+      nextAccount.username,
+      nextAccount.name,
+      nextAccount.email,
+      nextAccount.status,
+      nextAccount.lastLogin,
+      nextAccount.password ?? '',
+      nextAccount.teacherId ?? '',
+    );
   } else {
-    accountsData.accounts[accountIndex] = nextAccount;
+    db.prepare(
+      `
+        INSERT INTO accounts (
+          username,
+          role,
+          name,
+          email,
+          status,
+          last_login,
+          password,
+          teacher_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      nextAccount.username,
+      nextAccount.role,
+      nextAccount.name,
+      nextAccount.email,
+      nextAccount.status,
+      nextAccount.lastLogin,
+      nextAccount.password ?? '',
+      nextAccount.teacherId ?? '',
+    );
   }
-  await writeAccountsFile(accountsData);
 
   return NextResponse.json({ teacher: updated });
 }
@@ -220,28 +249,37 @@ export async function DELETE(
     return NextResponse.json({ error: 'Company is required.' }, { status: 400 });
   }
 
-  const data = await readTeachersFile();
-  const index = data.teachers.findIndex(
-    teacher => teacher.id === id && teacher.company === company,
-  );
+  const db = getDb();
+  const current = db
+    .prepare('SELECT * FROM teachers WHERE id = ? AND company = ?')
+    .get(id, company) as Record<string, string | null> | undefined;
 
-  if (index === -1) {
+  if (!current) {
     return NextResponse.json({ error: 'Teacher not found.' }, { status: 404 });
   }
 
-  const [removed] = data.teachers.splice(index, 1);
-  await writeTeachersFile(data);
+  db.prepare('DELETE FROM teachers WHERE id = ? AND company = ?').run(id, company);
+  db.prepare(
+    `
+      DELETE FROM accounts
+      WHERE role = 'teacher' AND (teacher_id = ? OR LOWER(username) = ?)
+    `,
+  ).run(current.id ?? id, (current.username ?? '').toLowerCase());
 
-  const accountsData = await readAccountsFile();
-  accountsData.accounts = accountsData.accounts.filter(
-    account =>
-      !(
-        account.role === 'teacher' &&
-        (account.teacherId === removed.id ||
-          account.username.toLowerCase() === removed.username.toLowerCase())
-      ),
-  );
-  await writeAccountsFile(accountsData);
+  const removed: TeacherRecord = {
+    id: current.id ?? id,
+    company: current.company ?? company,
+    username: current.username ?? '',
+    name: current.name ?? '',
+    email: current.email ?? '',
+    region: current.region ?? '',
+    status: normalizeStatus(
+      current.status as TeacherRecord['status'] | undefined,
+    ),
+    createdAt: current.created_at ?? '',
+    updatedAt: current.updated_at ?? '',
+    password: current.password ?? '',
+  };
 
   return NextResponse.json({ teacher: removed });
 }

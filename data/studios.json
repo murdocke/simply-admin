@@ -1,0 +1,18 @@
+{
+  "studios": [
+    {
+      "id": "riffs-chops",
+      "company": "neil",
+      "name": "Riffs & Chops",
+      "location": "Austin, TX",
+      "timeZone": "America/Chicago",
+      "status": "Active",
+      "createdAt": "2026-02-12T18:30:00.000Z",
+      "adminTeacherId": "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
+      "teacherIds": [
+        "23119e0d-2d21-4f17-99a4-c56e3aac4d8a",
+        "7f4a1c9b-6c3d-4f1b-9f93-6e6f4f8b8c12"
+      ]
+    }
+  ]
+}

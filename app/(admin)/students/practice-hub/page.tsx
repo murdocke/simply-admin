@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import lessonMaterials from '../../teachers/students/lesson-data/lesson-materials.json';
+import { useLessonData } from '../../components/use-lesson-data';
 import { useLessonCart } from '../../components/lesson-cart';
 import { useLessonCartScope, makeStudentScope } from '../../components/lesson-cart-scope';
 import { makePracticeMaterialId } from '../../components/practice-hub-utils';
 
 export default function StudentPracticeHubPage() {
+  const { lessonMaterials } = useLessonData();
   const { scope, studentId } = useLessonCartScope();
   const studentScope = studentId ? makeStudentScope(studentId) : scope;
   const { purchasedItems } = useLessonCart(studentScope);
@@ -89,7 +90,7 @@ export default function StudentPracticeHubPage() {
           `${item.program}|${item.section}` as keyof typeof lessonMaterials
         ] ?? [],
     }));
-  }, [studentServerUnlocks]);
+  }, [studentServerUnlocks, lessonMaterials]);
 
   const visibleSections = useMemo(() => {
     return unlockedSections

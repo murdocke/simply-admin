@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import lessonTypes from '../teachers/students/lesson-data/lesson-types.json';
-import lessonSections from '../teachers/students/lesson-data/lesson-sections.json';
 import LockedSectionCard from './locked-section-card';
+import { getLessonSections, getLessonTypes } from '@/lib/lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -46,11 +45,15 @@ export default function LessonLibraryProgram({
   programSlug,
   showLocks = true,
 }: LessonLibraryProgramProps) {
+  const lessonTypes = getLessonTypes();
+  const lessonSections = getLessonSections();
   const programName =
     lessonTypes.find(type => toProgramSlug(type) === programSlug) ?? null;
   const sectionData =
     programName && lessonSections[programName as keyof typeof lessonSections]
-      ? lessonSections[programName as keyof typeof lessonSections]
+      ? (lessonSections[programName as keyof typeof lessonSections] as
+          | string[]
+          | Record<string, string[]>)
       : [];
   const sections = Array.isArray(sectionData)
     ? sectionData

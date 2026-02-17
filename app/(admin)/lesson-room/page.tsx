@@ -22,6 +22,7 @@ type VideoPlaceholderProps = {
   videoRef?: React.RefObject<HTMLVideoElement>;
   labelSize?: "sm" | "md";
   signalActive?: boolean;
+  livekitState?: "disconnected" | "connecting" | "connected";
 };
 
 type CameraFrameProps = {
@@ -32,6 +33,7 @@ type CameraFrameProps = {
   videoRef?: React.RefObject<HTMLVideoElement>;
   labelSize?: "sm" | "md";
   signalActive?: boolean;
+  livekitState?: "disconnected" | "connecting" | "connected";
 };
 
 type DragPosition = {
@@ -46,7 +48,7 @@ type DragState = {
 };
 
 type DockSide = "left" | "right";
-type UserRole = "teacher" | "student" | "company";
+type UserRole = "teacher" | "student" | "company" | "parent";
 type CameraSource = "teacher1" | "teacher2" | "student";
 
 const CONTROL_PANEL_WIDTH = 300;
@@ -80,11 +82,56 @@ const VideoPlaceholder = ({
   videoRef,
   labelSize = "md",
   signalActive = false,
+  livekitState = "disconnected",
 }: VideoPlaceholderProps): ReactElement => {
   const labelClasses =
     labelSize === "sm"
       ? "px-3 py-1.5 text-[11px] rounded-full"
       : "px-4 py-2 text-sm rounded-full";
+  const [overlayTone, setOverlayTone] = useState<"light" | "dark">("light");
+  const pillTone =
+    overlayTone === "dark" ? "bg-black/45 text-white/90" : "bg-white/20 text-white/90";
+  const pillBorderTone =
+    overlayTone === "dark" ? "border-white/15" : "border-white/25";
+
+  useEffect(() => {
+    if (!videoRef?.current || !signalActive || livekitState !== "connected") {
+      setOverlayTone("light");
+      return;
+    }
+    const video = videoRef.current;
+    let timeoutId: number | undefined;
+    const sampleLuminance = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const width = 64;
+        const height = 36;
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.drawImage(video, 0, 0, width, height);
+        const { data } = context.getImageData(0, 0, width, height);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i] / 255;
+          const g = data[i + 1] / 255;
+          const b = data[i + 2] / 255;
+          sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        const avg = sum / (data.length / 4);
+        setOverlayTone(avg > 0.55 ? "dark" : "light");
+      } catch {
+        setOverlayTone("light");
+      }
+    };
+    timeoutId = window.setTimeout(sampleLuminance, 2200);
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [videoRef, signalActive, livekitState]);
   return (
     <div
       className={[
@@ -106,10 +153,10 @@ const VideoPlaceholder = ({
         />
       ) : null}
       <div className="relative flex items-center justify-between px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/80">
-        <span className="select-none rounded-full bg-white/20 px-4 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
+        <span className={`select-none rounded-full px-4 py-1.5 text-[11px] font-semibold backdrop-blur-sm ${pillTone}`}>
           Live View
         </span>
-        <span className="select-none flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
+        <span className={`select-none flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold backdrop-blur-sm ${pillTone}`}>
           <span className="h-2 w-2 rounded-full bg-red-500" />
           Recording In Progress
         </span>
@@ -117,7 +164,7 @@ const VideoPlaceholder = ({
       <div className="relative flex flex-1" />
       <div className="relative flex items-center justify-between px-4 py-3 text-xs text-white/70">
         <div
-          className={`select-none flex items-center gap-2 bg-white/20 font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm ${labelClasses}`}
+          className={`select-none flex items-center gap-2 font-semibold uppercase tracking-wide backdrop-blur-sm ${labelClasses} ${pillTone}`}
           style={{
             clipPath: "inset(0 round 999px)",
           }}
@@ -130,10 +177,10 @@ const VideoPlaceholder = ({
           {label}
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-full border border-white/25 px-3 py-1 backdrop-blur-sm bg-white/10">
+          <span className={`rounded-full border px-3 py-1 backdrop-blur-sm ${pillBorderTone} ${pillTone}`}>
             16:9
           </span>
-          <span className="rounded-full border border-white/25 px-3 py-1 backdrop-blur-sm bg-white/10">
+          <span className={`rounded-full border px-3 py-1 backdrop-blur-sm ${pillBorderTone} ${pillTone}`}>
             HD
           </span>
           {showSwapButton ? (
@@ -167,6 +214,7 @@ const CameraFrame = ({
   videoRef,
   labelSize,
   signalActive,
+  livekitState,
 }: CameraFrameProps): ReactElement => {
   return (
     <div className={`w-full aspect-video ${className}`}>
@@ -178,6 +226,7 @@ const CameraFrame = ({
         videoRef={videoRef}
         labelSize={labelSize}
         signalActive={signalActive}
+        livekitState={livekitState}
       />
     </div>
   );
@@ -256,6 +305,8 @@ const RightSidebar = ({
   devices,
   teacherCamOneId,
   teacherCamTwoId,
+  activeCameraTarget,
+  onChangeActiveCameraTarget,
   onChangeTeacherCamOne,
   onChangeTeacherCamTwo,
 }: {
@@ -264,9 +315,15 @@ const RightSidebar = ({
   devices: MediaDeviceInfo[];
   teacherCamOneId: string;
   teacherCamTwoId: string;
+  activeCameraTarget: "teacher1" | "teacher2";
+  onChangeActiveCameraTarget: (value: "teacher1" | "teacher2") => void;
   onChangeTeacherCamOne: (value: string) => void;
   onChangeTeacherCamTwo: (value: string) => void;
 }): ReactElement => {
+  const normalizedLabel = (device: MediaDeviceInfo) =>
+    (device.label || `Camera ${device.deviceId.slice(0, 4)}`)
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .trim();
   if (role === "student") {
     return (
       <div className="space-y-4">
@@ -343,18 +400,64 @@ const RightSidebar = ({
       </PanelSection>
 
       <PanelSection title="Camera Inputs">
-        <CameraSelect
-          label="Teacher Camera 1"
-          value={teacherCamOneId}
-          options={devices}
-          onChange={onChangeTeacherCamOne}
-        />
-        <CameraSelect
-          label="Teacher Camera 2"
-          value={teacherCamTwoId}
-          options={devices}
-          onChange={onChangeTeacherCamTwo}
-        />
+        <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.2em]">
+          <button
+            type="button"
+            onClick={() => onChangeActiveCameraTarget("teacher1")}
+            className={`rounded-full border px-3 py-2 font-semibold transition ${
+              activeCameraTarget === "teacher1"
+                ? "border-[var(--c-c8102e)] bg-[var(--c-c8102e)]/10 text-[var(--c-c8102e)]"
+                : "border-[var(--c-ecebe7)] text-[var(--c-6f6c65)] hover:border-[var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+            }`}
+            title="Press Q"
+          >
+            Teacher Cam 1
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeActiveCameraTarget("teacher2")}
+            className={`rounded-full border px-3 py-2 font-semibold transition ${
+              activeCameraTarget === "teacher2"
+                ? "border-[var(--c-c8102e)] bg-[var(--c-c8102e)]/10 text-[var(--c-c8102e)]"
+                : "border-[var(--c-ecebe7)] text-[var(--c-6f6c65)] hover:border-[var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+            }`}
+            title="Press W"
+          >
+            Teacher Cam 2
+          </button>
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
+          Click a camera below or press 1–9
+        </div>
+        <div className="flex flex-col gap-2">
+          {devices.map((device, index) => {
+            const isActive =
+              activeCameraTarget === "teacher1"
+                ? teacherCamOneId === device.deviceId
+                : teacherCamTwoId === device.deviceId;
+            return (
+              <button
+                key={device.deviceId}
+                type="button"
+                onClick={() =>
+                  activeCameraTarget === "teacher1"
+                    ? onChangeTeacherCamOne(device.deviceId)
+                    : onChangeTeacherCamTwo(device.deviceId)
+                }
+                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
+                  isActive
+                    ? "border-[var(--c-c8102e)] bg-[var(--c-c8102e)]/10 text-[var(--c-c8102e)]"
+                    : "border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-3a3935)] hover:border-[var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                }`}
+              >
+                <span>{normalizedLabel(device)}</span>
+                <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  {index + 1}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </PanelSection>
 
       <PanelSection title="Session Notes">
@@ -493,6 +596,7 @@ export default function LessonRoomPage(): ReactElement {
   const isWide = layoutWidth >= 2000 && layoutWidth < 3500;
   const layoutKey = isUltraWide ? "ultra" : isWide ? "middle" : "compact";
   const [activeRole, setActiveRole] = useState<UserRole>("teacher");
+  const [activeCameraTarget, setActiveCameraTarget] = useState<"teacher1" | "teacher2">("teacher1");
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionTermsAgreed, setPermissionTermsAgreed] = useState(false);
   const [teacherTrackOne, setTeacherTrackOne] = useState<LocalVideoTrack | null>(
@@ -778,6 +882,53 @@ export default function LessonRoomPage(): ReactElement {
   }, []);
 
   useEffect(() => {
+    if (activeRole !== "teacher") {
+      return;
+    }
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      const tag = target.tagName.toLowerCase();
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target.isContentEditable
+      );
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "q") {
+        setActiveCameraTarget("teacher1");
+        return;
+      }
+      if (key === "w") {
+        setActiveCameraTarget("teacher2");
+        return;
+      }
+      if (!/^[1-9]$/.test(key)) {
+        return;
+      }
+      const index = Number(key) - 1;
+      const device = videoDevices[index];
+      if (!device) {
+        return;
+      }
+      if (activeCameraTarget === "teacher1") {
+        setTeacherCamOneId(device.deviceId);
+      } else {
+        setTeacherCamTwoId(device.deviceId);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeRole, activeCameraTarget, videoDevices]);
+
+  useEffect(() => {
     try {
       const storedUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
       const storedViewRole = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
@@ -797,13 +948,12 @@ export default function LessonRoomPage(): ReactElement {
   }, []);
 
   useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_LIVEKIT_URL) {
+      setLivekitError("Missing LiveKit URL.");
+      return;
+    }
     let mounted = true;
     const connectRoom = async () => {
-      const publishTrack =
-        activeRole === "student" ? studentTrack : teacherTrackOne;
-      if (!process.env.NEXT_PUBLIC_LIVEKIT_URL || !publishTrack) {
-        return;
-      }
       setLivekitError(null);
       setLivekitState("connecting");
       try {
@@ -827,10 +977,6 @@ export default function LessonRoomPage(): ReactElement {
         }
         const room = new Room();
         await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, data.token);
-        await room.localParticipant.publishTrack(publishTrack);
-        if (activeRole === "teacher" && teacherTrackTwo && teacherTrackTwo !== publishTrack) {
-          await room.localParticipant.publishTrack(teacherTrackTwo);
-        }
         if (!mounted) {
           room.disconnect();
           return;
@@ -967,7 +1113,35 @@ export default function LessonRoomPage(): ReactElement {
         roomName: "unknown",
       });
     };
-  }, [activeRole, studentTrack, teacherTrackOne, teacherTrackTwo]);
+  }, [activeRole]);
+
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room || room.connectionState !== "connected") {
+      return;
+    }
+    const desiredTracks =
+      activeRole === "teacher"
+        ? [teacherTrackOne, teacherTrackTwo].filter(
+            (track): track is LocalVideoTrack => Boolean(track),
+          )
+        : [studentTrack].filter(
+            (track): track is LocalVideoTrack => Boolean(track),
+          );
+    const publications = Array.from(room.localParticipant.videoTrackPublications.values());
+    publications.forEach((pub) => {
+      if (!pub.track) return;
+      if (!desiredTracks.includes(pub.track as LocalVideoTrack)) {
+        room.localParticipant.unpublishTrack(pub.track as LocalVideoTrack);
+      }
+    });
+    desiredTracks.forEach((track) => {
+      const alreadyPublished = publications.some((pub) => pub.track === track);
+      if (!alreadyPublished) {
+        room.localParticipant.publishTrack(track);
+      }
+    });
+  }, [activeRole, teacherTrackOne, teacherTrackTwo, studentTrack, livekitState]);
 
   useEffect(() => {
     if (!roomRef.current) {
@@ -1216,6 +1390,7 @@ export default function LessonRoomPage(): ReactElement {
                     videoRef={teacherOneVideoRef}
                     labelSize="sm"
                     signalActive={isSignalActiveForSource(layoutSources.compact.small[0])}
+                    livekitState={livekitState}
                   />
                   <CameraFrame
                     label={getLabelForSource(layoutSources.compact.small[1], false)}
@@ -1224,6 +1399,7 @@ export default function LessonRoomPage(): ReactElement {
                     videoRef={teacherTwoVideoRef}
                     labelSize="sm"
                     signalActive={isSignalActiveForSource(layoutSources.compact.small[1])}
+                    livekitState={livekitState}
                   />
               </div>
             </section>
@@ -1239,6 +1415,7 @@ export default function LessonRoomPage(): ReactElement {
                       className="max-w-full"
                       videoRef={mainVideoRef}
                       signalActive={isSignalActiveForSource(layoutSources.compact.main)}
+                      livekitState={livekitState}
                     />
                   <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
                     <div className="group/controls relative flex flex-col items-center">
@@ -1272,6 +1449,8 @@ export default function LessonRoomPage(): ReactElement {
                     devices={videoDevices}
                     teacherCamOneId={teacherCamOneId}
                     teacherCamTwoId={teacherCamTwoId}
+                    activeCameraTarget={activeCameraTarget}
+                    onChangeActiveCameraTarget={setActiveCameraTarget}
                     onChangeTeacherCamOne={setTeacherCamOneId}
                     onChangeTeacherCamTwo={setTeacherCamTwoId}
                   />
@@ -1292,6 +1471,7 @@ export default function LessonRoomPage(): ReactElement {
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
                   signalActive={isSignalActiveForSource(layoutSources.middle.small[0])}
+                  livekitState={livekitState}
                 />
                 <CameraFrame
                   label={getLabelForSource(layoutSources.middle.small[1], false)}
@@ -1300,6 +1480,7 @@ export default function LessonRoomPage(): ReactElement {
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
                   signalActive={isSignalActiveForSource(layoutSources.middle.small[1])}
+                  livekitState={livekitState}
                 />
               </section>
               <section className="flex flex-1 flex-col gap-3">
@@ -1310,6 +1491,7 @@ export default function LessonRoomPage(): ReactElement {
                     className="max-w-full"
                     videoRef={mainVideoRef}
                     signalActive={isSignalActiveForSource(layoutSources.middle.main)}
+                    livekitState={livekitState}
                   />
                   <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
                     <div className="group/controls relative flex flex-col items-center">
@@ -1343,6 +1525,8 @@ export default function LessonRoomPage(): ReactElement {
                   devices={videoDevices}
                   teacherCamOneId={teacherCamOneId}
                   teacherCamTwoId={teacherCamTwoId}
+                  activeCameraTarget={activeCameraTarget}
+                  onChangeActiveCameraTarget={setActiveCameraTarget}
                   onChangeTeacherCamOne={setTeacherCamOneId}
                   onChangeTeacherCamTwo={setTeacherCamTwoId}
                 />
@@ -1363,6 +1547,7 @@ export default function LessonRoomPage(): ReactElement {
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
                   signalActive={isSignalActiveForSource(layoutSources.ultra.small[0])}
+                  livekitState={livekitState}
                 />
               </section>
               <section className="flex flex-col gap-3">
@@ -1375,6 +1560,7 @@ export default function LessonRoomPage(): ReactElement {
                     className="max-w-full"
                     videoRef={mainVideoRef}
                     signalActive={isSignalActiveForSource(layoutSources.ultra.main)}
+                    livekitState={livekitState}
                   />
                   <div className="absolute left-1/2 top-[14px] z-10 w-[min(640px,94vw)] -translate-x-1/2">
                     <div className="group/controls relative flex flex-col items-center">
@@ -1410,6 +1596,7 @@ export default function LessonRoomPage(): ReactElement {
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
                   signalActive={isSignalActiveForSource(layoutSources.ultra.small[1])}
+                  livekitState={livekitState}
                 />
               </section>
               <aside className="space-y-4 pt-[29px]">
@@ -1419,6 +1606,8 @@ export default function LessonRoomPage(): ReactElement {
                   devices={videoDevices}
                   teacherCamOneId={teacherCamOneId}
                   teacherCamTwoId={teacherCamTwoId}
+                  activeCameraTarget={activeCameraTarget}
+                  onChangeActiveCameraTarget={setActiveCameraTarget}
                   onChangeTeacherCamOne={setTeacherCamOneId}
                   onChangeTeacherCamTwo={setTeacherCamTwoId}
                 />

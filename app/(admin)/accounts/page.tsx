@@ -17,6 +17,7 @@ type TeacherRecord = {
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active';
   createdAt: string;
@@ -57,6 +58,7 @@ const normalizeTeacherStatus = (
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active',
 ) => (status === 'Active' ? 'Licensed' : status);
@@ -67,6 +69,7 @@ const statusStyles: Record<string, string> = {
   Advanced: 'bg-[var(--c-f4f0ff)] text-[var(--c-47308a)]',
   Master: 'bg-[var(--c-fff2d9)] text-[var(--c-7a4a17)]',
   Onboarding: 'bg-[var(--c-fff2d9)] text-[var(--c-8a5b2b)]',
+  Interested: 'bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]',
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
 };
 
@@ -242,11 +245,22 @@ export default function AccountsPage() {
     return teachers.reduce(
       (acc, teacher) => {
         const status = normalizeTeacherStatus(teacher.status);
-        acc.total += 1;
-        if (status === 'Licensed') acc.licensed += 1;
-        if (status === 'Certified') acc.certified += 1;
-        if (status === 'Advanced') acc.advanced += 1;
-        if (status === 'Master') acc.master += 1;
+        if (status === 'Licensed') {
+          acc.total += 1;
+          acc.licensed += 1;
+        }
+        if (status === 'Certified') {
+          acc.total += 1;
+          acc.certified += 1;
+        }
+        if (status === 'Advanced') {
+          acc.total += 1;
+          acc.advanced += 1;
+        }
+        if (status === 'Master') {
+          acc.total += 1;
+          acc.master += 1;
+        }
         return acc;
       },
       {
@@ -318,6 +332,7 @@ export default function AccountsPage() {
         | 'Advanced'
         | 'Master'
         | 'Onboarding'
+        | 'Interested'
         | 'Inactive',
       password: '',
     });
@@ -477,6 +492,12 @@ export default function AccountsPage() {
             className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
           >
             Add Teacher
+          </button>
+          <button
+            onClick={() => router.push('/teacher-interest')}
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+          >
+            Teacher Interest
           </button>
           <button
             className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
@@ -987,6 +1008,7 @@ export default function AccountsPage() {
                       'Advanced',
                       'Master',
                       'Onboarding',
+                      'Interested',
                       'Inactive',
                     ].map(option => (
                       <option key={option} value={option}>

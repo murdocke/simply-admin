@@ -1,56 +1,63 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import studentsData from '@/data/students.json';
-import teachersData from '@/data/teachers.json';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
 } from './auth';
-
-const resolveStudentIdFromUser = (username?: string | null) => {
-  if (!username) return null;
-  const normalized = username.toLowerCase();
-  const studentsList = studentsData.students as Array<{
-    id: string;
-    name: string;
-    email: string;
-  }>;
-  return (
-    studentsList.find(student => student.email.toLowerCase() === normalized)
-      ?.id ??
-    studentsList.find(student => student.name.toLowerCase() === normalized)
-      ?.id ??
-    studentsList.find(student =>
-      student.name.toLowerCase().startsWith(normalized),
-    )?.id ??
-    null
-  );
-};
-
-const resolveTeacherUsernameFromUser = (username?: string | null) => {
-  if (!username) return null;
-  const normalized = username.toLowerCase();
-  const teachersList = teachersData.teachers as Array<{
-    username?: string;
-  }>;
-  return (
-    teachersList.find(teacher =>
-      teacher.username?.toLowerCase().startsWith(normalized),
-    )?.username ?? username
-  );
-};
+import { useApiData } from './use-api-data';
 
 export const makeStudentScope = (studentId: string) => `student:${studentId}`;
 export const makeTeacherScope = (teacherUsername: string) =>
   `teacher:${teacherUsername}`;
 
 export const useLessonCartScope = () => {
+  const { data: studentsData } = useApiData<{ students: Array<{
+    id: string;
+    name: string;
+    email: string;
+  }> }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { data: teachersData } = useApiData<{ teachers: Array<{
+    username?: string;
+  }> }>(
+    '/api/teachers',
+    { teachers: [] },
+  );
   const [role, setRole] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [teacherUsername, setTeacherUsername] = useState<string | null>(null);
+
+  const resolveStudentIdFromUser = (value?: string | null) => {
+    if (!value) return null;
+    const normalized = value.toLowerCase();
+    const studentsList = studentsData.students;
+    return (
+      studentsList.find(student => student.email.toLowerCase() === normalized)
+        ?.id ??
+      studentsList.find(student => student.name.toLowerCase() === normalized)
+        ?.id ??
+      studentsList.find(student =>
+        student.name.toLowerCase().startsWith(normalized),
+      )?.id ??
+      null
+    );
+  };
+
+  const resolveTeacherUsernameFromUser = (value?: string | null) => {
+    if (!value) return null;
+    const normalized = value.toLowerCase();
+    const teachersList = teachersData.teachers;
+    return (
+      teachersList.find(teacher =>
+        teacher.username?.toLowerCase().startsWith(normalized),
+      )?.username ?? value
+    );
+  };
 
   useEffect(() => {
     const loadScope = () => {
@@ -147,7 +154,7 @@ export const useLessonCartScope = () => {
       window.removeEventListener('sm-view-teacher-updated', handleStorage);
       window.removeEventListener('sm-view-student-updated', handleStorage);
     };
-  }, []);
+  }, [studentsData, teachersData]);
 
   const scope = useMemo(() => {
     if (role === 'student' && studentId) {

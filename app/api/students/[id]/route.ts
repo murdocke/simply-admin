@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type StudentRecord = {
   id: string;
@@ -22,32 +21,7 @@ type StudentRecord = {
   updatedAt: string;
 };
 
-type StudentsFile = {
-  students: StudentRecord[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'students.json');
-
-async function readStudentsFile(): Promise<StudentsFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as StudentsFile;
-    if (!parsed.students) {
-      return { students: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { students: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeStudentsFile(data: StudentsFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function PATCH(
   request: Request,
@@ -75,38 +49,82 @@ export async function PATCH(
     return NextResponse.json({ error: 'Teacher is required.' }, { status: 400 });
   }
 
-  const data = await readStudentsFile();
-  const index = data.students.findIndex(
-    student => student.id === id && student.teacher === body.teacher,
-  );
+  const db = getDb();
+  const current = db
+    .prepare('SELECT * FROM students WHERE id = ? AND teacher = ?')
+    .get(id, body.teacher) as Record<string, string | null> | undefined;
 
-  if (index === -1) {
+  if (!current) {
     return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
   }
 
-  const current = data.students[index];
   const updated: StudentRecord = {
-    ...current,
-    name: body.name ?? current.name,
-    email: body.email ?? current.email,
-    level: body.level ?? current.level,
-    status: body.status ?? current.status,
-    lessonFeeAmount: body.lessonFeeAmount ?? current.lessonFeeAmount ?? '',
-    lessonFeePeriod: body.lessonFeePeriod ?? current.lessonFeePeriod ?? 'Per Mo',
-    lessonDay: body.lessonDay ?? current.lessonDay ?? '',
-    lessonTime: body.lessonTime ?? current.lessonTime ?? '',
+    id: current.id ?? id,
+    teacher: current.teacher ?? body.teacher,
+    name: body.name ?? (current.name ?? ''),
+    email: body.email ?? (current.email ?? ''),
+    level: body.level ?? (current.level ?? ''),
+    status: (body.status ?? current.status ?? 'Active') as StudentRecord['status'],
+    lessonFeeAmount:
+      body.lessonFeeAmount ?? (current.lesson_fee_amount ?? ''),
+    lessonFeePeriod:
+      body.lessonFeePeriod ??
+      ((current.lesson_fee_period ?? 'Per Mo') as StudentRecord['lessonFeePeriod']),
+    lessonDay: body.lessonDay ?? (current.lesson_day ?? ''),
+    lessonTime: body.lessonTime ?? (current.lesson_time ?? ''),
     lessonDuration:
-      body.lessonDuration ?? current.lessonDuration ?? '30M',
-    lessonType: body.lessonType ?? current.lessonType ?? 'Individual',
+      body.lessonDuration ??
+      ((current.lesson_duration ?? '30M') as StudentRecord['lessonDuration']),
+    lessonType:
+      body.lessonType ??
+      ((current.lesson_type ?? 'Individual') as StudentRecord['lessonType']),
     lessonLocation:
-      body.lessonLocation ?? current.lessonLocation ?? 'In-Person',
-    lessonNotes: body.lessonNotes ?? current.lessonNotes ?? '',
-    studentAlert: body.studentAlert ?? current.studentAlert ?? '',
+      body.lessonLocation ??
+      ((current.lesson_location ?? 'In-Person') as StudentRecord['lessonLocation']),
+    lessonNotes: body.lessonNotes ?? (current.lesson_notes ?? ''),
+    studentAlert: body.studentAlert ?? (current.student_alert ?? ''),
+    createdAt: current.created_at ?? '',
     updatedAt: new Date().toISOString(),
   };
 
-  data.students[index] = updated;
-  await writeStudentsFile(data);
+  db.prepare(
+    `
+      UPDATE students
+      SET
+        name = ?,
+        email = ?,
+        level = ?,
+        status = ?,
+        lesson_fee_amount = ?,
+        lesson_fee_period = ?,
+        lesson_day = ?,
+        lesson_time = ?,
+        lesson_duration = ?,
+        lesson_type = ?,
+        lesson_location = ?,
+        lesson_notes = ?,
+        student_alert = ?,
+        updated_at = ?
+      WHERE id = ? AND teacher = ?
+    `,
+  ).run(
+    updated.name,
+    updated.email,
+    updated.level,
+    updated.status,
+    updated.lessonFeeAmount ?? '',
+    updated.lessonFeePeriod ?? '',
+    updated.lessonDay ?? '',
+    updated.lessonTime ?? '',
+    updated.lessonDuration ?? '',
+    updated.lessonType ?? '',
+    updated.lessonLocation ?? '',
+    updated.lessonNotes ?? '',
+    updated.studentAlert ?? '',
+    updated.updatedAt,
+    id,
+    body.teacher,
+  );
 
   return NextResponse.json({ student: updated });
 }
@@ -123,17 +141,42 @@ export async function DELETE(
     return NextResponse.json({ error: 'Teacher is required.' }, { status: 400 });
   }
 
-  const data = await readStudentsFile();
-  const index = data.students.findIndex(
-    student => student.id === id && student.teacher === teacher,
-  );
+  const db = getDb();
+  const current = db
+    .prepare('SELECT * FROM students WHERE id = ? AND teacher = ?')
+    .get(id, teacher) as Record<string, string | null> | undefined;
 
-  if (index === -1) {
+  if (!current) {
     return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
   }
 
-  const [removed] = data.students.splice(index, 1);
-  await writeStudentsFile(data);
+  db.prepare('DELETE FROM students WHERE id = ? AND teacher = ?').run(
+    id,
+    teacher,
+  );
+  const removed: StudentRecord = {
+    id: current.id ?? id,
+    teacher: current.teacher ?? teacher,
+    name: current.name ?? '',
+    email: current.email ?? '',
+    level: current.level ?? '',
+    status: (current.status ?? 'Active') as StudentRecord['status'],
+    lessonFeeAmount: current.lesson_fee_amount ?? '',
+    lessonFeePeriod:
+      (current.lesson_fee_period ?? 'Per Mo') as StudentRecord['lessonFeePeriod'],
+    lessonDay: current.lesson_day ?? '',
+    lessonTime: current.lesson_time ?? '',
+    lessonDuration:
+      (current.lesson_duration ?? '30M') as StudentRecord['lessonDuration'],
+    lessonType:
+      (current.lesson_type ?? 'Individual') as StudentRecord['lessonType'],
+    lessonLocation:
+      (current.lesson_location ?? 'In-Person') as StudentRecord['lessonLocation'],
+    lessonNotes: current.lesson_notes ?? '',
+    studentAlert: current.student_alert ?? '',
+    createdAt: current.created_at ?? '',
+    updatedAt: current.updated_at ?? '',
+  };
 
   return NextResponse.json({ student: removed });
 }

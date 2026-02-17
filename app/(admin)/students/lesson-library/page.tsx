@@ -1,5 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 import LessonLibraryView from '../../components/lesson-library-view';
 import LessonPackPromoCard from '../../components/lesson-pack-promo-card';
 import type { LessonPack } from '../../components/lesson-pack-types';
@@ -7,14 +6,42 @@ import LessonCartPurchaseButton from '../../components/lesson-cart-actions';
 import PromoTrigger from '../../components/promo-trigger';
 
 const loadLessonPacks = async (): Promise<LessonPack[]> => {
-  try {
-    const filePath = path.join(process.cwd(), 'data', 'lesson-packs.json');
-    const raw = await fs.readFile(filePath, 'utf-8');
-    const parsed = JSON.parse(raw) as { lessonPacks?: LessonPack[] };
-    return Array.isArray(parsed.lessonPacks) ? parsed.lessonPacks : [];
-  } catch {
-    return [];
-  }
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM lesson_packs').all() as Array<
+    Record<string, string | number | null>
+  >;
+  return rows.map(row => ({
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    subtitle: String(row.subtitle ?? ''),
+    description: String(row.description ?? ''),
+    coverImage: String(row.cover_image ?? ''),
+    tags: row.tags_json ? (JSON.parse(String(row.tags_json)) as string[]) : [],
+    priceTeacher:
+      typeof row.price_teacher === 'number'
+        ? row.price_teacher
+        : row.price_teacher
+          ? Number(row.price_teacher)
+          : 0,
+    priceStudent:
+      typeof row.price_student === 'number'
+        ? row.price_student
+        : row.price_student
+          ? Number(row.price_student)
+          : 0,
+    subjectCount:
+      typeof row.subject_count === 'number'
+        ? row.subject_count
+        : row.subject_count
+          ? Number(row.subject_count)
+          : 0,
+    status: String(row.status ?? ''),
+    createdAt: String(row.created_at ?? ''),
+    updatedAt: String(row.updated_at ?? ''),
+    subjects: row.subjects_json
+      ? (JSON.parse(String(row.subjects_json)) as LessonPack['subjects'])
+      : [],
+  }));
 };
 
 export default async function StudentLessonLibraryPage() {

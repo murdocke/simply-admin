@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import studentsData from '@/data/students.json';
 import {
   AUTH_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
 } from '../../components/auth';
-import lessonMaterials from '../students/lesson-data/lesson-materials.json';
 import { useLessonCart } from '../../components/lesson-cart';
 import {
   makeStudentScope,
@@ -14,6 +12,8 @@ import {
 } from '../../components/lesson-cart-scope';
 import { makePracticeMaterialId } from '../../components/practice-hub-utils';
 import { makeLessonId } from '../../components/lesson-utils';
+import { useApiData } from '../../components/use-api-data';
+import { useLessonData } from '../../components/use-lesson-data';
 
 type StudentRecord = {
   id: string;
@@ -85,9 +85,14 @@ const getLessonDateForPlan = (lessonDay?: string, baseDate = new Date()) => {
 };
 
 export default function TeacherPracticeHubPage() {
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { lessonMaterials } = useLessonData();
   const students = useMemo(
     () => (studentsData.students as StudentRecord[]) ?? [],
-    [],
+    [studentsData],
   );
   const [activeStudent, setActiveStudent] = useState<StudentRecord | null>(
     null,
@@ -258,7 +263,7 @@ export default function TeacherPracticeHubPage() {
         ),
       ),
     };
-  }, [teacherServerUnlocks, studentServerUnlocks]);
+  }, [teacherServerUnlocks, studentServerUnlocks, lessonMaterials]);
 
   const unlockedSections = useMemo(() => {
     const effectiveTeacherItems = teacherServerUnlocks;

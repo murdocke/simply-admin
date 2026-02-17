@@ -1,9 +1,7 @@
 import Link from 'next/link';
-import lessonTypes from '../teachers/students/lesson-data/lesson-types.json';
-import lessonSections from '../teachers/students/lesson-data/lesson-sections.json';
-import lessonMaterials from '../teachers/students/lesson-data/lesson-materials.json';
 import MaterialsGrid from './materials/materials-grid';
 import LessonSectionGate from './lesson-section-gate';
+import { getLessonMaterials, getLessonSections, getLessonTypes } from '@/lib/lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -30,11 +28,16 @@ export default function LessonLibrarySection({
   material,
   part,
 }: LessonLibrarySectionProps) {
+  const lessonTypes = getLessonTypes();
+  const lessonSections = getLessonSections();
+  const lessonMaterials = getLessonMaterials();
   const programName =
     lessonTypes.find(type => toProgramSlug(type) === programSlug) ?? null;
   const sectionData =
     programName && lessonSections[programName as keyof typeof lessonSections]
-      ? lessonSections[programName as keyof typeof lessonSections]
+      ? (lessonSections[programName as keyof typeof lessonSections] as
+          | string[]
+          | Record<string, string[]>)
       : [];
   const availableSections = Array.isArray(sectionData)
     ? sectionData

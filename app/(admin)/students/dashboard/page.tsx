@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import studentsData from '@/data/students.json';
-import teachersData from '@/data/teachers.json';
 import LastViewedVideoCard from '../../components/last-viewed-video-card';
 import StudentPromoCard from '../../components/student-promo-card';
 import {
@@ -11,7 +9,6 @@ import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
 } from '../../components/auth';
-import lessonMaterials from '../../teachers/students/lesson-data/lesson-materials.json';
 import { makePracticeMaterialId } from '../../components/practice-hub-utils';
 import { useLessonCart } from '../../components/lesson-cart';
 import {
@@ -24,6 +21,8 @@ import {
   readCommunications,
   type CommunicationEntry,
 } from '../../components/communications-store';
+import { useApiData } from '../../components/use-api-data';
+import { useLessonData } from '../../components/use-lesson-data';
 
 type StudentRecord = {
   id: string;
@@ -82,9 +81,18 @@ const lessonDurationMinutes = (value?: StudentRecord['lessonDuration']) => {
 };
 
 export default function StudentDashboardPage() {
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { data: teachersData } = useApiData<{ teachers: TeacherRecord[] }>(
+    '/api/teachers',
+    { teachers: [] },
+  );
+  const { lessonMaterials } = useLessonData();
   const students = useMemo(
     () => (studentsData.students as StudentRecord[]) ?? [],
-    [],
+    [studentsData],
   );
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(
     null,
@@ -141,7 +149,7 @@ export default function StudentDashboardPage() {
       teachers.find(teacher => teacher.name.toLowerCase().startsWith(normalized)) ??
       null
     );
-  }, [selectedStudent?.teacher]);
+  }, [selectedStudent?.teacher, teachersData]);
   const teacherIdForStatus = teacherRecordForStatus?.id ?? null;
   const teacherDisplayName =
     teacherRecordForStatus?.goesBy?.trim() ||
@@ -745,7 +753,7 @@ export default function StudentDashboardPage() {
         };
       })
       .filter(section => section.materials.length > 0);
-  }, [studentServerUnlocks, selectedIds, focusIds]);
+  }, [studentServerUnlocks, selectedIds, focusIds, lessonMaterials]);
 
   const focusItems = useMemo(() => {
     const focused: Array<{
@@ -779,7 +787,7 @@ export default function StudentDashboardPage() {
       });
     });
     return focused;
-  }, [studentServerUnlocks, focusIds]);
+  }, [studentServerUnlocks, focusIds, lessonMaterials]);
 
   const [focusPrimary, focusSecondary] = useMemo(() => {
     if (focusItems.length === 0) return [null, null];
@@ -841,7 +849,7 @@ export default function StudentDashboardPage() {
       });
     }
     return songs;
-  }, [studentServerUnlocks]);
+  }, [studentServerUnlocks, lessonMaterials]);
 
   const [primarySong, secondarySong] = useMemo(() => {
     if (unlockedSongs.length === 0) return [null, null];

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-
-import teacherRows from '../../../data/teachers-subscriptions.json';
+import { useApiData } from '../components/use-api-data';
 import AssumptionsBar, { type Assumptions } from '../components/assumptions-bar';
 
 type TeacherRow = {
@@ -14,6 +13,11 @@ type TeacherRow = {
 };
 
 export default function SubscriptionsPage() {
+  const { data } = useApiData<{ subscriptions: TeacherRow[] }>(
+    '/api/teachers-subscriptions',
+    { subscriptions: [] },
+  );
+  const teacherRows = data.subscriptions;
   const lastBillingDate = 'Jan 1, 2026';
   const rows = teacherRows as TeacherRow[];
   const baseAvgStudents = useMemo(() => {

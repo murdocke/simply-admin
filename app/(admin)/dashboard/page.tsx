@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
   const [now, setNow] = useState(() => new Date());
@@ -45,6 +46,7 @@ function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const activeTeachers = 845;
   const activeStudents = activeTeachers * 27;
   const monthlyRoyaltiesDue = activeStudents * 9;
@@ -101,6 +103,148 @@ export default function DashboardPage() {
   >([]);
   const [promoSearch, setPromoSearch] = useState('');
   const [alertSearch, setAlertSearch] = useState('');
+  const [companyAlerts, setCompanyAlerts] = useState<
+    {
+      id?: string;
+      title: string;
+      body: string;
+      color?: string;
+      persistence?: string;
+      createdAt?: string;
+      interestStage?:
+        | 'new'
+        | 'call_scheduled'
+        | 'questionnaire_sent'
+        | 'questionnaire_opened'
+        | 'questionnaire_completed'
+        | 'qualified'
+        | 'not_qualified';
+      interestName?: string;
+      interestEmail?: string;
+      interestPhone?: string;
+      questionnaireOpenedAt?: string;
+      questionnaireActiveAt?: string;
+      questionnaireCompletedAt?: string;
+      registrationEmailedAt?: string;
+      registrationOpenedAt?: string;
+      registrationActiveAt?: string;
+      registrationCompletedAt?: string;
+    }[]
+  >([]);
+  const [companyAlertsLoading, setCompanyAlertsLoading] = useState(false);
+  const [callScheduledMap, setCallScheduledMap] = useState<Record<string, boolean>>({});
+  const [expandedQuestionnaires, setExpandedQuestionnaires] = useState<
+    Record<string, boolean>
+  >({});
+  const [liveStatusTopMap, setLiveStatusTopMap] = useState<Record<string, number>>(
+    {},
+  );
+  const [questionnaireDetails, setQuestionnaireDetails] = useState<
+    Record<
+      string,
+      {
+        loading: boolean;
+        payload: Record<string, unknown> | null;
+        submittedAt: string | null;
+      }
+    >
+  >({});
+
+  const toggleQuestionnaireDetails = useCallback(
+    async (alertId: string) => {
+      setExpandedQuestionnaires(current => ({
+        ...current,
+        [alertId]: !current[alertId],
+      }));
+      setQuestionnaireDetails(current => {
+        if (current[alertId]) return current;
+        return {
+          ...current,
+          [alertId]: { loading: true, payload: null, submittedAt: null },
+        };
+      });
+      try {
+        const response = await fetch(
+          `/api/questionnaire?alertId=${encodeURIComponent(alertId)}`,
+          { cache: 'no-store' },
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          payload?: Record<string, unknown> | null;
+          submittedAt?: string | null;
+        };
+        setQuestionnaireDetails(current => ({
+          ...current,
+          [alertId]: {
+            loading: false,
+            payload: data.payload ?? null,
+            submittedAt: data.submittedAt ?? null,
+          },
+        }));
+      } catch {
+        setQuestionnaireDetails(current => ({
+          ...current,
+          [alertId]: { loading: false, payload: null, submittedAt: null },
+        }));
+      }
+    },
+    [],
+  );
+
+  const loadCompanyAlerts = useCallback(async () => {
+    setCompanyAlertsLoading(true);
+    try {
+      const response = await fetch('/api/company-alerts', { cache: 'no-store' });
+      if (!response.ok) {
+        setCompanyAlerts([]);
+        return;
+      }
+      const data = (await response.json()) as {
+        alerts?: { active?: { company?: typeof companyAlerts } };
+      };
+      const rawAlerts = data.alerts?.active?.company ?? [];
+      const normalized = Array.isArray(rawAlerts) ? rawAlerts : [rawAlerts];
+      setCompanyAlerts(
+        normalized
+          .filter(alert => alert?.title && alert?.body)
+          .sort((a, b) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+          }),
+      );
+    } catch {
+      setCompanyAlerts([]);
+    } finally {
+      setCompanyAlertsLoading(false);
+    }
+  }, []);
+
+  const renderInterestBody = (body: string) => {
+    const divider = ' requested info about teaching Simply Music. ';
+    if (!body.includes(divider)) {
+    return <p className="mt-2 text-lg">{body}</p>;
+  }
+    const [name, rest] = body.split(divider);
+    const parts = rest.split(' · ');
+    const email = parts[0] ?? '';
+    const phone = parts[1] ?? '';
+    const location = parts.slice(2).join(' · ');
+    return (
+      <p className="mt-2 text-lg">
+        <span className="font-semibold">{name}</span>
+        {divider}
+        <span className="font-semibold">{email}</span>
+        {phone ? (
+          <>
+            {' '}
+            · <span className="font-semibold">{phone}</span>
+          </>
+        ) : null}
+        {location ? ` · ${location}` : null}
+      </p>
+    );
+  };
 
   const writePromoPayload = () => {
     const payload = {
@@ -224,6 +368,55 @@ export default function DashboardPage() {
     }
   };
 
+  useEffect(() => {
+    let isActive = true;
+    const load = async () => {
+      if (!isActive) return;
+      await loadCompanyAlerts();
+    };
+    void load();
+    const interval = window.setInterval(load, 15000);
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, [loadCompanyAlerts]);
+
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('sm-company-alerts');
+      channel.onmessage = event => {
+        if (event?.data?.type === 'alert-added') {
+          void loadCompanyAlerts();
+        }
+        if (event?.data?.type === 'alert-removed') {
+          const removedId = event?.data?.id as string | undefined;
+          if (removedId) {
+            setCompanyAlerts(current => current.filter(item => item.id !== removedId));
+          } else {
+            void loadCompanyAlerts();
+          }
+        }
+        if (event?.data?.type === 'alert-updated') {
+          void loadCompanyAlerts();
+        }
+      };
+    } catch {
+      channel = null;
+    }
+    return () => {
+      channel?.close();
+    };
+  }, [loadCompanyAlerts]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadCompanyAlerts();
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [loadCompanyAlerts]);
+
   return (
     <div className="space-y-10">
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -245,6 +438,392 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {companyAlerts.length > 0 ? (
+        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Teacher Interest Alerts
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                New Teacher Submissions
+              </h2>
+            </div>
+            <div />
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {companyAlerts.map((alert, index) => {
+              const alertKey = alert.id ?? `${alert.title}-${alert.body}-${index}`;
+              const isQuestionnaireStage =
+                alert.interestStage === 'questionnaire_sent' ||
+                alert.interestStage === 'questionnaire_opened' ||
+                alert.interestStage === 'questionnaire_completed' ||
+                alert.interestStage === 'qualified' ||
+                alert.interestStage === 'not_qualified';
+              const isScheduled =
+                alert.interestStage === 'call_scheduled' ||
+                isQuestionnaireStage ||
+                callScheduledMap[alertKey];
+              const registrationEmailedAt = alert.registrationEmailedAt
+                ? new Date(alert.registrationEmailedAt)
+                : null;
+              const registrationOpenedAt = alert.registrationOpenedAt
+                ? new Date(alert.registrationOpenedAt)
+                : null;
+              const registrationActiveAt = alert.registrationActiveAt
+                ? new Date(alert.registrationActiveAt)
+                : null;
+              const registrationCompletedAt = alert.registrationCompletedAt
+                ? new Date(alert.registrationCompletedAt)
+                : null;
+              const isRegistrationActive = registrationActiveAt
+                ? Date.now() - registrationActiveAt.getTime() < 30 * 1000
+                : false;
+              const registrationStatus = registrationCompletedAt
+                ? 'Registration Completed'
+                : isRegistrationActive
+                  ? 'Registration In Progress'
+                  : registrationOpenedAt
+                    ? 'Registration Opened'
+                    : registrationEmailedAt || alert.interestStage === 'qualified'
+                      ? 'Registration Sent'
+                      : null;
+              const questionnaireOpenedAt = alert.questionnaireOpenedAt
+                ? new Date(alert.questionnaireOpenedAt)
+                : null;
+              const questionnaireActiveAt = alert.questionnaireActiveAt
+                ? new Date(alert.questionnaireActiveAt)
+                : null;
+              const questionnaireCompletedAt = alert.questionnaireCompletedAt
+                ? new Date(alert.questionnaireCompletedAt)
+                : null;
+              const isQuestionnaireActive = questionnaireActiveAt
+                ? Date.now() - questionnaireActiveAt.getTime() < 30 * 1000
+                : false;
+              const questionnaireStatus =
+                alert.interestStage === 'questionnaire_completed' ||
+                questionnaireCompletedAt
+                  ? 'Questionnaire Completed'
+                  : alert.interestStage === 'questionnaire_opened' ||
+                      questionnaireOpenedAt
+                    ? 'Questionnaire In Progress'
+                    : alert.interestStage === 'questionnaire_sent'
+                      ? 'Questionnaire Sent'
+                      : null;
+              const showRegistration = alert.interestStage === 'qualified';
+              const liveStatus = showRegistration ? registrationStatus : questionnaireStatus;
+              const liveOpenedAt = showRegistration
+                ? registrationOpenedAt
+                : questionnaireOpenedAt;
+              const liveCompletedAt = showRegistration
+                ? registrationCompletedAt
+                : questionnaireCompletedAt;
+              const liveActive = showRegistration ? isRegistrationActive : isQuestionnaireActive;
+              const isQuestionnaireComplete =
+                alert.interestStage === 'questionnaire_completed' ||
+                Boolean(questionnaireCompletedAt);
+              return (
+                <div
+                  key={alertKey}
+                  className={`relative rounded-2xl border px-5 py-4 text-sm text-white shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${
+                    isQuestionnaireStage
+                      ? 'border-[#1f7a3f] bg-[#1f7a3f]'
+                      : isScheduled
+                        ? 'border-[#d97706] bg-[#d97706]'
+                        : 'border-[var(--c-c8102e)] bg-[var(--c-c8102e)]'
+                  }`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (!alert.id) return;
+                    router.push(`/teacher-interest?alertId=${alert.id}`);
+                  }}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      if (!alert.id) return;
+                      router.push(`/teacher-interest?alertId=${alert.id}`);
+                    }
+                  }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/80">
+                      {alert.title}
+                    </p>
+                    <span className="text-xs uppercase tracking-[0.2em] opacity-70">
+                      {alert.createdAt
+                        ? new Date(alert.createdAt).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })
+                        : 'Just now'}
+                    </span>
+                  </div>
+                  <div className="text-lg">
+                    {renderInterestBody(alert.body)}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation();
+                        alert.id
+                          ? fetch('/api/company-alerts', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                id: alert.id,
+                                interestStage: 'call_scheduled',
+                              }),
+                            }).then(() => loadCompanyAlerts())
+                          : setCallScheduledMap(current => ({
+                              ...current,
+                              [alertKey]: true,
+                            }));
+                      }}
+                      disabled={isScheduled}
+                      className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                        isScheduled
+                          ? 'border-white/40 bg-white/15 text-white/70'
+                          : 'border-white bg-white text-[var(--c-c8102e)] hover:bg-white/90'
+                      }`}
+                    >
+                      {isScheduled ? '✓ Call Scheduled' : 'Call Scheduled'}
+                    </button>
+                    {alert.interestStage === 'call_scheduled' ||
+                    alert.interestStage === 'questionnaire_sent' ||
+                    alert.interestStage === 'questionnaire_opened' ||
+                    alert.interestStage === 'questionnaire_completed' ||
+                    alert.interestStage === 'qualified' ||
+                    alert.interestStage === 'not_qualified' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.stopPropagation();
+                            if (!alert.id) return;
+                            if (isQuestionnaireComplete) {
+                              void toggleQuestionnaireDetails(alert.id);
+                              return;
+                            }
+                            void fetch('/api/company-alerts', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                id: alert.id,
+                                action: 'send_questionnaire',
+                              }),
+                            }).then(() => loadCompanyAlerts());
+                          }}
+                          disabled={
+                            alert.interestStage === 'questionnaire_sent' ||
+                            alert.interestStage === 'questionnaire_opened' ||
+                            (!isQuestionnaireComplete &&
+                              (alert.interestStage === 'qualified' ||
+                                alert.interestStage === 'not_qualified'))
+                          }
+                          className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                            alert.interestStage === 'questionnaire_sent' ||
+                            alert.interestStage === 'questionnaire_opened' ||
+                            alert.interestStage === 'questionnaire_completed' ||
+                            alert.interestStage === 'qualified' ||
+                            alert.interestStage === 'not_qualified'
+                              ? 'border-white/40 bg-white/15 text-white/70'
+                              : 'border-white/60 bg-white/10 text-white hover:bg-white/20'
+                          }`}
+                        >
+                          {isQuestionnaireComplete
+                            ? `✓ Questionnaire Complete ${
+                                expandedQuestionnaires[alert.id ?? '']
+                                  ? '▴'
+                                  : '▾'
+                              }`
+                            : alert.interestStage === 'questionnaire_sent' ||
+                                alert.interestStage === 'questionnaire_opened' ||
+                                alert.interestStage === 'qualified' ||
+                                alert.interestStage === 'not_qualified'
+                              ? '✓ Email The Questionnaire'
+                              : 'Email The Questionnaire'}
+                        </button>
+                        {alert.interestStage === 'questionnaire_sent' ||
+                        alert.interestStage === 'questionnaire_opened' ||
+                        alert.interestStage === 'questionnaire_completed' ||
+                        alert.interestStage === 'qualified' ? (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              alert.id
+                                ? fetch('/api/company-alerts', {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      id: alert.id,
+                                      action: 'mark_qualified',
+                                    }),
+                                  }).then(() => loadCompanyAlerts())
+                                : null;
+                            }}
+                            disabled={alert.interestStage === 'qualified'}
+                            className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                              alert.interestStage === 'qualified'
+                                ? 'border-white/40 bg-white/15 text-white/70'
+                                : 'border-white/60 bg-white/10 text-white hover:bg-white/20'
+                            }`}
+                          >
+                            {alert.interestStage === 'qualified'
+                              ? '✓ Registration Sent'
+                              : 'Teacher Qualified'}
+                          </button>
+                        ) : null}
+                        {alert.interestStage === 'not_qualified' ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="rounded-full border border-white/40 bg-white/15 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70"
+                          >
+                            ✓ Not Qualified
+                          </button>
+                        ) : alert.interestStage !== 'qualified' ? (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              alert.id
+                                ? fetch('/api/company-alerts', {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      id: alert.id,
+                                      action: 'mark_not_qualified',
+                                    }),
+                                  }).then(() => loadCompanyAlerts())
+                                : null;
+                            }}
+                            className="rounded-full border border-white/60 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/20"
+                          >
+                            Not Qualified
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                  {liveStatus || liveActive ? (
+                    <div
+                      ref={node => {
+                        if (!node) return;
+                        if (liveStatusTopMap[alertKey] !== undefined) return;
+                        const parent = node.offsetParent as HTMLElement | null;
+                        if (!parent) return;
+                        const nodeRect = node.getBoundingClientRect();
+                        const parentRect = parent.getBoundingClientRect();
+                        const center =
+                          nodeRect.top + nodeRect.height / 2 - parentRect.top;
+                        setLiveStatusTopMap(current => ({
+                          ...current,
+                          [alertKey]: center,
+                        }));
+                      }}
+                      className="pointer-events-none absolute right-4 top-1/2 z-20 w-[310px] -translate-y-1/2 rounded-2xl border border-white/25 bg-white/10 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85 shadow-[0_12px_28px_-18px_rgba(0,0,0,0.6)] backdrop-blur-sm"
+                      style={
+                        liveStatusTopMap[alertKey] !== undefined
+                          ? { top: liveStatusTopMap[alertKey] }
+                          : undefined
+                      }
+                    >
+                      <div className="text-[10px] uppercase tracking-[0.28em] text-white/60">
+                        Live Status
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {liveStatus ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-2 w-2 rounded-full bg-white/80" />
+                            <span>{liveStatus}</span>
+                          </div>
+                        ) : null}
+                        {liveOpenedAt ? (
+                          <div className="text-white/65">
+                            Last opened{' '}
+                            {liveOpenedAt.toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        ) : null}
+                        {liveCompletedAt ? (
+                          <div className="text-white/65">
+                            Completed{' '}
+                            {liveCompletedAt.toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        ) : null}
+                        {liveActive ? (
+                          <div className="flex items-center gap-2 text-white/80">
+                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+                              <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-white/60" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                            </span>
+                            Currently Active
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                  {alert.id &&
+                  isQuestionnaireComplete &&
+                  expandedQuestionnaires[alert.id] ? (
+                    <div className="mt-4 rounded-2xl border border-white/25 bg-white/15 p-4 text-sm text-white/85">
+                      {questionnaireDetails[alert.id]?.loading ? (
+                        <p className="text-white/60">Loading questionnaire answers…</p>
+                      ) : questionnaireDetails[alert.id]?.payload ? (
+                        <div className="space-y-3">
+                          {questionnaireDetails[alert.id]?.submittedAt ? (
+                            <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                              Submitted{' '}
+                              {new Date(
+                                questionnaireDetails[alert.id]?.submittedAt ?? '',
+                              ).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          ) : null}
+                          {Object.entries(
+                            questionnaireDetails[alert.id]?.payload ?? {},
+                          ).map(([key, value]) => (
+                            <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                              <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                              </p>
+                              <p className="mt-1 text-white/85">
+                                {String(value || '—')}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-white/60">No questionnaire answers yet.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {[

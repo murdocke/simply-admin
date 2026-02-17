@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import teachersData from "@/data/teachers.json";
+import { useApiData } from "../../components/use-api-data";
 
 type Teacher = {
   id: string;
@@ -41,9 +41,13 @@ const parseTeacherIdFromThread = (threadId: string) => {
 };
 
 export default function CompanyMessagesPage() {
+  const { data: teachersData } = useApiData<{ teachers: Teacher[] }>(
+    "/api/teachers",
+    { teachers: [] }
+  );
   const teachers = useMemo(
     () => (teachersData.teachers as Teacher[]) ?? [],
-    []
+    [teachersData]
   );
   const [teacherQuery, setTeacherQuery] = useState("");
   const [selectedTeacherId, setSelectedTeacherId] = useState(
@@ -76,6 +80,12 @@ export default function CompanyMessagesPage() {
     if (!brianTeacher) return;
     setSelectedTeacherId(brianTeacher.id);
   }, [brianTeacher]);
+
+  useEffect(() => {
+    if (!selectedTeacherId && teachers.length > 0) {
+      setSelectedTeacherId(teachers[0]?.id ?? "");
+    }
+  }, [selectedTeacherId, teachers]);
 
   const activeTeacher = teachers.find(
     (teacher) => teacher.id === selectedTeacherId

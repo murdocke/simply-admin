@@ -1,6 +1,5 @@
-import lessonTypes from '../../students/lesson-data/lesson-types.json';
-import lessonSections from '../../students/lesson-data/lesson-sections.json';
 import LockedSectionCard from '../../../components/locked-section-card';
+import { getLessonSections, getLessonTypes } from '@/lib/lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -15,6 +14,8 @@ export default async function TeacherProgramPage({
   params: Promise<{ program: string }>;
   searchParams?: Promise<{ mode?: string }>;
 }) {
+  const lessonTypes = getLessonTypes();
+  const lessonSections = getLessonSections();
   const { program } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const modeQuery =
@@ -23,7 +24,9 @@ export default async function TeacherProgramPage({
     lessonTypes.find(type => toProgramSlug(type) === program) ?? null;
   const sectionData =
     programName && lessonSections[programName as keyof typeof lessonSections]
-      ? lessonSections[programName as keyof typeof lessonSections]
+      ? (lessonSections[programName as keyof typeof lessonSections] as
+          | string[]
+          | Record<string, string[]>)
       : [];
   const sections = Array.isArray(sectionData)
     ? sectionData

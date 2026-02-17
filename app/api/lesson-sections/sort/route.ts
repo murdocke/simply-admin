@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
-const DATA_PATH = path.join(
-  process.cwd(),
-  'app',
-  '(admin)',
-  'teachers',
-  'students',
-  'lesson-data',
-  'lesson-sections.json',
-);
+export const runtime = 'nodejs';
 
 type Body = {
   programName?: string;
@@ -26,12 +17,14 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-
-    const file = await fs.readFile(DATA_PATH, 'utf-8');
-    const data = JSON.parse(file) as Record<string, unknown>;
-    data[body.programName] = body.sections;
-
-    await fs.writeFile(DATA_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+    const db = getDb();
+    db.prepare(
+      `
+        INSERT INTO lesson_sections (program, sections_json)
+        VALUES (?, ?)
+        ON CONFLICT(program) DO UPDATE SET sections_json = excluded.sections_json
+      `,
+    ).run(body.programName, JSON.stringify(body.sections));
 
     return NextResponse.json({ ok: true });
   } catch (error) {

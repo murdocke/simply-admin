@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student';
+  role: 'company' | 'teacher' | 'student' | 'parent';
   name: string;
   email: string;
   accountStatus?: string;
@@ -13,27 +12,7 @@ type AccountRecord = {
   password?: string;
 };
 
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function readAccountsFile(): Promise<AccountsFile> {
-  try {
-    const raw = await fs.readFile(accountsFile, 'utf-8');
-    const parsed = JSON.parse(raw) as AccountsFile;
-    if (!parsed.accounts) {
-      return { accounts: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { accounts: [] };
-    }
-    throw error;
-  }
-}
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
@@ -50,10 +29,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = await readAccountsFile();
-  const account = data.accounts.find(
-    record => record.username.toLowerCase() === username,
-  );
+  const db = getDb();
+  const account = db
+    .prepare(
+      `
+        SELECT
+          username,
+          role,
+          account_status,
+          password
+        FROM accounts
+        WHERE LOWER(username) = ?
+      `,
+    )
+    .get(username) as
+    | {
+        username: string;
+        role: AccountRecord['role'];
+        account_status: string | null;
+        password: string | null;
+      }
+    | undefined;
 
   if (!account || (account.password ?? '') !== password) {
     return NextResponse.json(
@@ -62,7 +58,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (account.accountStatus && account.accountStatus !== 'Active') {
+  if (account.account_status && account.account_status !== 'Active') {
     return NextResponse.json(
       { error: 'Account is not active.' },
       { status: 403 },

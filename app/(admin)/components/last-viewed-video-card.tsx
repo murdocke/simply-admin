@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import lessonParts from '../teachers/students/lesson-data/lesson-parts.json';
+import { useLessonData } from './use-lesson-data';
 
 type LastViewedVideo = {
   material: string;
@@ -40,6 +40,7 @@ export default function LastViewedVideoCard({
   expandedShowCenterText = true,
   expandedShowOverlay = true,
 }: LastViewedVideoCardProps) {
+  const { lessonParts } = useLessonData();
   const [material, setMaterial] = useState(data.material);
   const [part, setPart] = useState<string | null>(data.part ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -61,7 +62,7 @@ export default function LastViewedVideoCard({
       material.startsWith(prefix),
     );
     return matchedKey ? partsMap[matchedKey] ?? [] : [];
-  }, [material]);
+  }, [lessonParts, material]);
 
   useEffect(() => {
     if (lessonPartItems.length === 0) {
@@ -160,7 +161,7 @@ export default function LastViewedVideoCard({
 
   return (
     <section
-      className={`rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm ${
+      className={`rounded-2xl border border-[var(--c-ecebe7)] bg-white p-5 shadow-sm [[data-theme=dark]_&]:bg-[var(--c-ffffff)] ${
         className ?? ''
       }`}
     >

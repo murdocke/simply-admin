@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import teacherRows from '../../../data/teachers-subscriptions.json';
+import { useApiData } from '../components/use-api-data';
 import AssumptionsBar, { type Assumptions } from '../components/assumptions-bar';
 
 type TeacherRow = {
@@ -38,6 +38,11 @@ function formatCurrency(value: number) {
 }
 
 export default function RoyaltiesPage() {
+  const { data } = useApiData<{ subscriptions: TeacherRow[] }>(
+    '/api/teachers-subscriptions',
+    { subscriptions: [] },
+  );
+  const teacherRows = data.subscriptions;
   const rows = teacherRows as TeacherRow[];
   const baseAvgStudents = useMemo(() => {
     if (rows.length === 0) return 0;

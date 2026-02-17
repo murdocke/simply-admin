@@ -1,6 +1,18 @@
 {
   "teachers": [
     {
+      "id": "688ce2b6-224c-4eb5-ba80-e51dc47a7b44",
+      "company": "neil",
+      "username": "riffsandchops",
+      "name": "Ashyln Gray",
+      "email": "riffsandchops@gmail.com",
+      "region": "California",
+      "status": "Interested",
+      "createdAt": "2026-02-16T00:53:05.495Z",
+      "updatedAt": "2026-02-16T00:53:05.495Z",
+      "password": ""
+    },
+    {
       "id": "32069b67-4c9a-4a32-990b-d971842f9810",
       "company": "neil",
       "name": "Susan Friedman",
@@ -52,11 +64,28 @@
       "name": "Brian Gray",
       "email": "riffsandchops@gmail.com",
       "region": "South",
+      "status": "Licensed",
       "createdAt": "2026-02-05T00:37:54.486Z",
       "updatedAt": "2026-02-06T11:25:34.243Z",
       "username": "brian",
       "goesBy": "Mr. Brian",
-      "password": "Coffee@Sunrise@2026"
+      "password": "Coffee@Sunrise@2026",
+      "studioId": "riffs-chops",
+      "studioRole": "Admin"
+    },
+    {
+      "id": "7f4a1c9b-6c3d-4f1b-9f93-6e6f4f8b8c12",
+      "company": "neil",
+      "name": "Jason Stillwell",
+      "email": "jason@riffsandchops.com",
+      "region": "South",
+      "status": "Licensed",
+      "createdAt": "2026-02-15T18:05:00.000Z",
+      "updatedAt": "2026-02-15T18:05:00.000Z",
+      "username": "jason",
+      "password": "Coffee@Sunrise@2026",
+      "studioId": "riffs-chops",
+      "studioRole": "Teacher"
     },
     {
       "id": "dbadc128-28fb-4f3f-afd0-1391bbdccf48",

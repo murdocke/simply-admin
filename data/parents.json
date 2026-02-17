@@ -1,0 +1,22 @@
+{
+  "parents": [
+    {
+      "id": "parent-0f9a1c8a-8f69-4a4c-8d1b-1a2a63734f2c",
+      "username": "jacksons",
+      "name": "Kim Jackson",
+      "email": "kimluerssen@hotmail.com",
+      "phone": "(512) 555-0198",
+      "preferredContact": "Text",
+      "students": [
+        "45dbd930-b151-4170-aadc-7f33a13f3797",
+        "87581ca8-56db-482b-9ff2-86083daf8b55"
+      ],
+      "billing": {
+        "status": "Auto-pay enabled",
+        "nextPaymentDue": "2026-02-20",
+        "monthlyTotal": 224,
+        "lastPaid": "2026-02-01"
+      }
+    }
+  ]
+}

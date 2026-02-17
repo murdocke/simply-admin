@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
     "livekit-client": "^2.12.4",
     "livekit-server-sdk": "^2.8.5",
     "next": "16.1.6",

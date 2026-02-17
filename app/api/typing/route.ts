@@ -1,30 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
-type TypingStore = {
-  lastSeen: Record<string, string>;
-};
-
-const typingFile = path.join(process.cwd(), 'data', 'typing.json');
-
-async function readStore(): Promise<TypingStore> {
-  try {
-    const raw = await fs.readFile(typingFile, 'utf-8');
-    const parsed = JSON.parse(raw) as TypingStore;
-    return parsed?.lastSeen ? parsed : { lastSeen: {} };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { lastSeen: {} };
-    }
-    throw error;
-  }
-}
-
-async function writeStore(data: TypingStore) {
-  await fs.mkdir(path.dirname(typingFile), { recursive: true });
-  await fs.writeFile(typingFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { key?: string };
@@ -32,9 +9,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Key is required.' }, { status: 400 });
   }
 
-  const store = await readStore();
-  store.lastSeen[body.key] = new Date().toISOString();
-  await writeStore(store);
+  const db = getDb();
+  const lastSeen = new Date().toISOString();
+  db.prepare(
+    `
+      INSERT INTO typing (key, last_seen)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET last_seen = excluded.last_seen
+    `,
+  ).run(body.key, lastSeen);
   return NextResponse.json({ ok: true });
 }
 
@@ -45,6 +28,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Key is required.' }, { status: 400 });
   }
 
-  const store = await readStore();
-  return NextResponse.json({ lastSeen: store.lastSeen[key] ?? null });
+  const db = getDb();
+  const row = db
+    .prepare('SELECT last_seen FROM typing WHERE key = ?')
+    .get(key) as { last_seen: string | null } | undefined;
+  return NextResponse.json({ lastSeen: row?.last_seen ?? null });
 }

@@ -2,8 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import lessonTypes from '../teachers/students/lesson-data/lesson-types.json';
-import lessonSections from '../teachers/students/lesson-data/lesson-sections.json';
 import {
   formatCurrency,
   formatTeacherPriceLabel,
@@ -11,6 +9,7 @@ import {
   hydrateSectionPriceOverrides,
   saveSectionPriceOverrides,
 } from './lesson-pricing';
+import { useLessonData } from './use-lesson-data';
 
 const toProgramSlug = (value: string) =>
   value
@@ -152,15 +151,19 @@ function SectionCard({
 export default function CompanyLessonLibraryProgram({
   programSlug,
 }: CompanyLessonLibraryProgramProps) {
+  const { lessonTypes, lessonSections } = useLessonData();
   const programName = useMemo(
     () => lessonTypes.find(type => toProgramSlug(type) === programSlug) ?? null,
-    [programSlug],
+    [lessonTypes, programSlug],
   );
   const rawSectionData = useMemo(() => {
     if (!programName) return [] as string[] | GroupedSections;
-    const data = lessonSections[programName as keyof typeof lessonSections];
+    const data = lessonSections[programName as keyof typeof lessonSections] as
+      | string[]
+      | GroupedSections
+      | undefined;
     return data ?? [];
-  }, [programName]);
+  }, [lessonSections, programName]);
 
   const isGrouped =
     programName && !Array.isArray(rawSectionData) && rawSectionData;

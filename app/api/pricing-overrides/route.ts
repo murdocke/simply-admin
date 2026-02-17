@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 import { slugifyLessonValue } from '@/app/(admin)/components/lesson-utils';
 
 type PriceOverride = {
@@ -8,11 +7,7 @@ type PriceOverride = {
   teacher?: number;
 };
 
-type PricingStore = {
-  overrides: Record<string, PriceOverride>;
-};
-
-const pricingFile = path.join(process.cwd(), 'data', 'pricing-overrides.json');
+export const runtime = 'nodejs';
 
 const normalizeSectionName = (value?: string | null) => {
   if (!value) return '';
@@ -32,27 +27,19 @@ const makeOverrideKey = (program?: string, section?: string) => {
   return `${programSlug}::${sectionSlug}`;
 };
 
-async function readStore(): Promise<PricingStore> {
-  try {
-    const raw = await fs.readFile(pricingFile, 'utf-8');
-    const parsed = JSON.parse(raw) as PricingStore;
-    return parsed?.overrides ? parsed : { overrides: {} };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { overrides: {} };
-    }
-    throw error;
-  }
-}
-
-async function writeStore(data: PricingStore) {
-  await fs.mkdir(path.dirname(pricingFile), { recursive: true });
-  await fs.writeFile(pricingFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 export async function GET() {
-  const store = await readStore();
-  return NextResponse.json({ overrides: store.overrides ?? {} });
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT scope, student_price, teacher_price FROM pricing_overrides')
+    .all() as Array<{ scope: string; student_price: number | null; teacher_price: number | null }>;
+  const overrides: Record<string, PriceOverride> = {};
+  rows.forEach(row => {
+    overrides[row.scope] = {
+      student: row.student_price ?? undefined,
+      teacher: row.teacher_price ?? undefined,
+    };
+  });
+  return NextResponse.json({ overrides });
 }
 
 export async function POST(request: Request) {
@@ -78,13 +65,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const store = await readStore();
-  store.overrides = store.overrides ?? {};
-  store.overrides[key] = {
-    student: Number.isFinite(body.student) ? body.student : undefined,
-    teacher: Number.isFinite(body.teacher) ? body.teacher : undefined,
-  };
-  await writeStore(store);
+  const db = getDb();
+  db.prepare(
+    `
+      INSERT INTO pricing_overrides (scope, student_price, teacher_price)
+      VALUES (?, ?, ?)
+      ON CONFLICT(scope) DO UPDATE SET
+        student_price = excluded.student_price,
+        teacher_price = excluded.teacher_price
+    `,
+  ).run(
+    key,
+    Number.isFinite(body.student) ? body.student : null,
+    Number.isFinite(body.teacher) ? body.teacher : null,
+  );
 
   return NextResponse.json({ ok: true });
 }

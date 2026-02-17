@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
+
+export const runtime = 'nodejs';
 
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student';
+  role: 'company' | 'teacher' | 'student' | 'parent';
   name: string;
   email: string;
   goesBy?: string;
@@ -14,60 +15,13 @@ type AccountRecord = {
   teacherId?: string;
 };
 
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-type TeachersFile = {
-  teachers: Array<{
-    id: string;
-    username?: string;
-    name: string;
-    email: string;
-    status: string;
-    goesBy?: string;
-  }>;
-};
-
-type CompaniesFile = {
-  companies: Array<{
-    username: string;
-    name: string;
-    email: string;
-    status: string;
-    lastLogin: string | null;
-    password?: string;
-  }>;
-};
-
-const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
-const teachersFile = path.join(process.cwd(), 'data', 'teachers.json');
-const companiesFile = path.join(process.cwd(), 'data', 'companies.json');
-
-async function readJson<T>(filePath: string, fallback: T): Promise<T> {
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return fallback;
-    }
-    throw error;
-  }
-}
-
-async function writeJson<T>(filePath: string, data: T) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
   const body = (await request.json()) as {
-    role?: 'company' | 'teacher' | 'student';
+    role?: 'company' | 'teacher' | 'student' | 'parent';
     name?: string;
     email?: string;
     password?: string;
@@ -79,74 +33,127 @@ export async function PATCH(
   }
 
   const normalized = username.trim().toLowerCase();
-  const accountsData = await readJson<AccountsFile>(accountsFile, {
-    accounts: [],
-  });
-  const index = accountsData.accounts.findIndex(
-    account =>
-      account.username.toLowerCase() === normalized &&
-      account.role === body.role,
-  );
+  const db = getDb();
+  const existing = db
+    .prepare(
+      `
+        SELECT
+          username,
+          role,
+          name,
+          email,
+          status,
+          goes_by,
+          last_login,
+          password,
+          teacher_id
+        FROM accounts
+        WHERE LOWER(username) = ? AND role = ?
+      `,
+    )
+    .get(normalized, body.role) as
+    | {
+        username: string;
+        role: AccountRecord['role'];
+        name: string;
+        email: string;
+        status: string | null;
+        goes_by: string | null;
+        last_login: string | null;
+        password: string | null;
+        teacher_id: string | null;
+      }
+    | undefined;
 
-  if (index === -1) {
+  if (!existing) {
     return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
   }
 
-  const current = accountsData.accounts[index];
   const updated: AccountRecord = {
-    ...current,
-    name: body.name ?? current.name,
-    email: body.email ?? current.email,
-    goesBy: body.goesBy ?? current.goesBy ?? '',
+    username: existing.username,
+    role: existing.role,
+    name: body.name ?? existing.name,
+    email: body.email ?? existing.email,
+    goesBy: body.goesBy ?? existing.goes_by ?? '',
+    status: existing.status ?? '',
+    lastLogin: existing.last_login ?? null,
     password:
-      body.password !== undefined ? body.password.trim() : current.password ?? '',
+      body.password !== undefined
+        ? body.password.trim()
+        : existing.password ?? '',
+    teacherId: existing.teacher_id ?? undefined,
   };
 
-  accountsData.accounts[index] = updated;
-  await writeJson(accountsFile, accountsData);
+  db.prepare(
+    `
+      UPDATE accounts
+      SET
+        name = ?,
+        email = ?,
+        goes_by = ?,
+        password = ?
+      WHERE LOWER(username) = ? AND role = ?
+    `,
+  ).run(
+    updated.name,
+    updated.email,
+    updated.goesBy ?? '',
+    updated.password ?? '',
+    normalized,
+    body.role,
+  );
 
   if (body.role === 'teacher') {
-    const teachersData = await readJson<TeachersFile>(teachersFile, {
-      teachers: [],
-    });
-    const teacherIndex = teachersData.teachers.findIndex(
-      teacher =>
-        teacher.username?.trim().toLowerCase() === normalized ||
-        teacher.id === updated.teacherId,
+    db.prepare(
+      `
+        UPDATE teachers
+        SET name = ?, email = ?, goes_by = ?, status = ?
+        WHERE LOWER(username) = ? OR id = ?
+      `,
+    ).run(
+      updated.name,
+      updated.email,
+      updated.goesBy ?? '',
+      updated.status ?? '',
+      normalized,
+      updated.teacherId ?? '',
     );
-    if (teacherIndex !== -1) {
-      teachersData.teachers[teacherIndex] = {
-        ...teachersData.teachers[teacherIndex],
-        name: updated.name,
-        email: updated.email,
-        goesBy: updated.goesBy,
-        status: updated.status,
-      };
-      await writeJson(teachersFile, teachersData);
-    }
   }
 
   if (body.role === 'company') {
-    const companiesData = await readJson<CompaniesFile>(companiesFile, {
-      companies: [],
-    });
-    const companyIndex = companiesData.companies.findIndex(
-      company => company.username.toLowerCase() === normalized,
-    );
-    const nextCompany = {
-      username: normalized,
-      name: updated.name,
-      email: updated.email,
-      status: updated.status,
-      lastLogin: updated.lastLogin ?? null,
-      password: updated.password ?? '',
-    };
-    if (companyIndex === -1) {
-      companiesData.companies.push(nextCompany);
+    const company = db
+      .prepare('SELECT username FROM companies WHERE LOWER(username) = ?')
+      .get(normalized) as { username: string } | undefined;
+    if (company) {
+      db.prepare(
+        `
+          UPDATE companies
+          SET name = ?, email = ?, status = ?, last_login = ?, password = ?
+          WHERE LOWER(username) = ?
+        `,
+      ).run(
+        updated.name,
+        updated.email,
+        updated.status ?? '',
+        updated.lastLogin ?? null,
+        updated.password ?? '',
+        normalized,
+      );
     } else {
-      companiesData.companies[companyIndex] = nextCompany;
+      db.prepare(
+        `
+          INSERT INTO companies (username, name, email, status, last_login, password)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      ).run(
+        normalized,
+        updated.name,
+        updated.email,
+        updated.status ?? '',
+        updated.lastLogin ?? null,
+        updated.password ?? '',
+      );
     }
-    await writeJson(companiesFile, companiesData);
   }
 
   const { password: _password, ...safe } = updated;

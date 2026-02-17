@@ -1,24 +1,79 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AUTH_STORAGE_KEY,
   roleHome,
   type AuthUser,
 } from '../../(admin)/components/auth';
+import teachersData from '@/data/teachers.json';
+import studiosData from '@/data/studios.json';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = (searchParams.get('role') ?? '').toLowerCase();
+  const isTeacherRole = roleParam === 'teacher';
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [showDemo, setShowDemo] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [bgIndex, setBgIndex] = useState(0);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'lookup' | 'verify' | 'code'>(
+    'lookup',
+  );
+  const [lookupValue, setLookupValue] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<
+    'authenticator' | 'email' | 'sms'
+  >('authenticator');
+  const [forgotStatus, setForgotStatus] = useState('');
   const [demoAccounts, setDemoAccounts] = useState<
-    { username: string; role: string; name: string }[]
+    {
+      username: string;
+      role: string;
+      name: string;
+      studio?: { name: string; isAdmin: boolean };
+    }[]
   >([]);
+  const groupedDemoAccounts = useMemo(
+    () => [
+      {
+        key: 'company',
+        label: 'Company Accounts',
+        accounts: demoAccounts.filter(account => account.role === 'company'),
+      },
+      {
+        key: 'studio',
+        label: 'Studios',
+        accounts: demoAccounts
+          .filter(account => account.studio)
+          .sort((a, b) =>
+            (a.studio?.name ?? '').localeCompare(b.studio?.name ?? ''),
+          ),
+      },
+      {
+        key: 'teacher',
+        label: 'Teachers',
+        accounts: demoAccounts.filter(
+          account => account.role === 'teacher' && !account.studio,
+        ),
+      },
+      {
+        key: 'parent',
+        label: 'Parents',
+        accounts: demoAccounts.filter(account => account.role === 'parent'),
+      },
+      {
+        key: 'student',
+        label: 'Students',
+        accounts: demoAccounts.filter(account => account.role === 'student'),
+      },
+    ],
+    [demoAccounts],
+  );
 
   const backgroundImages = useMemo(
     () => [
@@ -62,7 +117,38 @@ export default function LoginPage() {
         return data.accounts ?? [];
       })
       .then(list => {
-        const allowed = new Set(['neil', 'brian', 'quinn']);
+        const allowed = new Set([
+          'neil',
+          'brian',
+          'jason',
+          'nancy',
+          'quinn',
+          'kim',
+          'jacksons',
+          'kenzie',
+          'keira',
+        ]);
+        const teachers = (teachersData.teachers as {
+          id: string;
+          username?: string;
+          studioId?: string;
+          studioRole?: string;
+        }[]) ?? [];
+        const studios = (studiosData.studios as { id: string; name: string }[]) ?? [];
+        const studioById = new Map(studios.map(studio => [studio.id, studio]));
+        const studioByUsername = new Map<
+          string,
+          { name: string; isAdmin: boolean }
+        >();
+        teachers.forEach(teacher => {
+          if (!teacher.username || !teacher.studioId) return;
+          const studio = studioById.get(teacher.studioId);
+          if (!studio) return;
+          studioByUsername.set(teacher.username.toLowerCase(), {
+            name: studio.name,
+            isAdmin: teacher.studioRole === 'Admin',
+          });
+        });
         setDemoAccounts(
           list
             .filter(account => allowed.has(account.username.toLowerCase()))
@@ -70,6 +156,7 @@ export default function LoginPage() {
               username: account.username,
               role: account.role,
               name: account.name ?? '',
+              studio: studioByUsername.get(account.username.toLowerCase()),
             })),
         );
       })
@@ -118,13 +205,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--c-f7f7f5)] text-[var(--c-1f1f1d)] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-white text-[var(--c-1f1f1d)] relative overflow-hidden">
       <div className="absolute inset-0 z-0">
         {backgroundImages.map((src, index) => (
           <div
             key={src}
-            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] -translate-x-[98%] -translate-y-[92%] bg-contain bg-no-repeat transition-opacity duration-[2000ms] md:block ${
-              index === bgIndex ? 'opacity-70' : 'opacity-0'
+            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] -translate-x-[110%] -translate-y-[100%] bg-contain bg-no-repeat transition-opacity duration-[2000ms] md:block ${
+              index === bgIndex ? 'opacity-100' : 'opacity-0'
             }`}
             style={{
               backgroundImage: `url(${src})`,
@@ -135,21 +222,58 @@ export default function LoginPage() {
       </div>
       <div
         className={`relative z-10 w-full ${
-          error || showDemo ? 'max-w-4xl' : 'max-w-sm'
+          error || showDemo ? 'max-w-5xl' : 'max-w-md'
         }`}
       >
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
-          <div className="w-full max-w-sm rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-8 shadow-sm">
+          <div
+            className="relative w-full rounded-2xl border border-[var(--c-ecebe7)] bg-white/70 backdrop-blur-md p-8 shadow-sm select-none"
+            style={{ maxWidth: 460 }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setShowDemo(current => {
+                  const next = !current;
+                  if (!next) {
+                    setError('');
+                    setUser('');
+                    setPass('');
+                  }
+                  return next;
+                })
+              }
+              className="absolute right-4 top-4 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-2 text-[var(--c-6f6c65)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              aria-label="Demo accounts"
+              title="Demo accounts"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="8" r="4" />
+              </svg>
+            </button>
             <div className="mb-6 flex items-center justify-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-[var(--c-c8102e)] text-white flex items-center justify-center font-semibold">
-            SM
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-              Admin
-            </p>
-            <h1 className="text-xl font-semibold">Simply Music</h1>
-          </div>
+              <img
+                src="https://simplymusic.com/wp-content/uploads/2024/02/simply-music-logo.svg"
+                alt="Simply Music"
+                className="h-12 w-12"
+                style={{ borderRadius: 12 }}
+              />
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Login
+                </p>
+                <h1 className="text-xl font-semibold">Simply Music</h1>
+              </div>
             </div>
 
             <form
@@ -159,7 +283,7 @@ export default function LoginPage() {
               }}
             >
               <input
-                className="w-full mb-3 px-4 py-2 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
+                className="w-full mb-3 px-4 py-2 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)]"
                 placeholder="Username"
                 value={user}
                 onChange={e => setUser(e.target.value)}
@@ -167,7 +291,7 @@ export default function LoginPage() {
 
               <div className="relative mb-5">
                 <input
-                  className="w-full px-4 py-2 pr-12 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] outline-none focus:border-[var(--c-c8102e)]"
+                  className="w-full px-4 py-2 pr-12 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)]"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Password"
                   value={pass}
@@ -228,26 +352,63 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setShowDemo(current => {
-                    const next = !current;
-                    if (!next) {
-                      setError('');
-                      setUser('');
-                      setPass('');
-                    }
-                    return next;
-                  })
-                }
-                className="mt-3 w-full rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] py-2 text-sm text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                onClick={() => {
+                  setShowForgot(true);
+                  setForgotStep('lookup');
+                  setForgotStatus('');
+                  setLookupValue('');
+                  setDeliveryMethod('authenticator');
+                }}
+                className="mt-3 w-full rounded-lg border py-2 text-sm font-medium transition hover:border-[color:var(--c-c8102e)]/40"
+                style={{
+                  backgroundColor: '#ffffff',
+                  color: '#111111',
+                  borderColor: '#e5e3dd',
+                }}
               >
-                Demo Accounts
+                Forgot Password
               </button>
+
+              {isTeacherRole ? (
+                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5">
+                  <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    Inquire About Teaching
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                    Curious about becoming a Simply Music Teacher?
+                    <br />
+                    We can help you explore the next steps.
+                  </p>
+                  <a
+                    href="/embed/lead-form"
+                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                  >
+                    Learn More
+                  </a>
+                </div>
+              ) : roleParam === 'student' ? (
+                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5">
+                  <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                    Create An Account
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                    New to Simply Music?
+                    <br />
+                    Create your account to get started.
+                  </p>
+                  <a
+                    href="/simplymusic/students"
+                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                  >
+                    Create Account
+                  </a>
+                </div>
+              ) : null}
             </form>
           </div>
 
           {showDemo ? (
-            <div className="w-full max-w-lg rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+            <div className="w-full max-w-2xl rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
@@ -289,7 +450,8 @@ export default function LoginPage() {
                 </button>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
-                <div className="grid grid-cols-3 gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                <div className="grid grid-cols-[32px_1.2fr_0.8fr_1.2fr] gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  <div />
                   <div>Username</div>
                   <div>Role</div>
                   <div>Name</div>
@@ -300,27 +462,91 @@ export default function LoginPage() {
                       No demo accounts found.
                     </div>
                   ) : (
-                    demoAccounts.map(account => (
-                      <div
-                        key={`${account.username}-${account.role}`}
-                        className="grid cursor-pointer grid-cols-3 gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm"
-                        onClick={() => {
-                          setUser(account.username);
-                          setPass('Coffee@Sunrise@2026');
-                          handleLogin(account.username, 'Coffee@Sunrise@2026');
-                        }}
-                      >
-                        <div className="font-medium text-[var(--c-1f1f1d)]">
-                          {account.username}
+                    groupedDemoAccounts.map(group => {
+                      let lastStudio: string | null = null;
+                      return (
+                        <div key={group.key}>
+                          <div className="bg-[var(--c-f7f7f5)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            {group.label}
+                          </div>
+                          {group.accounts.length === 0 ? (
+                            <div className="px-4 py-3 text-sm text-[var(--c-6f6c65)]">
+                              No demo accounts available.
+                            </div>
+                          ) : (
+                            group.accounts.map(account => {
+                              const studioName = account.studio?.name ?? null;
+                              const showStudioHeader =
+                                group.key === 'studio' &&
+                                studioName &&
+                                studioName !== lastStudio;
+                              if (showStudioHeader) lastStudio = studioName;
+                              return (
+                                <div key={`${account.username}-${account.role}`}>
+                                  {showStudioHeader ? (
+                                    <div className="bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                                      {studioName}
+                                    </div>
+                                  ) : null}
+                                  <div
+                                    className="grid cursor-pointer grid-cols-[32px_1.2fr_0.8fr_1.2fr] items-center gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm"
+                                    onClick={() => {
+                                      setUser(account.username);
+                                      setPass('Coffee@Sunrise@2026');
+                                      handleLogin(account.username, 'Coffee@Sunrise@2026');
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-1 text-[var(--c-6f6c65)]">
+                                      {account.studio ? (
+                                        <span
+                                          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--c-f7f7f5)]"
+                                          title={`Studio: ${account.studio.name}`}
+                                          aria-label={`Studio: ${account.studio.name}`}
+                                        >
+                                          <svg
+                                            aria-hidden="true"
+                                            viewBox="0 0 24 24"
+                                            className="h-3 w-3"
+                                            fill="currentColor"
+                                          >
+                                            <path d="M3 10.5 12 4l9 6.5v8.5a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+                                          </svg>
+                                        </span>
+                                      ) : null}
+                                      {account.studio?.isAdmin ? (
+                                        <span
+                                          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--c-f7f7f5)]"
+                                          title="Studio Admin"
+                                          aria-label="Studio Admin"
+                                        >
+                                          <svg
+                                            aria-hidden="true"
+                                            viewBox="0 0 24 24"
+                                            className="h-3 w-3"
+                                            fill="currentColor"
+                                          >
+                                            <path d="M12 2 3 5v6c0 5.25 3.75 9.75 9 11 5.25-1.25 9-5.75 9-11V5l-9-3Zm0 5a2 2 0 0 1 2 2v1.2a1.8 1.8 0 1 1-3.6 0V9a2 2 0 0 1 2-2Zm0 11.2a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6Z" />
+                                          </svg>
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <div className="font-medium text-[var(--c-1f1f1d)]">
+                                      {account.username}
+                                    </div>
+                                    <div className="text-[var(--c-6f6c65)]">
+                                      {account.studio?.isAdmin ? 'studio' : account.role}
+                                    </div>
+                                    <div className="text-[var(--c-6f6c65)]">
+                                      {account.name || '—'}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
-                        <div className="text-[var(--c-6f6c65)]">
-                          {account.role}
-                        </div>
-                        <div className="text-[var(--c-6f6c65)]">
-                          {account.name || '—'}
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -328,6 +554,238 @@ export default function LoginPage() {
           ) : null}
         </div>
       </div>
+
+      {showForgot ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+          <div className="w-full max-w-3xl rounded-3xl border border-[var(--c-ecebe7)] bg-white/70 backdrop-blur-md p-8 shadow-xl">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--c-1f1f1d)]">
+                  Forgot Password
+                </h2>
+                <p className="mt-1 text-base text-[var(--c-6f6c65)]">
+                  Find your account and choose how to receive a verification code.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgot(false)}
+                className="rounded-full bg-white p-2 text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)]"
+                aria-label="Close"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {forgotStep === 'lookup' ? (
+              <div className="mt-6 grid gap-8 grid-cols-[1.2fr_0.8fr] items-start">
+                <div>
+                  <label className="text-sm uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                    Username, Email, or Phone
+                  </label>
+                  <input
+                    className="mt-2 w-full rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md px-4 py-2 outline-none focus:border-[var(--c-c8102e)]"
+                    placeholder="Enter your username, email, or phone"
+                    value={lookupValue}
+                    onChange={event => setLookupValue(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="mt-4 w-full rounded-lg bg-[var(--c-c8102e)] py-2.5 text-sm font-medium text-white shadow-sm transition hover:brightness-105"
+                    onClick={() => {
+                      if (!lookupValue.trim()) {
+                        setForgotStatus('Please enter your account details.');
+                        return;
+                      }
+                      setForgotStatus('');
+                      setForgotStep('verify');
+                    }}
+                  >
+                    Find Account
+                  </button>
+
+                  {isTeacherRole ? (
+                    <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-4">
+                      <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                        Inquire About Teaching
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                        Curious about becoming a Simply Music Teacher?
+                        <br />
+                        We can help you explore the next steps.
+                      </p>
+                      <a
+                        href="/embed/lead-form"
+                        className="mt-3 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                      >
+                        Learn More
+                      </a>
+                    </div>
+                  ) : roleParam === 'student' ? (
+                    <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-4">
+                      <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
+                        Create An Account
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                        New to Simply Music?
+                        <br />
+                        Create your account to get started.
+                      </p>
+                      <a
+                        href="/simplymusic/students"
+                        className="mt-3 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                      >
+                        Create Account
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex h-full flex-col items-center justify-between gap-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-white p-6">
+                  <div className="flex h-64 w-64 items-center justify-center rounded-2xl bg-[var(--c-fcfcfb)]">
+                    <img
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=https://simplymusic.com"
+                      alt="Simply Music QR code"
+                      width={256}
+                      height={256}
+                      className="h-64 w-64"
+                    />
+                  </div>
+                  <p className="text-center text-sm text-[var(--c-6f6c65)]">
+                    Login Faster with your device on the Simply Music Mobile App
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {forgotStep === 'verify' ? (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">
+                  <p className="text-sm text-[var(--c-6f6c65)]">
+                    We found an account for <span className="font-medium">{lookupValue}</span>.
+                    Scan the QR code in the Simply Music app to confirm &ldquo;Is this you?&rdquo;
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[1fr,220px]">
+                  <div className="grid gap-3">
+                    {[
+                      {
+                        id: 'authenticator',
+                        title: 'Use authenticator app',
+                        body: 'Approve the prompt in your app for instant access.',
+                      },
+                      {
+                        id: 'email',
+                        title: 'Email a code',
+                        body: 'Send a one-time code to the email on file.',
+                      },
+                      {
+                        id: 'sms',
+                        title: 'Text a code',
+                        body: 'Send a one-time code to the phone on file.',
+                      },
+                    ].map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() =>
+                          setDeliveryMethod(option.id as typeof deliveryMethod)
+                        }
+                        className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
+                          deliveryMethod === option.id
+                            ? 'border-[var(--c-c8102e)] bg-[var(--c-fff5f6)]'
+                            : 'border-[var(--c-e5e3dd)] bg-white hover:border-[var(--c-c8102e)]/40'
+                        }`}
+                      >
+                        <p className="font-semibold text-[var(--c-1f1f1d)]">
+                          {option.title}
+                        </p>
+                        <p className="mt-1 text-[var(--c-6f6c65)]">{option.body}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex h-full flex-col items-center justify-between gap-3 rounded-xl border border-[var(--c-e5e3dd)] bg-white p-4">
+                    <div className="flex h-36 w-36 items-center justify-center rounded-lg border border-dashed border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                      QR Code
+                    </div>
+                    <p className="text-center text-xs text-[var(--c-6f6c65)]">
+                      Open the Simply Music app and approve the login request.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full rounded-lg bg-[var(--c-c8102e)] py-2.5 text-sm font-medium text-white shadow-sm transition hover:brightness-105"
+                  onClick={() => {
+                    setForgotStep('code');
+                    setForgotStatus(
+                      deliveryMethod === 'authenticator'
+                        ? 'Enter the code from your authenticator app.'
+                        : 'We sent a code to your contact on file.',
+                    );
+                  }}
+                >
+                  Continue
+                </button>
+
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] py-2 text-sm text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  onClick={() => setDeliveryMethod('email')}
+                >
+                  Try another way
+                </button>
+              </div>
+            ) : null}
+
+            {forgotStep === 'code' ? (
+              <div className="mt-5">
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Verification Code
+                </label>
+                <input
+                  className="mt-2 w-full rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md px-4 py-2 outline-none focus:border-[var(--c-c8102e)]"
+                  placeholder="Enter the 6-digit code"
+                />
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-lg bg-[var(--c-c8102e)] py-2.5 text-sm font-medium text-white shadow-sm transition hover:brightness-105"
+                  onClick={() => {
+                    setForgotStatus(
+                      'Verification submitted. We will wire up Plivo/Mailgun next.',
+                    );
+                  }}
+                >
+                  Verify Code
+                </button>
+              </div>
+            ) : null}
+
+            {forgotStatus ? (
+              <div className="mt-4 rounded-lg border border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)] px-3 py-2 text-sm text-[var(--c-6f6c65)]">
+                {forgotStatus}
+              </div>
+            ) : null}
+
+
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

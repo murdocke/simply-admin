@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import teachersData from "@/data/teachers.json";
-import studentsData from "@/data/students.json";
 import {
   AUTH_STORAGE_KEY,
   VIEW_ROLE_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
   type AuthUser,
 } from "../../components/auth";
+import { useApiData } from "../../components/use-api-data";
 
 type Teacher = {
   id: string;
@@ -67,20 +66,30 @@ const parseTeacherIdFromThread = (threadId: string) => {
 };
 
 export default function StudentMessagesPage() {
+  const { data: teachersData } = useApiData<{ teachers: Teacher[] }>(
+    "/api/teachers",
+    { teachers: [] }
+  );
+  const { data: studentsData } = useApiData<{ students: Student[] }>(
+    "/api/students",
+    { students: [] }
+  );
   const teachers = useMemo(() => {
     const list = (teachersData.teachers as Teacher[]).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
     return list;
-  }, []);
+  }, [teachersData]);
 
   const students = useMemo(
     () => (studentsData.students as Student[]) ?? [],
-    []
+    [studentsData]
   );
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
   const [viewerRole, setViewerRole] = useState<string | null>(null);
-  const [selectedTeacherId] = useState(teachers[0]?.id ?? "");
+  const [selectedTeacherId, setSelectedTeacherId] = useState(
+    teachers[0]?.id ?? ""
+  );
   const [draft, setDraft] = useState("");
   const [messagesByThread, setMessagesByThread] = useState<ThreadStore>({});
   const [threadSubjects, setThreadSubjects] = useState<Record<string, string>>(
@@ -251,6 +260,12 @@ export default function StudentMessagesPage() {
       window.clearInterval(interval);
     };
   }, [loadReads, loadThreads, resolveStudent]);
+
+  useEffect(() => {
+    if (!selectedTeacherId && teachers.length > 0) {
+      setSelectedTeacherId(teachers[0]?.id ?? "");
+    }
+  }, [selectedTeacherId, teachers]);
 
   useEffect(() => {
     void loadThreads();

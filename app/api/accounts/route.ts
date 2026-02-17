@@ -1,41 +1,61 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
-type AccountRecord = {
-  username: string;
-  role: string;
-  name: string;
-  email: string;
-  status: string;
-  lastLogin: string | null;
-  password?: string;
-};
-
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function readAccountsFile(): Promise<AccountsFile> {
-  try {
-    const raw = await fs.readFile(accountsFile, 'utf-8');
-    const parsed = JSON.parse(raw) as AccountsFile;
-    if (!parsed.accounts) {
-      return { accounts: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { accounts: [] };
-    }
-    throw error;
-  }
-}
+export const runtime = 'nodejs';
 
 export async function GET() {
-  const data = await readAccountsFile();
-  const safe = data.accounts.map(({ password: _password, ...rest }) => rest);
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          username,
+          role,
+          name,
+          email,
+          status,
+          membership_status,
+          account_status,
+          goes_by,
+          last_login,
+          teacher_id,
+          password
+        FROM accounts
+        ORDER BY username ASC
+      `,
+    )
+    .all() as Array<{
+    username: string;
+    role: string;
+    name: string;
+    email: string;
+    status: string | null;
+    membership_status: string | null;
+    account_status: string | null;
+    goes_by: string | null;
+    last_login: string | null;
+    teacher_id: string | null;
+    password: string | null;
+  }>;
+
+  const safe = rows.map(
+    ({
+      password: _password,
+      membership_status,
+      account_status,
+      goes_by,
+      last_login,
+      teacher_id,
+      ...rest
+    }) => ({
+      ...rest,
+      membershipStatus: membership_status ?? undefined,
+      accountStatus: account_status ?? undefined,
+      goesBy: goes_by ?? undefined,
+      lastLogin: last_login ?? null,
+      teacherId: teacher_id ?? undefined,
+    }),
+  );
+
   return NextResponse.json({ accounts: safe });
 }

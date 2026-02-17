@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { randomUUID } from 'crypto';
+import { getDb } from '@/lib/db';
 
 type TeacherRecord = {
   id: string;
@@ -16,19 +15,18 @@ type TeacherRecord = {
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active';
   createdAt: string;
   updatedAt: string;
   password?: string;
+  goesBy?: string;
+  studioId?: string;
+  studioRole?: string;
 };
 
-type TeachersFile = {
-  teachers: TeacherRecord[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'teachers.json');
-const accountsFile = path.join(process.cwd(), 'data', 'accounts.json');
+export const runtime = 'nodejs';
 
 const normalizeStatus = (
   status:
@@ -37,35 +35,15 @@ const normalizeStatus = (
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active'
     | undefined,
 ) => (status === 'Active' || !status ? 'Licensed' : status);
 
-async function readTeachersFile(): Promise<TeachersFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as TeachersFile;
-    if (!parsed.teachers) {
-      return { teachers: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { teachers: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeTeachersFile(data: TeachersFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student';
+  role: 'company' | 'teacher' | 'student' | 'parent';
   name: string;
   email: string;
   status: string;
@@ -74,42 +52,34 @@ type AccountRecord = {
   teacherId?: string;
 };
 
-type AccountsFile = {
-  accounts: AccountRecord[];
-};
-
-async function readAccountsFile(): Promise<AccountsFile> {
-  try {
-    const raw = await fs.readFile(accountsFile, 'utf-8');
-    const parsed = JSON.parse(raw) as AccountsFile;
-    if (!parsed.accounts) {
-      return { accounts: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { accounts: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeAccountsFile(data: AccountsFile) {
-  await fs.mkdir(path.dirname(accountsFile), { recursive: true });
-  await fs.writeFile(accountsFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const company = searchParams.get('company');
-  const data = await readTeachersFile();
-  const filtered = company
-    ? data.teachers.filter(teacher => teacher.company === company)
-    : data.teachers;
-  const normalized = filtered.map(teacher => ({
-    ...teacher,
-    status: normalizeStatus(teacher.status),
+  const db = getDb();
+  const rows = company
+    ? (db
+        .prepare('SELECT * FROM teachers WHERE company = ?')
+        .all(company) as Array<Record<string, string | null>>)
+    : (db.prepare('SELECT * FROM teachers').all() as Array<
+        Record<string, string | null>
+      >);
+
+  const normalized = rows.map(row => ({
+    id: row.id ?? '',
+    company: row.company ?? '',
+    username: row.username ?? '',
+    name: row.name ?? '',
+    email: row.email ?? '',
+    region: row.region ?? '',
+    status: normalizeStatus(row.status as TeacherRecord['status']),
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
+    password: row.password ?? '',
+    goesBy: row.goes_by ?? '',
+    studioId: row.studio_id ?? '',
+    studioRole: row.studio_role ?? '',
   }));
+
   return NextResponse.json({ teachers: normalized });
 }
 
@@ -126,6 +96,7 @@ export async function POST(request: Request) {
       | 'Advanced'
       | 'Master'
       | 'Onboarding'
+      | 'Interested'
       | 'Inactive'
       | 'Active';
     password?: string;
@@ -140,16 +111,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = await readTeachersFile();
-  const usernameTaken = data.teachers.some(
-    teacher =>
-      teacher.company === body.company &&
-      teacher.username?.trim().toLowerCase() === normalizedUsername,
-  );
-  const accountsData = await readAccountsFile();
-  const accountConflict = accountsData.accounts.find(
-    account => account.username.toLowerCase() === normalizedUsername,
-  );
+  const db = getDb();
+  const usernameTaken = db
+    .prepare(
+      `
+        SELECT id
+        FROM teachers
+        WHERE company = ? AND LOWER(username) = ?
+      `,
+    )
+    .get(body.company, normalizedUsername);
+  const accountConflict = db
+    .prepare('SELECT username FROM accounts WHERE LOWER(username) = ?')
+    .get(normalizedUsername);
   if (accountConflict) {
     return NextResponse.json(
       { error: 'Username already in use.' },
@@ -176,31 +150,103 @@ export async function POST(request: Request) {
     password: body.password?.trim() || '',
   };
 
-  data.teachers.unshift(record);
-  await writeTeachersFile(data);
+  db.prepare(
+    `
+      INSERT INTO teachers (
+        id,
+        company,
+        username,
+        name,
+        email,
+        region,
+        status,
+        created_at,
+        updated_at,
+        password,
+        goes_by,
+        studio_id,
+        studio_role
+      ) VALUES (
+        @id,
+        @company,
+        @username,
+        @name,
+        @email,
+        @region,
+        @status,
+        @createdAt,
+        @updatedAt,
+        @password,
+        @goesBy,
+        @studioId,
+        @studioRole
+      )
+    `,
+  ).run({
+    id: record.id,
+    company: record.company,
+    username: record.username,
+    name: record.name,
+    email: record.email,
+    region: record.region,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    password: record.password ?? '',
+    goesBy: (record as Record<string, string>).goesBy ?? '',
+    studioId: (record as Record<string, string>).studioId ?? '',
+    studioRole: (record as Record<string, string>).studioRole ?? '',
+  });
 
-  const accountIndex = accountsData.accounts.findIndex(
-    account =>
-      account.username.toLowerCase() === normalizedUsername &&
-      account.role === 'teacher',
-  );
+  const existingAccount = db
+    .prepare(
+      `
+        SELECT last_login
+        FROM accounts
+        WHERE LOWER(username) = ? AND role = 'teacher'
+      `,
+    )
+    .get(normalizedUsername) as { last_login: string | null } | undefined;
   const nextAccount: AccountRecord = {
     username: normalizedUsername,
     role: 'teacher',
     name: record.name,
     email: record.email,
     status: record.status,
-    lastLogin:
-      accountIndex === -1 ? null : accountsData.accounts[accountIndex].lastLogin,
+    lastLogin: existingAccount?.last_login ?? null,
     password: body.password?.trim() || '',
     teacherId: record.id,
   };
-  if (accountIndex === -1) {
-    accountsData.accounts.push(nextAccount);
-  } else {
-    accountsData.accounts[accountIndex] = nextAccount;
-  }
-  await writeAccountsFile(accountsData);
+  db.prepare(
+    `
+      INSERT INTO accounts (
+        username,
+        role,
+        name,
+        email,
+        status,
+        last_login,
+        password,
+        teacher_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(username, role) DO UPDATE SET
+        name = excluded.name,
+        email = excluded.email,
+        status = excluded.status,
+        last_login = excluded.last_login,
+        password = excluded.password,
+        teacher_id = excluded.teacher_id
+    `,
+  ).run(
+    nextAccount.username,
+    nextAccount.role,
+    nextAccount.name,
+    nextAccount.email,
+    nextAccount.status,
+    nextAccount.lastLogin,
+    nextAccount.password ?? '',
+    nextAccount.teacherId ?? '',
+  );
 
   return NextResponse.json({ teacher: record }, { status: 201 });
 }

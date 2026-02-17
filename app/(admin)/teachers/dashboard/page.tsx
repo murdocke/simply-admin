@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import studentsData from '../../../../data/students.json';
-import teachersData from '../../../../data/teachers.json';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -14,6 +12,7 @@ import {
   readCommunications,
   type CommunicationEntry,
 } from '../../components/communications-store';
+import { useApiData } from '../../components/use-api-data';
 
 type StudentRecord = {
   id: string;
@@ -40,6 +39,17 @@ type TeacherRecord = {
   name: string;
   email: string;
   username?: string;
+  studioId?: string;
+  studioRole?: string;
+};
+
+type StudioRecord = {
+  id: string;
+  name: string;
+  location?: string;
+  status?: string;
+  adminTeacherId?: string;
+  teacherIds?: string[];
 };
 
 type StudentPresenceActivity = {
@@ -79,6 +89,18 @@ const getMonthKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 export default function TeacherDashboardPage() {
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { data: teachersData } = useApiData<{ teachers: TeacherRecord[] }>(
+    '/api/teachers',
+    { teachers: [] },
+  );
+  const { data: studiosData } = useApiData<{ studios: StudioRecord[] }>(
+    '/api/studios',
+    { studios: [] },
+  );
   const [now, setNow] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => {
     const today = new Date();
@@ -140,13 +162,66 @@ export default function TeacherDashboardPage() {
   const [onlineStudents, setOnlineStudents] = useState<
     (StudentRecord & { activity?: StudentPresenceActivity | null })[]
   >([]);
+  const [communicationsViewerOpen, setCommunicationsViewerOpen] = useState(false);
+
+  const currentTeacher = useMemo(() => {
+    const teachers = (teachersData.teachers as TeacherRecord[]) ?? [];
+    if (teacherId) {
+      return teachers.find(teacher => teacher.id === teacherId) ?? null;
+    }
+    if (teacherName) {
+      return teachers.find(teacher => teacher.username === teacherName) ?? null;
+    }
+    return null;
+  }, [teacherId, teacherName, teachersData]);
+
+  const studio = useMemo(() => {
+    if (!currentTeacher?.studioId) return null;
+    const studios = (studiosData.studios as StudioRecord[]) ?? [];
+    return studios.find(item => item.id === currentTeacher.studioId) ?? null;
+  }, [currentTeacher, studiosData]);
+
+  const studioTeachers = useMemo(() => {
+    if (!studio?.teacherIds?.length) return [] as TeacherRecord[];
+    const teachers = (teachersData.teachers as TeacherRecord[]) ?? [];
+    return teachers.filter(teacher => studio.teacherIds?.includes(teacher.id));
+  }, [studio, teachersData]);
+
+  const communicationsViewedBy = useMemo(
+    () => ['Ames Reed', 'Paige Hart', 'Jake Nolan', 'Patrick Lee', 'Max Carter'],
+    [],
+  );
+
+  const communicationsNotSeenBy = useMemo(
+    () => ['Quinn Alvarez', 'Maya Brooks', 'Sasha Kim', 'Leo Kim'],
+    [],
+  );
+
+  const localTime = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(now),
+    [now],
+  );
+
+  const localDate = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).format(now),
+    [now],
+  );
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setNow(new Date());
-    }, 60_000);
+    }, 1_000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [teachersData]);
 
   useEffect(() => {
     let channel: BroadcastChannel | null = null;
@@ -164,7 +239,7 @@ export default function TeacherDashboardPage() {
     return () => {
       channel?.close();
     };
-  }, []);
+  }, [teachersData]);
 
   useEffect(() => {
     let channel: BroadcastChannel | null = null;
@@ -601,7 +676,7 @@ export default function TeacherDashboardPage() {
         student.lessonDay &&
         student.lessonDay.toLowerCase() === selectedDayLabel.toLowerCase(),
     );
-  }, [selectedDayLabel]);
+  }, [selectedDayLabel, studentsData]);
   const nextDayLessons = useMemo(() => {
     const students = studentsData.students as StudentRecord[];
     return students.filter(
@@ -610,7 +685,7 @@ export default function TeacherDashboardPage() {
         student.lessonDay &&
         student.lessonDay.toLowerCase() === nextDayLabel.toLowerCase(),
     );
-  }, [nextDayLabel]);
+  }, [nextDayLabel, studentsData]);
   const nextNextDayLessons = useMemo(() => {
     const students = studentsData.students as StudentRecord[];
     return students.filter(
@@ -619,7 +694,7 @@ export default function TeacherDashboardPage() {
         student.lessonDay &&
         student.lessonDay.toLowerCase() === nextNextDayLabel.toLowerCase(),
     );
-  }, [nextNextDayLabel]);
+  }, [nextNextDayLabel, studentsData]);
   const sortedNextDayLessons = useMemo(() => {
     return [...nextDayLessons].sort((a, b) => {
       const aMinutes = parseTimeToMinutes(a.lessonTime) ?? 0;
@@ -666,7 +741,7 @@ export default function TeacherDashboardPage() {
         student.status === 'Active' &&
         (!teacherName || student.teacher === teacherName),
     );
-  }, [teacherName]);
+  }, [teacherName, studentsData]);
 
   const unpaidCount = useMemo(
     () => activeStudents.filter(student => !paymentStatus[student.id]).length,
@@ -847,7 +922,7 @@ export default function TeacherDashboardPage() {
       window.removeEventListener('storage', handleUpdate);
       window.clearInterval(interval);
     };
-  }, [teacherId]);
+  }, [teacherId, studentsData]);
 
   const savePrepStore = (next: typeof prepByStudent) => {
     setPrepByStudent(next);
@@ -915,6 +990,15 @@ export default function TeacherDashboardPage() {
             Your studio snapshot, schedule, and fees in one place.
           </p>
         </header>
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+            Local Time
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+            {localTime}
+          </p>
+          <p className="mt-1 text-xs text-[var(--c-6f6c65)]">{localDate}</p>
+        </div>
       </div>
       {alertPayloads.length > 0 ? (
         <div className="space-y-3">
@@ -948,7 +1032,7 @@ export default function TeacherDashboardPage() {
       ) : null}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.6fr] lg:items-start">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)]/60 p-5 shadow-sm">
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-white p-5 shadow-sm [[data-theme=dark]_&]:bg-[var(--c-e7eddc)]/60">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
               Lessons
             </p>
@@ -1091,7 +1175,7 @@ export default function TeacherDashboardPage() {
               </span>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-white p-4 [[data-theme=dark]_&]:bg-[var(--c-fcfcfb)]">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
                   {nextDayFullLabel}
                 </p>
@@ -1120,7 +1204,7 @@ export default function TeacherDashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-4">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-white p-4 [[data-theme=dark]_&]:bg-[var(--c-fcfcfb)]">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
                   {nextNextDayFullLabel}
                 </p>
@@ -1200,24 +1284,50 @@ export default function TeacherDashboardPage() {
               </p>
             </div>
           ) : null}
-          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-              Current Date/Time
-            </p>
-            <p className="mt-3 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-              {new Intl.DateTimeFormat('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-              }).format(now)}
-            </p>
-            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-              {new Intl.DateTimeFormat('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-              }).format(now)}
-            </p>
-          </div>
+          {studio ? (
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Studio Account
+                </p>
+                <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                  {currentTeacher?.id === studio.adminTeacherId
+                    ? 'Owner'
+                    : 'Teacher'}
+                </span>
+              </div>
+              <p className="mt-3 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                {studio.name}
+              </p>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                {studioTeachers.length} teachers · {studio.location ?? 'Location TBD'}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {studioTeachers.map(teacher => (
+                  <span
+                    key={teacher.id}
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                  >
+                    {teacher.name}
+                    {teacher.id === studio.adminTeacherId ? ' · Admin' : ''}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <a
+                  href="/studios/dashboard"
+                  className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                >
+                  Open Studio
+                </a>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  {currentTeacher?.id === studio.adminTeacherId
+                    ? 'Admin access'
+                    : 'Studio access'}
+                </span>
+              </div>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
               Next Student
@@ -1305,7 +1415,10 @@ export default function TeacherDashboardPage() {
                 Shared updates
               </p>
             </a>
-            <div className="mt-4 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-4 py-3">
+            <a
+              href="/teachers/communications"
+              className="mt-4 block rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-4 py-3"
+            >
               {communications[0] ? (
                 <>
                   <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
@@ -1317,13 +1430,43 @@ export default function TeacherDashboardPage() {
                   <p className="mt-1 text-xs text-[var(--c-6f6c65)] line-clamp-2">
                     {communications[0].body}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setCommunicationsViewerOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                    >
+                      Viewed By
+                      <span className="rounded-full bg-[var(--c-e7eddc)] px-2 py-1 text-[10px] font-semibold text-[var(--c-3a3935)]">
+                        {communicationsViewedBy.length}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setCommunicationsViewerOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                    >
+                      Not Seen By
+                      <span className="rounded-full bg-[var(--c-fce8d6)] px-2 py-1 text-[10px] font-semibold text-[var(--c-8a5b2b)]">
+                        {communicationsNotSeenBy.length}
+                      </span>
+                    </button>
+                  </div>
                 </>
               ) : (
                 <p className="text-xs text-[var(--c-9a9892)]">
                   No communications posted yet.
                 </p>
               )}
-            </div>
+            </a>
           </div>
           <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -1515,6 +1658,79 @@ export default function TeacherDashboardPage() {
               Submit Prep
             </button>
           </form>
+        </div>
+      ) : null}
+
+      {communicationsViewerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setCommunicationsViewerOpen(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Communications
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  Latest Audience
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  Latest post: {communications[0]?.title ?? 'No message'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCommunicationsViewerOpen(false)}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Viewed By ({communicationsViewedBy.length})
+                </p>
+                <div className="mt-2 space-y-2">
+                  {communicationsViewedBy.map(person => (
+                    <div
+                      key={person}
+                      className="flex items-center justify-between rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
+                    >
+                      <span className="font-medium text-[var(--c-1f1f1d)]">
+                        {person}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                        Viewed
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Not Seen By ({communicationsNotSeenBy.length})
+                </p>
+                <div className="mt-2 space-y-2">
+                  {communicationsNotSeenBy.map(person => (
+                    <div
+                      key={person}
+                      className="flex items-center justify-between rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] px-4 py-3 text-sm text-[var(--c-3a3935)]"
+                    >
+                      <span className="font-medium text-[var(--c-1f1f1d)]">
+                        {person}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                        Not seen
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
     {isPromoOpen && promoPayload ? (

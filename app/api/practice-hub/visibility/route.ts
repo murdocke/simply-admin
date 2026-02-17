@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type VisibilityState = {
   selectedIds: string[];
@@ -9,9 +8,7 @@ type VisibilityState = {
   helpFlags: Record<string, boolean>;
 };
 
-type VisibilityStore = Record<string, VisibilityState>;
-
-const filePath = path.join(process.cwd(), 'data', 'practice-hub-visibility.json');
+export const runtime = 'nodejs';
 
 const emptyState = (): VisibilityState => ({
   selectedIds: [],
@@ -20,29 +17,38 @@ const emptyState = (): VisibilityState => ({
   helpFlags: {},
 });
 
-const readStore = async (): Promise<VisibilityStore> => {
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8');
-    const parsed = JSON.parse(raw) as VisibilityStore;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeStore = async (store: VisibilityStore) => {
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2));
-};
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const studentId = searchParams.get('studentId');
   if (!studentId) {
     return NextResponse.json(emptyState());
   }
-  const store = await readStore();
-  const state = store[studentId] ?? emptyState();
-  return NextResponse.json(state);
+  const db = getDb();
+  const row = db
+    .prepare(
+      `
+        SELECT selected_ids_json, focus_ids_json, practice_days_json, help_flags_json
+        FROM practice_hub_visibility
+        WHERE student_id = ?
+      `,
+    )
+    .get(studentId) as
+    | {
+        selected_ids_json: string | null;
+        focus_ids_json: string | null;
+        practice_days_json: string | null;
+        help_flags_json: string | null;
+      }
+    | undefined;
+  if (!row) {
+    return NextResponse.json(emptyState());
+  }
+  return NextResponse.json({
+    selectedIds: row.selected_ids_json ? JSON.parse(row.selected_ids_json) : [],
+    focusIds: row.focus_ids_json ? JSON.parse(row.focus_ids_json) : [],
+    practiceDays: row.practice_days_json ? JSON.parse(row.practice_days_json) : {},
+    helpFlags: row.help_flags_json ? JSON.parse(row.help_flags_json) : {},
+  });
 }
 
 export async function POST(request: Request) {
@@ -58,8 +64,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  const store = await readStore();
-  const existing = store[body.studentId] ?? emptyState();
+  const db = getDb();
+  const existingRow = db
+    .prepare(
+      `
+        SELECT selected_ids_json, focus_ids_json, practice_days_json, help_flags_json
+        FROM practice_hub_visibility
+        WHERE student_id = ?
+      `,
+    )
+    .get(body.studentId) as
+    | {
+        selected_ids_json: string | null;
+        focus_ids_json: string | null;
+        practice_days_json: string | null;
+        help_flags_json: string | null;
+      }
+    | undefined;
+  const existing: VisibilityState = existingRow
+    ? {
+        selectedIds: existingRow.selected_ids_json
+          ? JSON.parse(existingRow.selected_ids_json)
+          : [],
+        focusIds: existingRow.focus_ids_json
+          ? JSON.parse(existingRow.focus_ids_json)
+          : [],
+        practiceDays: existingRow.practice_days_json
+          ? JSON.parse(existingRow.practice_days_json)
+          : {},
+        helpFlags: existingRow.help_flags_json
+          ? JSON.parse(existingRow.help_flags_json)
+          : {},
+      }
+    : emptyState();
   const next: VisibilityState = {
     selectedIds:
       'selectedIds' in body && Array.isArray(body.selectedIds)
@@ -78,8 +115,28 @@ export async function POST(request: Request) {
         ? body.helpFlags
         : existing.helpFlags,
   };
-  store[body.studentId] = next;
-  await writeStore(store);
+  db.prepare(
+    `
+      INSERT INTO practice_hub_visibility (
+        student_id,
+        selected_ids_json,
+        focus_ids_json,
+        practice_days_json,
+        help_flags_json
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(student_id) DO UPDATE SET
+        selected_ids_json = excluded.selected_ids_json,
+        focus_ids_json = excluded.focus_ids_json,
+        practice_days_json = excluded.practice_days_json,
+        help_flags_json = excluded.help_flags_json
+    `,
+  ).run(
+    body.studentId,
+    JSON.stringify(next.selectedIds ?? []),
+    JSON.stringify(next.focusIds ?? []),
+    JSON.stringify(next.practiceDays ?? {}),
+    JSON.stringify(next.helpFlags ?? {}),
+  );
 
   return NextResponse.json({ ok: true });
 }

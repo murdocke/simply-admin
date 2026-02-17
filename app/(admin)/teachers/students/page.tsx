@@ -8,10 +8,7 @@ import {
   VIEW_TEACHER_STORAGE_KEY,
   VIEW_STUDENT_STORAGE_KEY,
 } from '../../components/auth';
-import lessonTypes from './lesson-data/lesson-types.json';
-import lessonSections from './lesson-data/lesson-sections.json';
-import lessonMaterials from './lesson-data/lesson-materials.json';
-import lessonParts from './lesson-data/lesson-parts.json';
+import { useLessonData } from '../../components/use-lesson-data';
 
 type StudentRecord = {
   id: string;
@@ -109,6 +106,8 @@ const defaultForm = {
 };
 
 export default function TeacherStudentsPage() {
+  const { lessonTypes, lessonSections, lessonMaterials, lessonParts } =
+    useLessonData();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [teacherName, setTeacherName] = useState<string | null>(null);

@@ -146,16 +146,19 @@
 
 @keyframes balloon-float {
   0% {
-    transform: translate(var(--balloon-x), var(--balloon-y));
+    transform: translate(var(--balloon-x), var(--balloon-y)) scale(1);
+    filter: blur(0.8px);
   }
   50% {
     transform: translate(
-      calc(var(--balloon-x) - 6px),
-      calc(var(--balloon-y) + 8px)
-    );
+      calc(var(--balloon-x) - 18px),
+      calc(var(--balloon-y) + 6px)
+    ) scale(1.03) rotate(-1.5deg);
+    filter: blur(0px);
   }
   100% {
-    transform: translate(var(--balloon-x), var(--balloon-y));
+    transform: translate(var(--balloon-x), var(--balloon-y)) scale(1);
+    filter: blur(0.8px);
   }
 }
 
@@ -178,7 +181,7 @@
 .balloon-float {
   animation: balloon-float 7s ease-in-out infinite;
   transform: translate(var(--balloon-x), var(--balloon-y));
-  will-change: transform;
+  will-change: transform, filter;
 }
 
 .no-spinner::-webkit-outer-spin-button,

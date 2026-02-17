@@ -7,14 +7,13 @@ import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
 } from '../components/auth';
-import lessonTypes from './students/lesson-data/lesson-types.json';
-import lessonSections from './students/lesson-data/lesson-sections.json';
 import LockedSectionCard from '../components/locked-section-card';
 import LessonCartPurchaseButton from '../components/lesson-cart-actions';
 import StudentPromoCard from '../components/student-promo-card';
 import LessonPackPromoCard from '../components/lesson-pack-promo-card';
 import type { LessonPack } from '../components/lesson-pack-types';
-import studentsData from '@/data/students.json';
+import { useApiData } from '../components/use-api-data';
+import { useLessonData } from '../components/use-lesson-data';
 
 type TeacherRecord = {
   id: string;
@@ -28,6 +27,7 @@ type TeacherRecord = {
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active';
   createdAt: string;
@@ -58,6 +58,7 @@ const normalizeTeacherStatus = (
     | 'Advanced'
     | 'Master'
     | 'Onboarding'
+    | 'Interested'
     | 'Inactive'
     | 'Active',
 ) => (status === 'Active' ? 'Licensed' : status);
@@ -68,6 +69,7 @@ const statusStyles: Record<string, string> = {
   Advanced: 'bg-[var(--c-f4f0ff)] text-[var(--c-47308a)]',
   Master: 'bg-[var(--c-fff2d9)] text-[var(--c-7a4a17)]',
   Onboarding: 'bg-[var(--c-fff2d9)] text-[var(--c-8a5b2b)]',
+  Interested: 'bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]',
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
 };
 
@@ -99,6 +101,11 @@ const durationToMinutes = (value?: StudentRecord['lessonDuration']) => {
 export default function TeachersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: studentsData } = useApiData<{ students: StudentRecord[] }>(
+    '/api/students',
+    { students: [] },
+  );
+  const { lessonTypes, lessonSections } = useLessonData();
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [viewRole, setViewRole] = useState<string | null>(null);
@@ -267,7 +274,7 @@ export default function TeachersPage() {
         student.status === 'Active' &&
         (!teacherName || student.teacher === teacherName),
     );
-  }, [teacherName]);
+  }, [teacherName, studentsData]);
 
   const todayLessons = useMemo(() => {
     return activeStudents
@@ -422,6 +429,7 @@ export default function TeachersPage() {
         | 'Advanced'
         | 'Master'
         | 'Onboarding'
+        | 'Interested'
         | 'Inactive',
     });
     setError(null);
@@ -850,7 +858,10 @@ export default function TeachersPage() {
               )
               .map(type => {
               const sectionData =
-                lessonSections[type as keyof typeof lessonSections];
+                (lessonSections[type as keyof typeof lessonSections] as
+                  | string[]
+                  | Record<string, string[]>
+                  | undefined) ?? [];
               const sections = Array.isArray(sectionData)
                 ? sectionData
                 : sectionData
@@ -1222,6 +1233,7 @@ export default function TeachersPage() {
                           | 'Advanced'
                           | 'Master'
                           | 'Onboarding'
+                          | 'Interested'
                           | 'Inactive',
                       }))
                     }
@@ -1232,6 +1244,7 @@ export default function TeachersPage() {
                     <option value="Advanced">Advanced</option>
                     <option value="Master">Master</option>
                     <option value="Onboarding">Onboarding</option>
+                    <option value="Interested">Interested</option>
                     <option value="Inactive">Inactive</option>
                   </select>
                 </label>

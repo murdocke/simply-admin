@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
 type Message = {
   id: string;
@@ -10,37 +9,51 @@ type Message = {
   subject?: string;
 };
 
-type MessageStore = {
-  threads: Record<string, Message[]>;
-  subjects?: Record<string, string>;
-};
-
-const messagesFile = path.join(process.cwd(), 'data', 'messages.json');
-
-async function readStore(): Promise<MessageStore> {
-  try {
-    const raw = await fs.readFile(messagesFile, 'utf-8');
-    const parsed = JSON.parse(raw) as MessageStore;
-    return parsed?.threads ? parsed : { threads: {} };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { threads: {} };
-    }
-    throw error;
-  }
-}
-
-async function writeStore(data: MessageStore) {
-  await fs.mkdir(path.dirname(messagesFile), { recursive: true });
-  await fs.writeFile(messagesFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function GET() {
-  const store = await readStore();
-  return NextResponse.json({
-    threads: store.threads ?? {},
-    subjects: store.subjects ?? {},
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `
+        SELECT id, thread_id, sender, text, timestamp, subject
+        FROM messages
+        ORDER BY timestamp ASC
+      `,
+    )
+    .all() as Array<{
+    id: string;
+    thread_id: string;
+    sender: Message['sender'];
+    text: string;
+    timestamp: string;
+    subject: string | null;
+  }>;
+
+  const threads: Record<string, Message[]> = {};
+  rows.forEach(row => {
+    if (!threads[row.thread_id]) threads[row.thread_id] = [];
+    threads[row.thread_id].push({
+      id: row.id,
+      sender: row.sender,
+      text: row.text,
+      timestamp: row.timestamp,
+      subject: row.subject ?? undefined,
+    });
   });
+
+  const subjectRows = db
+    .prepare('SELECT thread_id, subject FROM message_threads')
+    .all() as Array<{ thread_id: string; subject: string | null }>;
+  const subjects: Record<string, string> = {};
+  subjectRows.forEach(row => {
+    if (row.subject) subjects[row.thread_id] = row.subject;
+    if (!threads[row.thread_id]) {
+      threads[row.thread_id] = [];
+    }
+  });
+
+  return NextResponse.json({ threads, subjects });
 }
 
 export async function POST(request: Request) {
@@ -57,18 +70,56 @@ export async function POST(request: Request) {
     );
   }
 
-  const store = await readStore();
-  const current = store.threads[body.threadId] ?? [];
-  store.threads[body.threadId] = [...current, body.message];
-  if (body.subject !== undefined) {
-    store.subjects = store.subjects ?? {};
-    if (body.subject && body.subject.trim()) {
-      store.subjects[body.threadId] = body.subject;
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `
+        INSERT INTO messages (
+          id,
+          thread_id,
+          sender,
+          text,
+          timestamp,
+          subject
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      body.message.id,
+      body.threadId,
+      body.message.sender,
+      body.message.text,
+      body.message.timestamp,
+      body.message.subject ?? null,
+    );
+
+    if (body.subject !== undefined) {
+      if (body.subject && body.subject.trim()) {
+        db.prepare(
+          `
+            INSERT INTO message_threads (thread_id, subject)
+            VALUES (?, ?)
+            ON CONFLICT(thread_id) DO UPDATE SET subject = excluded.subject
+          `,
+        ).run(body.threadId, body.subject.trim());
+      } else {
+        db.prepare(
+          `
+            UPDATE message_threads
+            SET subject = NULL
+            WHERE thread_id = ?
+          `,
+        ).run(body.threadId);
+      }
     } else {
-      delete store.subjects[body.threadId];
+      db.prepare(
+        `
+          INSERT OR IGNORE INTO message_threads (thread_id, subject)
+          VALUES (?, NULL)
+        `,
+      ).run(body.threadId);
     }
-  }
-  await writeStore(store);
+  });
+  tx();
 
   return NextResponse.json({ ok: true });
 }

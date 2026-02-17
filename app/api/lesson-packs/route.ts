@@ -1,43 +1,104 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 import type { LessonPack } from '@/app/(admin)/components/lesson-pack-types';
 
-type LessonPacksFile = {
-  lessonPacks: LessonPack[];
-};
-
-const dataFile = path.join(process.cwd(), 'data', 'lesson-packs.json');
-
-async function readLessonPacksFile(): Promise<LessonPacksFile> {
-  try {
-    const raw = await fs.readFile(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw) as LessonPacksFile;
-    if (!parsed.lessonPacks) {
-      return { lessonPacks: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { lessonPacks: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeLessonPacksFile(data: LessonPacksFile) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function GET() {
-  const data = await readLessonPacksFile();
-  return NextResponse.json(data);
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT * FROM lesson_packs')
+    .all() as Array<Record<string, string | number | null>>;
+  const lessonPacks = rows.map(row => ({
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    subtitle: String(row.subtitle ?? ''),
+    description: String(row.description ?? ''),
+    coverImage: String(row.cover_image ?? ''),
+    tags: row.tags_json ? (JSON.parse(String(row.tags_json)) as string[]) : [],
+    priceTeacher:
+      typeof row.price_teacher === 'number'
+        ? row.price_teacher
+        : row.price_teacher
+          ? Number(row.price_teacher)
+          : 0,
+    priceStudent:
+      typeof row.price_student === 'number'
+        ? row.price_student
+        : row.price_student
+          ? Number(row.price_student)
+          : 0,
+    subjectCount:
+      typeof row.subject_count === 'number'
+        ? row.subject_count
+        : row.subject_count
+          ? Number(row.subject_count)
+          : 0,
+    status: String(row.status ?? ''),
+    createdAt: String(row.created_at ?? ''),
+    updatedAt: String(row.updated_at ?? ''),
+    subjects: row.subjects_json
+      ? (JSON.parse(String(row.subjects_json)) as LessonPack['subjects'])
+      : [],
+  }));
+  return NextResponse.json({ lessonPacks });
 }
 
 export async function PUT(request: Request) {
   const body = (await request.json()) as { lessonPacks?: LessonPack[] };
   const lessonPacks = Array.isArray(body.lessonPacks) ? body.lessonPacks : [];
-  await writeLessonPacksFile({ lessonPacks });
+  const db = getDb();
+  const insert = db.prepare(`
+    INSERT INTO lesson_packs (
+      id,
+      title,
+      subtitle,
+      description,
+      cover_image,
+      tags_json,
+      price_teacher,
+      price_student,
+      subject_count,
+      status,
+      created_at,
+      updated_at,
+      subjects_json
+    ) VALUES (
+      @id,
+      @title,
+      @subtitle,
+      @description,
+      @coverImage,
+      @tagsJson,
+      @priceTeacher,
+      @priceStudent,
+      @subjectCount,
+      @status,
+      @createdAt,
+      @updatedAt,
+      @subjectsJson
+    )
+  `);
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM lesson_packs').run();
+    for (const pack of lessonPacks) {
+      insert.run({
+        id: pack.id,
+        title: pack.title ?? '',
+        subtitle: pack.subtitle ?? '',
+        description: pack.description ?? '',
+        coverImage: pack.coverImage ?? '',
+        tagsJson: JSON.stringify(pack.tags ?? []),
+        priceTeacher: pack.priceTeacher ?? null,
+        priceStudent: pack.priceStudent ?? null,
+        subjectCount: pack.subjectCount ?? null,
+        status: pack.status ?? '',
+        createdAt: pack.createdAt ?? '',
+        updatedAt: pack.updatedAt ?? '',
+        subjectsJson: JSON.stringify(pack.subjects ?? []),
+      });
+    }
+  });
+  tx();
   return NextResponse.json({ lessonPacks });
 }

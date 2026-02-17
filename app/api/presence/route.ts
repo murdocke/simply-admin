@@ -1,38 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { getDb } from '@/lib/db';
 
-type PresenceStore = {
-  lastSeen: Record<string, string>;
-  activity?: Record<
-    string,
-    {
-      label: string;
-      detail?: string;
-      updatedAt: string;
-    }
-  >;
-};
-
-const presenceFile = path.join(process.cwd(), 'data', 'presence.json');
-
-async function readPresence(): Promise<PresenceStore> {
-  try {
-    const raw = await fs.readFile(presenceFile, 'utf-8');
-    const parsed = JSON.parse(raw) as PresenceStore;
-    return parsed?.lastSeen ? parsed : { lastSeen: {}, activity: {} };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { lastSeen: {}, activity: {} };
-    }
-    throw error;
-  }
-}
-
-async function writePresence(data: PresenceStore) {
-  await fs.mkdir(path.dirname(presenceFile), { recursive: true });
-  await fs.writeFile(presenceFile, JSON.stringify(data, null, 2), 'utf-8');
-}
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
@@ -43,17 +12,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Key is required.' }, { status: 400 });
   }
 
-  const data = await readPresence();
-  data.lastSeen[body.key] = new Date().toISOString();
-  if (body.activity?.label) {
-    data.activity = data.activity ?? {};
-    data.activity[body.key] = {
-      label: body.activity.label,
-      detail: body.activity.detail,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-  await writePresence(data);
+  const db = getDb();
+  const lastSeen = new Date().toISOString();
+  const activityLabel = body.activity?.label ?? null;
+  const activityDetail = body.activity?.detail ?? null;
+  const activityUpdatedAt = body.activity?.label ? lastSeen : null;
+  db.prepare(
+    `
+      INSERT INTO presence (
+        key,
+        last_seen,
+        activity_label,
+        activity_detail,
+        activity_updated_at
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        last_seen = excluded.last_seen,
+        activity_label = CASE
+          WHEN excluded.activity_label IS NOT NULL THEN excluded.activity_label
+          ELSE activity_label
+        END,
+        activity_detail = CASE
+          WHEN excluded.activity_label IS NOT NULL THEN excluded.activity_detail
+          ELSE activity_detail
+        END,
+        activity_updated_at = CASE
+          WHEN excluded.activity_label IS NOT NULL THEN excluded.activity_updated_at
+          ELSE activity_updated_at
+        END
+    `,
+  ).run(body.key, lastSeen, activityLabel, activityDetail, activityUpdatedAt);
 
   return NextResponse.json({ ok: true });
 }
@@ -65,10 +53,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Key is required.' }, { status: 400 });
   }
 
-  const data = await readPresence();
+  const db = getDb();
+  const row = db
+    .prepare(
+      `
+        SELECT last_seen, activity_label, activity_detail, activity_updated_at
+        FROM presence
+        WHERE key = ?
+      `,
+    )
+    .get(key) as
+    | {
+        last_seen: string | null;
+        activity_label: string | null;
+        activity_detail: string | null;
+        activity_updated_at: string | null;
+      }
+    | undefined;
   return NextResponse.json({
-    lastSeen: data.lastSeen[key] ?? null,
-    activity: data.activity?.[key] ?? null,
+    lastSeen: row?.last_seen ?? null,
+    activity: row?.activity_label
+      ? {
+          label: row.activity_label,
+          detail: row.activity_detail ?? undefined,
+          updatedAt: row.activity_updated_at ?? row.last_seen ?? '',
+        }
+      : null,
   });
 }
 
@@ -79,14 +89,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Key is required.' }, { status: 400 });
   }
 
-  const data = await readPresence();
-  if (data.lastSeen[key]) {
-    delete data.lastSeen[key];
-    if (data.activity?.[key]) {
-      delete data.activity[key];
-    }
-    await writePresence(data);
-  }
+  const db = getDb();
+  db.prepare('DELETE FROM presence WHERE key = ?').run(key);
 
   return NextResponse.json({ ok: true });
 }

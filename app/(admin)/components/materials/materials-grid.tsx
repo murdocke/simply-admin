@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import lessonParts from '../../teachers/students/lesson-data/lesson-parts.json';
+import { useLessonData } from '../use-lesson-data';
 
 type MaterialsMode = 'training' | 'teaching' | 'learning';
 
@@ -54,6 +54,7 @@ export default function MaterialsGrid({
   initialMaterial,
   initialPart,
 }: MaterialsGridProps) {
+  const { lessonParts } = useLessonData();
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [pendingNextMaterial, setPendingNextMaterial] = useState<string | null>(
@@ -83,7 +84,7 @@ export default function MaterialsGrid({
       selectedMaterial.startsWith(prefix)
     );
     return matchedKey ? partsMap[matchedKey] ?? [] : [];
-  }, [selectedMaterial]);
+  }, [lessonParts, selectedMaterial]);
   const activePartIndex = selectedPart
     ? lessonPartItems.indexOf(selectedPart)
     : -1;
@@ -136,7 +137,7 @@ export default function MaterialsGrid({
       return `${sectionTitle} - ${nextPart}`;
     }
     return sectionTitle || nextMaterial || null;
-  }, [activePartIndex, lessonPartItems, materials, selectedMaterial]);
+  }, [activePartIndex, lessonPartItems, lessonParts, materials, selectedMaterial]);
 
   const handleNextClick = () => {
     if (!selectedMaterial) return;
