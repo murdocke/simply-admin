@@ -89,10 +89,14 @@ export default function AccountsPage() {
     useState<SelectedTeacher | null>(null);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [unlinkedStudents, setUnlinkedStudents] = useState<StudentRecord[]>([]);
+  const [unlinkedLoading, setUnlinkedLoading] = useState(false);
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentPage, setStudentPage] = useState(1);
+  const [unlinkedPage, setUnlinkedPage] = useState(1);
   const teacherPageSize = 20;
   const studentPageSize = 10;
+  const unlinkedPageSize = 10;
   const viewTeacherKey = useMemo(() => {
     if (!companyName) return VIEW_TEACHER_STORAGE_KEY;
     return `${VIEW_TEACHER_STORAGE_KEY}:${companyName}`;
@@ -240,6 +244,32 @@ export default function AccountsPage() {
     };
   }, [selectedTeacher?.username]);
 
+  useEffect(() => {
+    let isActive = true;
+    const fetchUnlinked = async () => {
+      try {
+        setUnlinkedLoading(true);
+        const response = await fetch('/api/students?unlinked=true', {
+          cache: 'no-store',
+        });
+        const data = (await response.json()) as { students: StudentRecord[] };
+        if (isActive) {
+          setUnlinkedStudents(data.students ?? []);
+        }
+      } catch {
+        if (isActive) setUnlinkedStudents([]);
+      } finally {
+        if (isActive) setUnlinkedLoading(false);
+      }
+    };
+    fetchUnlinked();
+    const interval = window.setInterval(fetchUnlinked, 15000);
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
   const statusCounts = useMemo(() => {
     return teachers.reduce(
@@ -294,6 +324,14 @@ export default function AccountsPage() {
     const start = (studentPage - 1) * studentPageSize;
     return students.slice(start, start + studentPageSize);
   }, [studentPage, studentPageSize, students]);
+  const unlinkedTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(unlinkedStudents.length / unlinkedPageSize)),
+    [unlinkedStudents.length],
+  );
+  const pagedUnlinked = useMemo(() => {
+    const start = (unlinkedPage - 1) * unlinkedPageSize;
+    return unlinkedStudents.slice(start, start + unlinkedPageSize);
+  }, [unlinkedPage, unlinkedPageSize, unlinkedStudents]);
 
   const openCreateModal = () => {
     setEditing(null);
@@ -605,6 +643,121 @@ export default function AccountsPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+              Unlinked Student Accounts
+            </p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+              {unlinkedStudents.length} students
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
+          <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+            <div className="col-span-4">Student</div>
+            <div className="col-span-4">Email</div>
+            <div className="col-span-2">Level</div>
+            <div className="col-span-2">Status</div>
+          </div>
+          <div className="divide-y divide-[var(--c-ecebe7)]">
+            {unlinkedLoading ? (
+              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                Loading unlinked students...
+              </div>
+            ) : unlinkedStudents.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                No unlinked students yet.
+              </div>
+            ) : (
+              pagedUnlinked.map(student => (
+                <div
+                  key={student.id}
+                  className="grid grid-cols-12 items-center gap-2 px-4 py-4 text-sm"
+                >
+                  <div className="col-span-4">
+                    <p className="font-medium text-[var(--c-1f1f1d)]">
+                      {student.name}
+                    </p>
+                    <p className="text-xs text-[var(--c-9a9892)]">
+                      Added {new Date(student.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="col-span-4 text-[var(--c-6f6c65)]">
+                    {student.email || '—'}
+                  </div>
+                  <div className="col-span-2">
+                    <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
+                      {student.level}
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)]">
+                      {student.status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        {unlinkedStudents.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
+            <span>
+              Showing {(unlinkedPage - 1) * unlinkedPageSize + 1}-
+              {Math.min(
+                unlinkedPage * unlinkedPageSize,
+                unlinkedStudents.length,
+              )}{' '}
+              of {unlinkedStudents.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setUnlinkedPage(1)}
+                disabled={unlinkedPage === 1}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnlinkedPage(prev => Math.max(1, prev - 1))}
+                disabled={unlinkedPage === 1}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                Page {unlinkedPage} of {unlinkedTotalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setUnlinkedPage(prev =>
+                    Math.min(unlinkedTotalPages, prev + 1),
+                  )
+                }
+                disabled={unlinkedPage === unlinkedTotalPages}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnlinkedPage(unlinkedTotalPages)}
+                disabled={unlinkedPage === unlinkedTotalPages}
+                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-6">

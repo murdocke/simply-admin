@@ -27,14 +27,19 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const teacher = searchParams.get('teacher');
+  const unlinked = searchParams.get('unlinked') === 'true';
   const db = getDb();
-  const rows = teacher
+  const rows = unlinked
     ? (db
-        .prepare('SELECT * FROM students WHERE teacher = ?')
-        .all(teacher) as Array<Record<string, string | null>>)
-    : (db.prepare('SELECT * FROM students').all() as Array<
-        Record<string, string | null>
-      >);
+        .prepare(`SELECT * FROM students WHERE teacher IS NULL OR teacher = ''`)
+        .all() as Array<Record<string, string | null>>)
+    : teacher
+      ? (db
+          .prepare('SELECT * FROM students WHERE teacher = ?')
+          .all(teacher) as Array<Record<string, string | null>>)
+      : (db.prepare('SELECT * FROM students').all() as Array<
+          Record<string, string | null>
+        >);
 
   const students = rows.map(row => ({
     id: row.id ?? '',
@@ -79,9 +84,9 @@ export async function POST(request: Request) {
     studentAlert?: string;
   };
 
-  if (!body.teacher || !body.name) {
+  if (!body.name) {
     return NextResponse.json(
-      { error: 'Teacher and name are required.' },
+      { error: 'Name is required.' },
       { status: 400 },
     );
   }
@@ -89,7 +94,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const record: StudentRecord = {
     id: randomUUID(),
-    teacher: body.teacher,
+    teacher: body.teacher ?? '',
     name: body.name,
     email: body.email ?? '',
     level: body.level ?? 'Beginner',

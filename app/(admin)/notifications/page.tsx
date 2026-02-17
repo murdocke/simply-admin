@@ -151,11 +151,75 @@ export default function NotificationsPage() {
     });
   };
 
-  const isVerificationEvent = (event: NotificationEvent) =>
-    event.source === 'Teacher Registration' &&
-    (event.subject === 'Verification Code' ||
-      event.title === 'Verification Code' ||
-      event.data?.verificationChannel);
+  const extractVerificationCode = (text: string) => {
+    if (!text) return null;
+    const match = text.match(/\b(\d{4,8})\b/);
+    return match ? match[1] : null;
+  };
+
+  const handleCopyCode = async (code: string) => {
+    const fallbackCopy = () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = code;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(textarea);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(code);
+        return;
+      } catch {
+        fallbackCopy();
+        return;
+      }
+    }
+    fallbackCopy();
+  };
+
+  const isVerificationEvent = (event: NotificationEvent) => {
+    const subject = (event.subject ?? '').toLowerCase();
+    const title = (event.title ?? '').toLowerCase();
+    const body = (event.body ?? '').toLowerCase();
+    const hasVerificationWord =
+      subject.includes('verification') ||
+      title.includes('verification') ||
+      body.includes('verification code') ||
+      body.includes('sms verification');
+    const hasCode = Boolean(extractVerificationCode(event.body ?? ''));
+    return (
+      hasVerificationWord ||
+      hasCode ||
+      Boolean(event.data?.verificationChannel)
+    );
+  };
+
+  const CODE_TTL_MS = 10 * 60 * 1000;
+
+  const getVerificationKey = (event: NotificationEvent) => {
+    const channel =
+      (event.data?.verificationChannel as string | undefined) ?? event.type;
+    const label =
+      (event.subject ?? event.title ?? 'verification').toLowerCase();
+    const recipient = (event.to ?? '').toLowerCase();
+    return `${recipient}::${channel}::${label}`;
+  };
+
+  const isExpiredVerification = (event: NotificationEvent) => {
+    if (!event.createdAt) return false;
+    const created = new Date(event.createdAt).getTime();
+    if (Number.isNaN(created)) return false;
+    return Date.now() - created > CODE_TTL_MS;
+  };
 
   const importantEvents = useMemo(
     () => visible.filter(event => !isVerificationEvent(event)),
@@ -163,7 +227,26 @@ export default function NotificationsPage() {
   );
 
   const verificationEvents = useMemo(
-    () => visible.filter(isVerificationEvent),
+    () => {
+      const filtered = visible.filter(
+        event => isVerificationEvent(event) && !isExpiredVerification(event),
+      );
+      const latestByKey = new Map<string, NotificationEvent>();
+      for (const event of filtered) {
+        const key = getVerificationKey(event);
+        const nextTime = event.createdAt
+          ? new Date(event.createdAt).getTime()
+          : 0;
+        const existing = latestByKey.get(key);
+        const existingTime = existing?.createdAt
+          ? new Date(existing.createdAt).getTime()
+          : 0;
+        if (!existing || nextTime >= existingTime) {
+          latestByKey.set(key, event);
+        }
+      }
+      return Array.from(latestByKey.values());
+    },
     [visible],
   );
 
@@ -288,6 +371,10 @@ export default function NotificationsPage() {
                       key={event.id}
                       className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-5 py-4"
                     >
+                      {(() => {
+                        const code = extractVerificationCode(event.body ?? '');
+                        return (
+                          <>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
@@ -299,8 +386,17 @@ export default function NotificationsPage() {
                               : event.title || 'Untitled Push'}
                           </p>
                         </div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                          {formatTimestamp(event.createdAt)}
+                        <div className="flex flex-col items-end gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          <span>{formatTimestamp(event.createdAt)}</span>
+                          {code ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(code)}
+                              className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                            >
+                              Copy Code
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       <div className="mt-3 text-sm text-[var(--c-6f6c65)]">
@@ -318,6 +414,9 @@ export default function NotificationsPage() {
                           </p>
                         ) : null}
                       </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -344,6 +443,10 @@ export default function NotificationsPage() {
                       key={event.id}
                       className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-4 py-3"
                     >
+                      {(() => {
+                        const code = extractVerificationCode(event.body ?? '');
+                        return (
+                          <>
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
@@ -355,9 +458,20 @@ export default function NotificationsPage() {
                               : event.title || 'Verification Code'}
                           </p>
                         </div>
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                          {formatTimestamp(event.createdAt)}
-                        </span>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            {formatTimestamp(event.createdAt)}
+                          </span>
+                          {code ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(code)}
+                              className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                            >
+                              Copy Code
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                       <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
                         <span className="font-semibold text-[var(--c-1f1f1d)]">To:</span>{' '}
@@ -366,6 +480,9 @@ export default function NotificationsPage() {
                       <p className="mt-2 text-xs text-[var(--c-6f6c65)]">
                         {renderLinkedText(event.body)}
                       </p>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

@@ -20,6 +20,7 @@ type VideoPlaceholderProps = {
   showSwapButton?: boolean;
   onSwap?: () => void;
   videoRef?: React.RefObject<HTMLVideoElement>;
+  mirrored?: boolean;
   labelSize?: "sm" | "md";
   signalActive?: boolean;
   livekitState?: "disconnected" | "connecting" | "connected";
@@ -31,6 +32,7 @@ type CameraFrameProps = {
   showSwapButton?: boolean;
   onSwap?: () => void;
   videoRef?: React.RefObject<HTMLVideoElement>;
+  mirrored?: boolean;
   labelSize?: "sm" | "md";
   signalActive?: boolean;
   livekitState?: "disconnected" | "connecting" | "connected";
@@ -80,6 +82,7 @@ const VideoPlaceholder = ({
   showSwapButton = false,
   onSwap,
   videoRef,
+  mirrored = false,
   labelSize = "md",
   signalActive = false,
   livekitState = "disconnected",
@@ -150,6 +153,7 @@ const VideoPlaceholder = ({
           playsInline
           muted
           className="absolute inset-0 h-full w-full object-cover"
+          style={mirrored ? { transform: "scaleX(-1)" } : undefined}
         />
       ) : null}
       <div className="relative flex items-center justify-between px-4 py-3 text-xs uppercase tracking-[0.2em] text-white/80">
@@ -212,6 +216,7 @@ const CameraFrame = ({
   showSwapButton = false,
   onSwap,
   videoRef,
+  mirrored = false,
   labelSize,
   signalActive,
   livekitState,
@@ -224,6 +229,7 @@ const CameraFrame = ({
         showSwapButton={showSwapButton}
         onSwap={onSwap}
         videoRef={videoRef}
+        mirrored={mirrored}
         labelSize={labelSize}
         signalActive={signalActive}
         livekitState={livekitState}
@@ -766,6 +772,16 @@ export default function LessonRoomPage(): ReactElement {
           : remoteTeacherTracksRef.current[1],
       ) && livekitState === "connected"
     );
+  };
+
+  const isLocalSourceForRole = (source: CameraSource) => {
+    if (activeRole === "teacher") {
+      return source === "teacher1" || source === "teacher2";
+    }
+    if (activeRole === "student") {
+      return source === "student";
+    }
+    return false;
   };
 
   useEffect(() => {
@@ -1389,6 +1405,7 @@ export default function LessonRoomPage(): ReactElement {
                     onSwap={() => handleSwap(0)}
                     videoRef={teacherOneVideoRef}
                     labelSize="sm"
+                    mirrored={isLocalSourceForRole(layoutSources.compact.small[0])}
                     signalActive={isSignalActiveForSource(layoutSources.compact.small[0])}
                     livekitState={livekitState}
                   />
@@ -1398,6 +1415,7 @@ export default function LessonRoomPage(): ReactElement {
                     onSwap={() => handleSwap(1)}
                     videoRef={teacherTwoVideoRef}
                     labelSize="sm"
+                    mirrored={isLocalSourceForRole(layoutSources.compact.small[1])}
                     signalActive={isSignalActiveForSource(layoutSources.compact.small[1])}
                     livekitState={livekitState}
                   />
@@ -1414,6 +1432,7 @@ export default function LessonRoomPage(): ReactElement {
                       label={getLabelForSource(layoutSources.compact.main, true)}
                       className="max-w-full"
                       videoRef={mainVideoRef}
+                      mirrored={isLocalSourceForRole(layoutSources.compact.main)}
                       signalActive={isSignalActiveForSource(layoutSources.compact.main)}
                       livekitState={livekitState}
                     />
@@ -1470,6 +1489,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
+                  mirrored={isLocalSourceForRole(layoutSources.middle.small[0])}
                   signalActive={isSignalActiveForSource(layoutSources.middle.small[0])}
                   livekitState={livekitState}
                 />
@@ -1479,6 +1499,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
+                  mirrored={isLocalSourceForRole(layoutSources.middle.small[1])}
                   signalActive={isSignalActiveForSource(layoutSources.middle.small[1])}
                   livekitState={livekitState}
                 />
@@ -1490,6 +1511,7 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.middle.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
+                    mirrored={isLocalSourceForRole(layoutSources.middle.main)}
                     signalActive={isSignalActiveForSource(layoutSources.middle.main)}
                     livekitState={livekitState}
                   />
@@ -1546,6 +1568,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(0)}
                   videoRef={teacherOneVideoRef}
                   labelSize="sm"
+                  mirrored={isLocalSourceForRole(layoutSources.ultra.small[0])}
                   signalActive={isSignalActiveForSource(layoutSources.ultra.small[0])}
                   livekitState={livekitState}
                 />
@@ -1559,6 +1582,7 @@ export default function LessonRoomPage(): ReactElement {
                     label={getLabelForSource(layoutSources.ultra.main, true)}
                     className="max-w-full"
                     videoRef={mainVideoRef}
+                    mirrored={isLocalSourceForRole(layoutSources.ultra.main)}
                     signalActive={isSignalActiveForSource(layoutSources.ultra.main)}
                     livekitState={livekitState}
                   />
@@ -1595,6 +1619,7 @@ export default function LessonRoomPage(): ReactElement {
                   onSwap={() => handleSwap(1)}
                   videoRef={teacherTwoVideoRef}
                   labelSize="sm"
+                  mirrored={isLocalSourceForRole(layoutSources.ultra.small[1])}
                   signalActive={isSignalActiveForSource(layoutSources.ultra.small[1])}
                   livekitState={livekitState}
                 />

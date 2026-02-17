@@ -103,6 +103,10 @@ export default function LocatorPage() {
   const [accountHref, setAccountHref] = useState('/login');
   const [accountLabel, setAccountLabel] = useState('Login');
 
+  useEffect(() => {
+    document.title = 'Teacher Locator | Simply Music';
+  }, []);
+
   const [locationQuery, setLocationQuery] = useState('');
   const [zipQuery, setZipQuery] = useState('');
   const [distance, setDistance] = useState('10');

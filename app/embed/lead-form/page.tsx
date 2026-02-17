@@ -386,6 +386,10 @@ export default function LeadFormEmbedPage() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  useEffect(() => {
+    document.title = 'Lead Form | Simply Music';
+  }, []);
+
   const getAudioContext = () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();

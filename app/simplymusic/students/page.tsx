@@ -19,6 +19,10 @@ export default function TeachersPage() {
   const [accountLabel, setAccountLabel] = useState('Login');
 
   useEffect(() => {
+    document.title = 'Students | Simply Music';
+  }, []);
+
+  useEffect(() => {
     try {
       const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
       if (!stored) return;

@@ -6,15 +6,17 @@ import { useRouter } from 'next/navigation';
 
 function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
   const [now, setNow] = useState(() => new Date());
-  const time = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hour: 'numeric',
-        minute: '2-digit',
-      }).format(now),
-    [now, timeZone],
-  );
+  const timeParts = useMemo(() => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+    }).formatToParts(now);
+    const hour = parts.find(part => part.type === 'hour')?.value ?? '';
+    const minute = parts.find(part => part.type === 'minute')?.value ?? '';
+    const dayPeriod = parts.find(part => part.type === 'dayPeriod')?.value ?? '';
+    return { hour, minute, dayPeriod };
+  }, [now, timeZone]);
   const date = useMemo(
     () =>
       new Intl.DateTimeFormat('en-US', {
@@ -31,14 +33,29 @@ function TimeBadge({ label, timeZone }: { label: string; timeZone: string }) {
     const id = window.setInterval(tick, 1_000);
     return () => window.clearInterval(id);
   }, []);
+  const isTick = now.getSeconds() % 2 === 0;
 
   return (
-    <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
+    <div className="select-none rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
       <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
         {label}
       </p>
       <p className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-        {time}
+        <span>{timeParts.hour}</span>
+        <span
+          className={`mx-1 inline-block transition-all duration-300 ${
+            isTick ? 'scale-110 text-[var(--c-c8102e)]' : 'opacity-40'
+          }`}
+          aria-hidden
+        >
+          :
+        </span>
+        <span>{timeParts.minute}</span>
+        {timeParts.dayPeriod ? (
+          <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+            {timeParts.dayPeriod}
+          </span>
+        ) : null}
       </p>
       <p className="mt-1 text-xs text-[var(--c-6f6c65)]">{date}</p>
     </div>
@@ -122,6 +139,8 @@ export default function DashboardPage() {
       interestName?: string;
       interestEmail?: string;
       interestPhone?: string;
+      questionnaireToken?: string;
+      registrationToken?: string;
       questionnaireOpenedAt?: string;
       questionnaireActiveAt?: string;
       questionnaireCompletedAt?: string;
@@ -417,9 +436,40 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [loadCompanyAlerts]);
 
+  const latestInterest = companyAlerts[0];
+  const questionnaireHref = latestInterest?.questionnaireToken
+    ? `/questionnaire?token=${encodeURIComponent(latestInterest.questionnaireToken)}`
+    : null;
+  const registrationHref = latestInterest?.registrationToken
+    ? `/teacher-registration?token=${encodeURIComponent(
+        latestInterest.registrationToken,
+      )}`
+    : null;
+  const quickRoutes = [
+    { label: 'Teachers', href: '/simplymusic/teachers/', logoutOnClick: true },
+    { label: 'Students', href: '/simplymusic/students/', logoutOnClick: true },
+    { label: 'Lead Form', href: '/embed/lead-form/' },
+    { label: 'Locator', href: '/simplymusic/locator', logoutOnClick: true },
+    {
+      label: 'Student Registration',
+      href: '/student-registration',
+      logoutOnClick: true,
+    },
+    questionnaireHref
+      ? { label: 'Questionnaire', href: questionnaireHref }
+      : null,
+    registrationHref
+      ? { label: 'Teacher Registration', href: registrationHref }
+      : null,
+  ].filter(Boolean) as Array<{
+    label: string;
+    href: string;
+    logoutOnClick?: boolean;
+  }>;
+
   return (
     <div className="space-y-10">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Overview
@@ -431,10 +481,37 @@ export default function DashboardPage() {
             Choose a workspace to jump into a focused view.
           </p>
         </div>
-        <div className="w-full rounded-3xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-4 shadow-sm md:w-auto">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TimeBadge label="Melbourne" timeZone="Australia/Melbourne" />
-            <TimeBadge label="Sacramento" timeZone="America/Los_Angeles" />
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-stretch">
+          <div className="flex h-full flex-col rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--c-9a9892)]">
+              Onboarding Development
+            </p>
+            <div className="mt-2 grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
+              {quickRoutes.map(route => (
+                <Link
+                  key={route.href}
+                  href={route.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => {
+                    if (!route.logoutOnClick) return;
+                    window.localStorage.removeItem('sm_user');
+                    window.localStorage.removeItem('sm_view_role');
+                    window.localStorage.removeItem('sm_view_teacher');
+                    window.localStorage.removeItem('sm_view_student');
+                  }}
+                  className="flex items-center justify-center rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold text-[var(--c-1f1f1d)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+                >
+                  {route.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div className="h-full rounded-3xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TimeBadge label="Melbourne" timeZone="Australia/Melbourne" />
+              <TimeBadge label="Sacramento" timeZone="America/Los_Angeles" />
+            </div>
           </div>
         </div>
       </div>
