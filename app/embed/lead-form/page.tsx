@@ -377,6 +377,10 @@ export default function LeadFormEmbedPage() {
   const [emailSentStatus, setEmailSentStatus] = useState(false);
   const [emailExpiresAt, setEmailExpiresAt] = useState<string | null>(null);
   const [emailRemaining, setEmailRemaining] = useState<number | null>(null);
+  const [emailResendAt, setEmailResendAt] = useState<string | null>(null);
+  const [emailResendRemaining, setEmailResendRemaining] = useState<number | null>(
+    null,
+  );
   const [emailResetKey, setEmailResetKey] = useState(0);
   const [emailVerified, setEmailVerified] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -471,7 +475,7 @@ export default function LeadFormEmbedPage() {
     );
   }, [state, pianoPassed]);
 
-  const emailCanResend = canResend(emailRemaining, emailSentStatus);
+  const emailCanResend = canResend(emailResendRemaining, emailSentStatus);
 
   const sendEmailVerification = async () => {
     if (!isEmail(state.email)) {
@@ -495,6 +499,7 @@ export default function LeadFormEmbedPage() {
     const data = (await response.json()) as { expiresAt?: string | null };
     setEmailSentStatus(true);
     setEmailExpiresAt(data?.expiresAt ?? null);
+    setEmailResendAt(new Date(Date.now() + 60_000).toISOString());
     setEmailVerified(false);
     setEmailCode("");
     setEmailResetKey(current => current + 1);
@@ -532,7 +537,7 @@ export default function LeadFormEmbedPage() {
     }
     if (step === 2) {
       if (!emailSentStatus) {
-        setVerifyError("Send the code first — it only takes a second.");
+        await sendEmailVerification();
         return;
       }
       if (emailCode.trim().length < 6) {
@@ -575,6 +580,8 @@ export default function LeadFormEmbedPage() {
     setEmailCode("");
     setEmailExpiresAt(null);
     setEmailRemaining(null);
+    setEmailResendAt(null);
+    setEmailResendRemaining(null);
     setEmailResetKey(current => current + 1);
     setLeadVerificationToken(crypto.randomUUID());
     setVerifyError(null);
@@ -599,6 +606,23 @@ export default function LeadFormEmbedPage() {
     const interval = window.setInterval(tick, 1000);
     return () => window.clearInterval(interval);
   }, [emailExpiresAt]);
+
+  useEffect(() => {
+    if (!emailResendAt) {
+      setEmailResendRemaining(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((new Date(emailResendAt).getTime() - Date.now()) / 1000),
+      );
+      setEmailResendRemaining(remaining);
+    };
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [emailResendAt]);
 
   const handlePianoClick = (note: PianoNote) => {
     if (pianoPassed) return;
@@ -807,7 +831,7 @@ export default function LeadFormEmbedPage() {
 
         <div className="relative mt-10">
           <img
-            src="https://app.simplymusic.com/c44a858fa58e03e52efb9ae34349b386.svg"
+            src="/reference/simply-tree.svg"
             alt=""
             className="pointer-events-none absolute left-0 top-full z-20 h-auto w-[600px] opacity-100"
             style={{
@@ -817,7 +841,7 @@ export default function LeadFormEmbedPage() {
             aria-hidden
           />
           <img
-            src="https://app.simplymusic.com/c44a858fa58e03e52efb9ae34349b386.svg"
+            src="/reference/simply-tree.svg"
             alt=""
             className="pointer-events-none absolute left-0 top-full z-0 h-auto w-[600px] opacity-100"
             style={{
@@ -828,7 +852,7 @@ export default function LeadFormEmbedPage() {
           />
           <div className="relative z-10 overflow-hidden rounded-[32px] border border-neutral-200 bg-white px-6 py-8 shadow-[0_20px_60px_-45px_rgba(17,17,17,0.3)] sm:px-10">
             <img
-              src="https://app.simplymusic.com/5668f9bc9ee0f3f3ac8f.png"
+              src="/reference/full-balloon.png"
               alt=""
               className="balloon-float pointer-events-none absolute right-0 top-0 z-0 h-auto w-auto max-w-[320px] opacity-100"
               style={
@@ -1025,8 +1049,8 @@ export default function LeadFormEmbedPage() {
                       disabled={!emailCanResend}
                       className={`whitespace-nowrap rounded-full border px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] backdrop-blur-md transition ${
                         emailCanResend
-                          ? "border-neutral-200 bg-white/50 text-neutral-700 hover:bg-white/70"
-                          : "cursor-not-allowed border-neutral-200 bg-white/30 text-neutral-400"
+                          ? "border-red-200 bg-red-50/60 text-red-700 hover:bg-red-50/80"
+                          : "cursor-not-allowed border-red-200 bg-red-50/70 text-red-400"
                       }`}
                     >
                       {emailSentStatus
@@ -1440,7 +1464,7 @@ export default function LeadFormEmbedPage() {
                   type="button"
                   className={`w-full rounded-full bg-red-600 px-10 py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-red-500 sm:w-1/2 ${
                     (step === 1 && !step1Valid) ||
-                    (step === 2 && !step2Valid) ||
+                    (step === 2 && emailSentStatus && !step2Valid) ||
                     (step === 3 && !step3Valid)
                       ? "bg-red-300"
                       : ""
@@ -1448,11 +1472,11 @@ export default function LeadFormEmbedPage() {
                   onClick={handleNext}
                   disabled={
                     (step === 1 && !step1Valid) ||
-                    (step === 2 && !step2Valid) ||
+                    (step === 2 && emailSentStatus && !step2Valid) ||
                     (step === 3 && !step3Valid)
                   }
                 >
-                  Next
+                  {step === 2 ? (emailSentStatus ? "Verify Email" : "Send Code") : "Next"}
                 </button>
               )}
               {step === 4 && (

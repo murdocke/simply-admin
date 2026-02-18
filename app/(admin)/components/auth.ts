@@ -1,4 +1,4 @@
-export type UserRole = 'company' | 'teacher' | 'student' | 'parent';
+export type UserRole = 'company' | 'teacher' | 'student' | 'parent' | 'dev';
 
 export type AuthUser = {
   username: string;
@@ -15,6 +15,7 @@ export const roleHome: Record<UserRole, string> = {
   teacher: '/teachers/dashboard',
   student: '/students/dashboard',
   parent: '/parents/dashboard',
+  dev: '/dev/dashboard',
 };
 
 export const navItems: Record<UserRole, Array<{ label: string; href: string }>> =
@@ -33,6 +34,10 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
     ],
     teacher: [
       { label: 'Dashboard', href: '/teachers/dashboard' },
+      { label: 'Training', href: '/teachers?mode=training' },
+      { label: 'Coaching', href: '/teachers/coaching' },
+      { label: 'Library', href: '/teachers/library' },
+      { label: 'Simpedia', href: '/teachers/simpedia' },
       { label: 'Studio', href: '/studios/dashboard' },
       { label: 'This Week', href: '/teachers/this-week' },
       { label: 'Schedule', href: '/teachers/schedule' },
@@ -56,6 +61,15 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
       { label: 'Messages', href: '/parents/messages' },
       { label: 'Billing', href: '/parents/billing' },
     ],
+    dev: [
+      { label: 'Dashboard', href: '/dev/dashboard' },
+      { label: 'Devel List', href: '/dev/devel-list' },
+      { label: 'Messages', href: '/dev/messages' },
+      { label: 'System Status', href: '/dev/system-status' },
+      { label: 'Integrations', href: '/dev/integrations' },
+      { label: 'Revenue Model', href: '/ecosystem-model' },
+      { label: 'Support', href: '/dev/support' },
+    ],
   };
 
 export const allowedRoots: Record<UserRole, string[]> = {
@@ -76,15 +90,20 @@ export const allowedRoots: Record<UserRole, string[]> = {
     '/support',
     '/teacher-interest',
   ],
-  teacher: [
-    '/teachers',
-    '/students/lesson-packs',
-    '/teachers/lesson-packs',
-    '/curriculum',
-    '/checkout',
-    '/lesson-room',
-    '/studios',
-  ],
+    teacher: [
+      '/teachers',
+      '/students/lesson-packs',
+      '/teachers/lesson-packs',
+      '/curriculum',
+      '/checkout',
+      '/lesson-room',
+      '/studios',
+      '/ittp',
+    ],
   student: ['/students', '/checkout', '/lesson-room'],
   parent: ['/parents', '/checkout'],
+  dev: [
+    '/dev',
+    '/ecosystem-model',
+  ],
 };

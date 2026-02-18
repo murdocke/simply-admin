@@ -92,7 +92,7 @@ export default function TeacherInterestPage() {
             alert.interestPhone ||
             alert.interestRegion ||
             alert.interestCity,
-        ),
+        ) && !alert.registrationCompletedAt,
       );
       filtered.sort((a, b) => {
         const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;

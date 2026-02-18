@@ -30,6 +30,21 @@ export async function GET(request: Request) {
         interest_region?: string;
       }
     | undefined;
+  const emailLower = alert?.interest_email?.trim().toLowerCase() ?? '';
+  const existingTeacher =
+    emailLower.length > 0
+      ? (db
+          .prepare(
+            `
+            SELECT id, name, email, status
+            FROM teachers
+            WHERE LOWER(email) = ?
+          `,
+          )
+          .get(emailLower) as
+          | { id?: string; name?: string; email?: string; status?: string }
+          | undefined)
+      : undefined;
 
   const now = new Date().toISOString();
   db.prepare(
@@ -79,6 +94,9 @@ export async function GET(request: Request) {
         .get(alert.id, nowTimestamp) as { expires_at?: string } | undefined)
     : undefined;
   return NextResponse.json({
+    isRegisteredTraining: existingTeacher?.status === 'Training',
+    teacherName: existingTeacher?.name ?? null,
+    teacherEmail: existingTeacher?.email ?? null,
     name: firstName,
     alertId: alert?.id ?? null,
     email: alert?.interest_email ?? null,
@@ -96,6 +114,7 @@ export async function POST(request: Request) {
     action?: 'ping' | 'inactive' | 'complete' | 'send-code' | 'verify-code';
     channel?: 'email' | 'sms';
     code?: string;
+    password?: string;
   };
 
   if (!body?.token || !body?.action) {
@@ -307,6 +326,168 @@ export async function POST(request: Request) {
   }
 
   if (body.action === 'complete') {
+    const alert = db
+      .prepare(
+        `
+        SELECT
+          id,
+          username,
+          interest_name,
+          interest_email,
+          interest_city,
+          interest_region
+        FROM company_alerts
+        WHERE registration_token = ?
+      `,
+      )
+      .get(body.token) as
+      | {
+          id?: string;
+          username?: string;
+          interest_name?: string;
+          interest_email?: string;
+          interest_city?: string;
+          interest_region?: string;
+        }
+      | undefined;
+
+    if (!alert?.id) {
+      return NextResponse.json({ error: 'Invalid token.' }, { status: 404 });
+    }
+
+    const name = alert.interest_name ?? 'Teacher';
+    const email = alert.interest_email ?? '';
+    const emailLower = email.trim().toLowerCase();
+    const company = alert.username ?? 'neil';
+    const region = alert.interest_region ?? alert.interest_city ?? 'Unassigned';
+    const password = body.password?.trim() ?? '';
+
+    const existingTeacher = emailLower
+      ? (db
+          .prepare(
+            `
+            SELECT id, username
+            FROM teachers
+            WHERE LOWER(email) = ?
+          `,
+          )
+          .get(emailLower) as { id?: string; username?: string } | undefined)
+      : undefined;
+
+    const baseUsername =
+      emailLower.split('@')[0]?.replace(/[^a-z0-9]/g, '') || 'teacher';
+    let username = existingTeacher?.username ?? baseUsername;
+    let suffix = 1;
+    while (true) {
+      const conflict = db
+        .prepare(
+          `
+          SELECT username
+          FROM accounts
+          WHERE LOWER(username) = ?
+        `,
+        )
+        .get(username.toLowerCase());
+      const teacherConflict = db
+        .prepare(
+          `
+          SELECT username
+          FROM teachers
+          WHERE LOWER(username) = ?
+        `,
+        )
+        .get(username.toLowerCase());
+      if (!conflict && !teacherConflict) break;
+      if (existingTeacher?.username) break;
+      suffix += 1;
+      username = `${baseUsername}${suffix}`;
+    }
+
+    const nowTimestamp = new Date().toISOString();
+    const teacherId = existingTeacher?.id ?? randomUUID();
+    if (existingTeacher?.id) {
+      db.prepare(
+        `
+        UPDATE teachers
+        SET
+          name = ?,
+          email = ?,
+          region = ?,
+          status = ?,
+          password = CASE WHEN ? != '' THEN ? ELSE password END,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      ).run(name, email, region, 'Training', password, password, nowTimestamp, teacherId);
+    } else {
+      db.prepare(
+        `
+        INSERT INTO teachers (
+          id,
+          company,
+          username,
+          name,
+          email,
+          region,
+          status,
+          created_at,
+          updated_at,
+          password,
+          goes_by,
+          studio_id,
+          studio_role
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        teacherId,
+        company,
+        username,
+        name,
+        email,
+        region,
+        'Training',
+        nowTimestamp,
+        nowTimestamp,
+        password,
+        '',
+        '',
+        '',
+      );
+    }
+
+    db.prepare(
+      `
+        INSERT INTO accounts (
+          username,
+          role,
+          name,
+          email,
+          status,
+          last_login,
+          password,
+          teacher_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(username, role) DO UPDATE SET
+          name = excluded.name,
+          email = excluded.email,
+          status = excluded.status,
+          teacher_id = excluded.teacher_id,
+          password = CASE
+            WHEN excluded.password != '' THEN excluded.password
+            ELSE accounts.password
+          END
+      `,
+    ).run(
+      username.toLowerCase(),
+      'teacher',
+      name,
+      email,
+      'Training',
+      null,
+      password,
+      teacherId,
+    );
+
     db.prepare(
       `
         UPDATE company_alerts
@@ -316,7 +497,142 @@ export async function POST(request: Request) {
         WHERE registration_token = ?
       `,
     ).run(now, body.token);
-    return NextResponse.json({ ok: true });
+    const teacherSubject = 'Welcome to Simply Music Teacher Training';
+    const teacherBody = `Hi ${name}, your Simply Music Teacher Training account is ready. You can log in to finish setting up your profile and start your training journey.`;
+    const adminSubject = 'New Training Teacher Registration';
+    const adminBody = `${name} just completed the training registration flow.`;
+
+    const neilAccount = db
+      .prepare(
+        `
+        SELECT email
+        FROM accounts
+        WHERE role = 'company' AND username = 'neil'
+      `,
+      )
+      .get() as { email?: string } | undefined;
+    const neilEmail = neilAccount?.email ?? 'neil@simplymusic.com';
+
+    db.prepare(
+      `
+        INSERT INTO notification_events (
+          id,
+          type,
+          to_value,
+          source,
+          subject,
+          title,
+          body,
+          data_json,
+          status,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      randomUUID(),
+      'email',
+      email,
+      'Teacher Registration',
+      teacherSubject,
+      '',
+      teacherBody,
+      JSON.stringify({
+        alertId: alert.id,
+        teacherId,
+        username,
+        email,
+      }),
+      'sent',
+      now,
+    );
+
+    db.prepare(
+      `
+        INSERT INTO notification_events (
+          id,
+          type,
+          to_value,
+          source,
+          subject,
+          title,
+          body,
+          data_json,
+          status,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      randomUUID(),
+      'email',
+      neilEmail,
+      'Teacher Registration',
+      adminSubject,
+      '',
+      `${adminBody} (Email: ${email})`,
+      JSON.stringify({
+        alertId: alert.id,
+        teacherId,
+        username,
+        email,
+      }),
+      'sent',
+      now,
+    );
+
+    const adminAccounts = db
+      .prepare(
+        `
+        SELECT username, email
+        FROM accounts
+        WHERE role = 'company'
+      `,
+      )
+      .all() as Array<{ username?: string; email?: string }>;
+
+    adminAccounts.forEach(admin => {
+      const destination =
+        admin.email?.trim() || admin.username?.trim() || neilEmail;
+      if (!destination) return;
+      db.prepare(
+        `
+          INSERT INTO notification_events (
+            id,
+            type,
+            to_value,
+            source,
+            subject,
+            title,
+            body,
+            data_json,
+            status,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ).run(
+        randomUUID(),
+        'push',
+        destination,
+        'Teacher Registration',
+        '',
+        adminSubject,
+        adminBody,
+        JSON.stringify({
+          alertId: alert.id,
+          teacherId,
+          username,
+          email,
+        }),
+        'sent',
+        now,
+      );
+    });
+
+    return NextResponse.json({
+      ok: true,
+      email,
+      name,
+      username,
+    });
   }
 
   return NextResponse.json({ ok: false }, { status: 400 });

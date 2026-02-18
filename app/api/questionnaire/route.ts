@@ -33,12 +33,29 @@ export async function GET(request: Request) {
   const alert = db
     .prepare(
       `
-      SELECT id, interest_name
+      SELECT id, interest_name, interest_email
       FROM company_alerts
       WHERE questionnaire_token = ?
     `,
     )
-    .get(token) as { id?: string; interest_name?: string } | undefined;
+    .get(token) as
+    | { id?: string; interest_name?: string; interest_email?: string }
+    | undefined;
+  const emailLower = alert?.interest_email?.trim().toLowerCase() ?? '';
+  const existingTeacher =
+    emailLower.length > 0
+      ? (db
+          .prepare(
+            `
+            SELECT id, name, email, status
+            FROM teachers
+            WHERE LOWER(email) = ?
+          `,
+          )
+          .get(emailLower) as
+          | { id?: string; name?: string; email?: string; status?: string }
+          | undefined)
+      : undefined;
 
   const now = new Date().toISOString();
   db.prepare(
@@ -58,7 +75,13 @@ export async function GET(request: Request) {
 
   const full = alert?.interest_name ?? null;
   const firstName = full ? full.split(' ')[0] : null;
-  return NextResponse.json({ name: firstName, alertId: alert?.id ?? null });
+  return NextResponse.json({
+    isRegisteredTraining: existingTeacher?.status === 'Training',
+    teacherName: existingTeacher?.name ?? null,
+    teacherEmail: existingTeacher?.email ?? null,
+    name: firstName,
+    alertId: alert?.id ?? null,
+  });
 }
 
 export async function POST(request: Request) {
@@ -196,7 +219,7 @@ export async function POST(request: Request) {
     randomUUID(),
     'email',
     companyEmail,
-    'Teacher Interest',
+    'Questionnaire',
     subject,
     '',
     bodyText,

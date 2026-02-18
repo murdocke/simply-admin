@@ -2,7 +2,7 @@
 
 import { Space_Grotesk } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -68,7 +68,12 @@ const initialState: FormState = {
 };
 
 export default function TeacherRegistrationPage() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = 'light';
+  }, []);
+
   const searchParams = useSearchParams();
+  const router = useRouter();
   const token = searchParams.get("token") ?? "";
   const [step, setStep] = useState<Step>(1);
   const [state, setState] = useState<FormState>(initialState);
@@ -283,7 +288,7 @@ export default function TeacherRegistrationPage() {
   const handleNext = async () => {
     if (step === 1) {
       if (!smsSentStatus) {
-        setStepError("Send the code first — we’ll text it to you right away.");
+        await sendVerification();
         return;
       }
       if (state.phoneCode.trim().length < 6) {
@@ -397,8 +402,8 @@ export default function TeacherRegistrationPage() {
       });
   }, [step, state.phoneCode, smsSentStatus]);
 
-  const handleComplete = () => {
-    if (step !== 5) return;
+  const handleComplete = async () => {
+    if (step !== 4) return;
     const checks = [
       state.agreement,
       state.terms,
@@ -428,6 +433,36 @@ export default function TeacherRegistrationPage() {
       return;
     }
     setStepError(null);
+    if (!token) return;
+    try {
+      const response = await fetch("/api/teacher-registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          action: "complete",
+          password: state.password.trim(),
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        email?: string;
+        name?: string;
+        username?: string;
+      };
+      if (!response.ok || !data?.ok) {
+        setStepError("We couldn’t finalize your registration. Try again.");
+        return;
+      }
+      const params = new URLSearchParams();
+      params.set("role", "teacher");
+      params.set("welcome", "1");
+      if (data.email) params.set("email", data.email);
+      if (data.name) params.set("name", data.name);
+      router.replace(`/login?${params.toString()}`);
+    } catch {
+      setStepError("We couldn’t finalize your registration. Try again.");
+    }
   };
 
   useEffect(() => {
@@ -446,7 +481,19 @@ export default function TeacherRegistrationPage() {
           city?: string | null;
           region?: string | null;
           smsCodeExpiresAt?: string | null;
+          isRegisteredTraining?: boolean;
+          teacherName?: string | null;
+          teacherEmail?: string | null;
         };
+        if (data?.isRegisteredTraining) {
+          const params = new URLSearchParams();
+          params.set("role", "teacher");
+          params.set("welcome", "1");
+          if (data.teacherEmail) params.set("email", data.teacherEmail);
+          if (data.teacherName) params.set("name", data.teacherName);
+          router.replace(`/login?${params.toString()}`);
+          return null;
+        }
         if (data?.alertId) {
           setAlertId(data.alertId);
         }
@@ -600,6 +647,15 @@ export default function TeacherRegistrationPage() {
                     ))}
                   </div>
                 </div>
+                {step === 2 ? (
+                  <div className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+                    <img
+                      src="/reference/SimplyMusic-3Device.png"
+                      alt="Simply Music multi-device preview"
+                      className="w-full"
+                    />
+                  </div>
+                ) : null}
 
                 {step === 1 && (
                   <div className="space-y-4">
@@ -831,7 +887,7 @@ export default function TeacherRegistrationPage() {
 
                 {step === 4 && (
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm select-none">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">
                         Main Terms & Agreement
                       </p>
@@ -846,7 +902,7 @@ export default function TeacherRegistrationPage() {
                         student success.
                       </p>
                     </div>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.agreement}
@@ -856,25 +912,25 @@ export default function TeacherRegistrationPage() {
                             agreement: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I agree to the Teacher Training Program terms and main
                         agreement.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.terms}
                         onChange={event =>
                           setState(current => ({ ...current, terms: event.target.checked }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>I accept the code of conduct and policies.</span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyMedia}
@@ -884,14 +940,14 @@ export default function TeacherRegistrationPage() {
                             policyMedia: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I consent to the use of my name and studio details for
                         program announcements and marketing materials.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyTrademark}
@@ -901,14 +957,14 @@ export default function TeacherRegistrationPage() {
                             policyTrademark: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I will use Simply Music branding and trademarks only as
                         permitted in the teacher guidelines.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyCurriculum}
@@ -918,14 +974,14 @@ export default function TeacherRegistrationPage() {
                             policyCurriculum: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I agree to teach the Simply Music curriculum as designed
                         and maintain program standards.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyPractice}
@@ -935,14 +991,14 @@ export default function TeacherRegistrationPage() {
                             policyPractice: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I will encourage safe, supportive practice expectations
                         for all students.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyBackground}
@@ -952,14 +1008,14 @@ export default function TeacherRegistrationPage() {
                             policyBackground: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I confirm I will meet any required background check or
                         safeguarding obligations for my region.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyInsurance}
@@ -969,14 +1025,14 @@ export default function TeacherRegistrationPage() {
                             policyInsurance: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I will maintain any required studio insurance and
                         licensing where applicable.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyCode}
@@ -986,14 +1042,14 @@ export default function TeacherRegistrationPage() {
                             policyCode: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I will uphold the Simply Music teacher code of conduct in
                         my communications and teaching.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyData}
@@ -1003,14 +1059,14 @@ export default function TeacherRegistrationPage() {
                             policyData: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I agree to handle student data responsibly and comply with
                         applicable privacy laws.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyPayments}
@@ -1020,14 +1076,14 @@ export default function TeacherRegistrationPage() {
                             policyPayments: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I acknowledge program fees, renewal policies, and payment
                         schedules as outlined.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer select-none items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.policyTermination}
@@ -1037,14 +1093,14 @@ export default function TeacherRegistrationPage() {
                             policyTermination: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>
                         I understand Simply Music may revoke access for material
                         breaches of the agreement.
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                    <label className="group flex cursor-pointer items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700 transition hover:border-neutral-300 hover:bg-white">
                       <input
                         type="checkbox"
                         checked={state.communications}
@@ -1054,7 +1110,7 @@ export default function TeacherRegistrationPage() {
                             communications: event.target.checked,
                           }))
                         }
-                        className="mt-1 h-4 w-4"
+                        className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>I agree to receive onboarding communications.</span>
                     </label>

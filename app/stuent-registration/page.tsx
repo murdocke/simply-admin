@@ -85,6 +85,10 @@ const initialState: FormState = {
 };
 
 export default function StudentRegistrationPage() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = 'light';
+  }, []);
+
   const router = useRouter();
   const [phase, setPhase] = useState<"gate" | "form">("gate");
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);

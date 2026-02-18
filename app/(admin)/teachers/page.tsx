@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
+  AUTH_STORAGE_KEY,
 } from '../components/auth';
 import LockedSectionCard from '../components/locked-section-card';
 import LessonCartPurchaseButton from '../components/lesson-cart-actions';
@@ -26,6 +27,7 @@ type TeacherRecord = {
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -57,6 +59,7 @@ const normalizeTeacherStatus = (
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -68,6 +71,7 @@ const statusStyles: Record<string, string> = {
   Certified: 'bg-[var(--c-e6eef8)] text-[var(--c-28527a)]',
   Advanced: 'bg-[var(--c-f4f0ff)] text-[var(--c-47308a)]',
   Master: 'bg-[var(--c-fff2d9)] text-[var(--c-7a4a17)]',
+  Training: 'bg-[var(--c-fce6ef)] text-[var(--c-a0395f)]',
   Onboarding: 'bg-[var(--c-fff2d9)] text-[var(--c-8a5b2b)]',
   Interested: 'bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]',
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
@@ -133,6 +137,20 @@ export default function TeachersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lessonPacks, setLessonPacks] = useState<LessonPack[]>([]);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameSuggested, setUsernameSuggested] = useState('');
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+  const [usernameStatus, setUsernameStatus] = useState<
+    'idle' | 'checking' | 'available' | 'unavailable'
+  >('idle');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
+  const [welcomeProfile, setWelcomeProfile] = useState<{
+    name?: string;
+    email?: string;
+  } | null>(null);
+  const pathname = usePathname();
 
   const notifyTeachersUpdated = () => {
     try {
@@ -196,6 +214,233 @@ export default function TeachersPage() {
       setTeacherName(null);
     }
   }, []);
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (role !== 'teacher') return;
+    if (pathname !== '/ittp') return;
+    const stored = window.localStorage.getItem('sm_teacher_welcome');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as { name?: string; email?: string };
+      setWelcomeProfile(parsed ?? null);
+      setShowUsernameModal(true);
+    } catch {
+      setShowUsernameModal(true);
+    }
+  }, [role, pathname]);
+
+  const normalizeUsernameInput = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9.-]/g, '');
+
+  const extractFirstName = (name?: string) => {
+    const cleaned = name?.trim();
+    if (!cleaned) return '';
+    return cleaned.split(/\s+/)[0] ?? '';
+  };
+
+  const buildBaseUsername = (name?: string, email?: string) => {
+    const cleanedName = name?.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+    if (cleanedName) {
+      const parts = cleanedName.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return `${parts[0]}.${parts[1].slice(0, 1)}`;
+      }
+      if (parts.length === 1) return `${parts[0]}.t`;
+    }
+    if (email) {
+      const prefix = email.split('@')[0]?.replace(/[^a-z0-9]/g, '');
+      if (prefix) return `${prefix.slice(0, 8)}.t`;
+    }
+    return 'teacher.t';
+  };
+
+  const checkUsernameAvailability = async (value: string) => {
+    const normalized = normalizeUsernameInput(value);
+    if (!normalized) return false;
+    const response = await fetch('/api/teachers/username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'check', nextUsername: normalized }),
+    });
+    if (!response.ok) return false;
+    const data = (await response.json()) as { available?: boolean };
+    return Boolean(data.available);
+  };
+
+  useEffect(() => {
+    if (!showUsernameModal) return;
+    let active = true;
+    const base = buildBaseUsername(welcomeProfile?.name, welcomeProfile?.email);
+    const firstName = extractFirstName(welcomeProfile?.name).toLowerCase();
+    const suggestionSeeds = [
+      firstName ? `${firstName}.piano` : '',
+      firstName ? `${firstName}.music` : '',
+      firstName ? `${firstName}.keys` : '',
+      firstName ? `${firstName}.teach` : '',
+      firstName ? `learn-with-${firstName}` : '',
+      base,
+      `${base}1`,
+      `${base}2`,
+      `${base}3`,
+    ]
+      .map(item => item.trim())
+      .filter(Boolean);
+    const uniqueSuggestions = Array.from(
+      new Set(
+        suggestionSeeds
+          .map(item => normalizeUsernameInput(item))
+          .filter(item => item.length >= 5 && item.length <= 35),
+      ),
+    );
+    const attemptSuggestion = async () => {
+      const candidates = uniqueSuggestions.length
+        ? uniqueSuggestions
+        : [base, `${base}1`, `${base}2`, `${base}3`, `${base}4`];
+      const availableSuggestions: string[] = [];
+      for (const candidate of candidates) {
+        if (!active) return;
+        const isAvailable = await checkUsernameAvailability(candidate);
+        if (isAvailable) {
+          availableSuggestions.push(candidate);
+          if (!usernameSuggested) {
+            setUsernameSuggested(candidate);
+            setUsernameInput(current => (current ? current : candidate));
+          }
+          if (availableSuggestions.length >= 6) break;
+        }
+      }
+      if (!availableSuggestions.length) {
+        setUsernameSuggested(base);
+        setUsernameInput(current => (current ? current : base));
+      }
+      if (active) {
+        setUsernameSuggestions(availableSuggestions);
+      }
+    };
+    void attemptSuggestion();
+    return () => {
+      active = false;
+    };
+  }, [showUsernameModal, welcomeProfile]);
+
+  useEffect(() => {
+    if (!showUsernameModal) return;
+    const nextValue = normalizeUsernameInput(usernameInput);
+    if (!nextValue) {
+      setUsernameStatus('idle');
+      return;
+    }
+    let active = true;
+    setUsernameStatus('checking');
+    const timer = window.setTimeout(() => {
+      checkUsernameAvailability(nextValue)
+        .then(isAvailable => {
+          if (!active) return;
+          setUsernameStatus(isAvailable ? 'available' : 'unavailable');
+        })
+        .catch(() => {
+          if (!active) return;
+          setUsernameStatus('unavailable');
+        });
+    }, 350);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [showUsernameModal, usernameInput]);
+
+  const handleSaveUsername = async () => {
+    const normalized = normalizeUsernameInput(usernameInput);
+    if (!normalized) {
+      setUsernameError('Add a username to continue.');
+      return;
+    }
+    if (normalized.length < 5 || normalized.length > 35) {
+      setUsernameError('Username must be 5–35 characters.');
+      return;
+    }
+    const illegalChars = /[^a-z0-9.-]/i;
+    if (illegalChars.test(usernameInput) || /\s/.test(usernameInput)) {
+      setUsernameError('Only letters, numbers, periods, and dashes (no spaces).');
+      return;
+    }
+    const bannedWords = [
+      'simplymusic',
+      'simply-music',
+      'simply.music',
+      'admin',
+      'support',
+      'help',
+      'moderator',
+      'owner',
+      'staff',
+      'nazi',
+      'hitler',
+      'kkk',
+      'racist',
+      'hate',
+      'slur',
+      'apple',
+      'google',
+      'microsoft',
+      'amazon',
+      'meta',
+      'tesla',
+      'spotify',
+      'netflix',
+      'nike',
+      'adidas',
+      'cocacola',
+      'coke',
+    ];
+    const normalizedCheck = normalized.replace(/[^a-z0-9]/g, '');
+    if (bannedWords.some(word => normalizedCheck.includes(word))) {
+      setUsernameError('Please choose a different username.');
+      return;
+    }
+    setUsernameError(null);
+    setIsSavingUsername(true);
+    try {
+      const storedAuth = window.localStorage.getItem(AUTH_STORAGE_KEY);
+      const parsedAuth = storedAuth
+        ? (JSON.parse(storedAuth) as { username?: string })
+        : null;
+      const currentUsername = teacherName ?? parsedAuth?.username ?? '';
+      const response = await fetch('/api/teachers/username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          currentUsername,
+          nextUsername: normalized,
+          email: welcomeProfile?.email ?? '',
+        }),
+      });
+      const data = (await response.json()) as { error?: string; username?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Unable to save username.');
+      }
+      if (storedAuth) {
+        try {
+          const nextAuth = { ...(parsedAuth ?? {}), username: normalized };
+          window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth));
+        } catch {
+          // ignore
+        }
+      }
+      setTeacherName(normalized);
+      window.localStorage.removeItem('sm_teacher_welcome');
+      setShowUsernameModal(false);
+    } catch (caught) {
+      setUsernameError(
+        caught instanceof Error ? caught.message : 'Unable to save username.',
+      );
+    } finally {
+      setIsSavingUsername(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -382,7 +627,10 @@ export default function TeachersPage() {
         );
         const data = (await response.json()) as { teachers: TeacherRecord[] };
         if (isActive) {
-          setTeachers(data.teachers ?? []);
+          const filtered = (data.teachers ?? []).filter(
+            teacher => teacher.status !== 'Interested',
+          );
+          setTeachers(filtered);
         }
       } catch {
         if (isActive) setError('Unable to load teachers right now.');
@@ -1021,7 +1269,87 @@ export default function TeachersPage() {
             </div>
           </div>
         </section>
-      </div>
+      {showUsernameModal && pathname === '/ittp' ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+          <div className="w-full max-w-lg rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+                  Training Setup
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  Choose Your Username
+                </h2>
+                <p className="mt-2 text-base text-[var(--c-6f6c65)]">
+                  This will be your public teacher handle inside Simply Music.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                Username
+              </label>
+              <input
+                value={usernameInput}
+                onChange={event => {
+                  setUsernameError(null);
+                  setUsernameInput(event.target.value);
+                }}
+                maxLength={35}
+                className="w-full rounded-xl border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-3 text-base text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                placeholder="yourname"
+              />
+              {usernameSuggestions.length > 0 ? (
+                <div className="text-sm text-[var(--c-6f6c65)]">
+                  Suggested:{' '}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {usernameSuggestions.slice(0, 6).map(suggestion => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          setUsernameError(null);
+                          setUsernameInput(suggestion);
+                        }}
+                        className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)] px-3 py-1.5 text-sm font-semibold text-[var(--c-1f1f1d)] transition hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : usernameSuggested ? (
+                <div className="text-sm text-[var(--c-6f6c65)]">
+                  Suggested: <span className="font-semibold">{usernameSuggested}</span>
+                </div>
+              ) : null}
+              <div className="text-sm uppercase tracking-[0.2em]">
+                {usernameStatus === 'checking' ? (
+                  <span className="text-[var(--c-9a9892)]">Checking availability…</span>
+                ) : usernameStatus === 'available' ? (
+                  <span className="text-emerald-600">Available</span>
+                ) : usernameStatus === 'unavailable' ? (
+                  <span className="text-[var(--c-c8102e)]">Already in use</span>
+                ) : null}
+              </div>
+              {usernameError ? (
+                <div className="rounded-xl border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-2 text-sm text-[var(--c-8f2f3b)]">
+                  {usernameError}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleSaveUsername}
+                disabled={isSavingUsername}
+                className="mt-4 w-full rounded-full bg-[var(--c-c8102e)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:brightness-110 disabled:opacity-60"
+              >
+                {isSavingUsername ? 'Saving…' : 'Save Username'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
     );
   }
 
@@ -1232,6 +1560,7 @@ export default function TeachersPage() {
                           | 'Certified'
                           | 'Advanced'
                           | 'Master'
+                          | 'Training'
                           | 'Onboarding'
                           | 'Interested'
                           | 'Inactive',
@@ -1243,6 +1572,7 @@ export default function TeachersPage() {
                     <option value="Certified">Certified</option>
                     <option value="Advanced">Advanced</option>
                     <option value="Master">Master</option>
+                    <option value="Training">Training</option>
                     <option value="Onboarding">Onboarding</option>
                     <option value="Interested">Interested</option>
                     <option value="Inactive">Inactive</option>

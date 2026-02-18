@@ -269,6 +269,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     null,
   );
   const [recentStudentIds, setRecentStudentIds] = useState<string[]>([]);
+  const [teacherStatus, setTeacherStatus] = useState<string | null>(null);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [accountInfo, setAccountInfo] = useState<{
@@ -278,6 +279,8 @@ export default function AdminShell({ children }: AdminShellProps) {
     status: string;
     lastLogin: string | null;
   } | null>(null);
+  const [hasTeacherWelcome, setHasTeacherWelcome] = useState(false);
+  const [isIttpUsernameModalOpen, setIsIttpUsernameModalOpen] = useState(false);
   const [pipState, setPipState] = useState<{
     open: boolean;
     playing: boolean;
@@ -294,6 +297,19 @@ export default function AdminShell({ children }: AdminShellProps) {
   const [pipDock, setPipDock] = useState<
     'left-bottom' | 'right-bottom' | 'right-top'
   >('right-bottom');
+  const [trainingProgress, setTrainingProgress] = useState<{
+    completed: number;
+    total: number;
+    percent: number;
+    modulesCompleted: number;
+    activeModule: number;
+  }>({
+    completed: 0,
+    total: 20,
+    percent: 0,
+    modulesCompleted: 0,
+    activeModule: 1,
+  });
   const showLessonRoomCta =
     pathname === '/teachers/dashboard' || pathname === '/students/dashboard';
   const backToTopOpacity = Math.min(1, Math.max(0, (scrollY - 80) / 240));
@@ -382,6 +398,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     (effectiveRole === 'teacher' && 'Teacher') ||
     (effectiveRole === 'parent' && 'Parent') ||
     (effectiveRole === 'student' && 'Student') ||
+    (effectiveRole === 'dev' && 'Developer') ||
     'Admin';
   const isStudentSidebar =
     effectiveRole === 'student' || pathname?.startsWith('/students');
@@ -1208,6 +1225,9 @@ export default function AdminShell({ children }: AdminShellProps) {
         teacher.name.toLowerCase().startsWith(normalized),
       ) ??
       null;
+    if (teacherRecord?.status) {
+      setTeacherStatus(teacherRecord.status);
+    }
     if (!teacherRecord?.id) return;
 
     const key = `teacher:${teacherRecord.id}`;
@@ -1232,6 +1252,35 @@ export default function AdminShell({ children }: AdminShellProps) {
       }).catch(() => {});
     };
   }, [role, user?.username, teachersData]);
+
+  useEffect(() => {
+    if (role !== 'teacher' || !user?.username) return;
+    let isActive = true;
+    const loadStatus = async () => {
+      try {
+        const response = await fetch('/api/teachers', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as { teachers: TeacherRecord[] };
+        const normalized = user.username.toLowerCase();
+        const record =
+          data.teachers.find(
+            teacher => teacher.username?.toLowerCase() === normalized,
+          ) ??
+          data.teachers.find(
+            teacher => teacher.email.toLowerCase() === normalized,
+          ) ??
+          null;
+        if (!isActive) return;
+        if (record?.status) setTeacherStatus(record.status);
+      } catch {
+        if (!isActive) return;
+      }
+    };
+    void loadStatus();
+    return () => {
+      isActive = false;
+    };
+  }, [role, user?.username]);
 
   useEffect(() => {
     if (role !== 'student' || !user?.username) return;
@@ -1369,6 +1418,91 @@ export default function AdminShell({ children }: AdminShellProps) {
         'sm-open-teacher-lookup',
         handleOpenTeacherLookup,
       );
+    };
+  }, [role]);
+
+  useEffect(() => {
+    if (effectiveRole !== 'teacher') return;
+    if (teacherStatus !== 'Training') return;
+    let isActive = true;
+    const pdfKeys = [
+      'ittp_mod1_overview_read',
+      'ittp_mod1_breakdown_read',
+      'ittp_mod2_overview_read',
+      'ittp_mod3_overview_read',
+      'ittp_mod5_overview_read',
+      'ittp_mod6_overview_read',
+      'ittp_mod7_overview_read',
+      'ittp_mod8_overview_read',
+      'ittp_mod9_overview_read',
+      'ittp_mod10_overview_read',
+    ];
+    const moduleKeys = Array.from({ length: 10 }).map(
+      (_, index) => `ittp_mod${index + 1}_master_complete`,
+    );
+    const total = pdfKeys.length + moduleKeys.length;
+    const readProgress = () => {
+      if (!isActive || typeof window === 'undefined') return;
+      const completedPdf = pdfKeys.filter(
+        key => window.localStorage.getItem(key) === 'true',
+      ).length;
+      const completedModules = moduleKeys.filter(
+        key => window.localStorage.getItem(key) === 'true',
+      ).length;
+      const completed = completedPdf + completedModules;
+      const activeModule =
+        Number(window.localStorage.getItem('ittp_active_module')) || 1;
+      setTrainingProgress({
+        completed,
+        total,
+        percent: total ? Math.round((completed / total) * 100) : 0,
+        modulesCompleted: completedModules,
+        activeModule,
+      });
+    };
+    readProgress();
+    const interval = window.setInterval(readProgress, 3000);
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, [effectiveRole, teacherStatus]);
+
+  useEffect(() => {
+    if (role !== 'teacher') return;
+    const refresh = () => {
+      try {
+        const hasWelcome = Boolean(
+          window.localStorage.getItem('sm_teacher_welcome'),
+        );
+        const modalOpen =
+          window.localStorage.getItem('ittp_username_modal_open') === 'true';
+        setIsIttpUsernameModalOpen(modalOpen);
+        setHasTeacherWelcome(hasWelcome && !modalOpen);
+      } catch {
+        setHasTeacherWelcome(false);
+        setIsIttpUsernameModalOpen(false);
+      }
+    };
+    refresh();
+    const handleModalState = (event: Event) => {
+      const custom = event as CustomEvent<{ open?: boolean }>;
+      const open = Boolean(custom.detail?.open);
+      setIsIttpUsernameModalOpen(open);
+      try {
+        const hasWelcome = Boolean(
+          window.localStorage.getItem('sm_teacher_welcome'),
+        );
+        setHasTeacherWelcome(hasWelcome && !open);
+      } catch {
+        setHasTeacherWelcome(false);
+      }
+    };
+    window.addEventListener('sm-teacher-welcome-updated', refresh);
+    window.addEventListener('ittp-username-modal-state', handleModalState as EventListener);
+    return () => {
+      window.removeEventListener('sm-teacher-welcome-updated', refresh);
+      window.removeEventListener('ittp-username-modal-state', handleModalState as EventListener);
     };
   }, [role]);
 
@@ -1626,6 +1760,16 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [pathname, effectiveRole, router]);
 
   useEffect(() => {
+    if (!pathname || !user) return;
+    if (
+      pathname.startsWith('/ecosystem-model') &&
+      (user.role !== 'dev' || user.username !== 'dev-brian')
+    ) {
+      router.replace(roleHome[user.role]);
+    }
+  }, [pathname, user, router]);
+
+  useEffect(() => {
     const syncPip = () => {
       try {
         const stored = window.localStorage.getItem('sm_pip_state');
@@ -1864,8 +2008,61 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   const items = useMemo(() => {
     if (!effectiveRole) return [];
-    return navItems[effectiveRole];
-  }, [effectiveRole]);
+    const base = navItems[effectiveRole];
+    if (effectiveRole === 'teacher' && teacherStatus === 'Training') {
+      return base
+        .filter(item =>
+          ['Training', 'Coaching', 'Library', 'Simpedia', 'Messages'].includes(
+            item.label,
+          ),
+        )
+        .map(item =>
+          item.label === 'Training'
+            ? { ...item, href: '/ittp' }
+            : item,
+        );
+    }
+    if (effectiveRole === 'teacher') {
+      return base.filter(
+        item => !['Coaching', 'Library', 'Simpedia'].includes(item.label),
+      );
+    }
+    return base;
+  }, [effectiveRole, teacherStatus]);
+
+  const isTrainingTeacher = effectiveRole === 'teacher' && teacherStatus === 'Training';
+  const shouldBlockIttp =
+    effectiveRole === 'teacher' &&
+    pathname?.startsWith('/ittp') &&
+    Boolean(teacherStatus) &&
+    teacherStatus !== 'Training';
+
+  useEffect(() => {
+    if (!isTrainingTeacher) return;
+    if (!pathname) return;
+    const allowed = [
+      '/ittp',
+      '/teachers/messages',
+      '/teachers/coaching',
+      '/teachers/library',
+      '/teachers/simpedia',
+    ];
+    const isAllowed = allowed.some(route => pathname.startsWith(route));
+    if (!isAllowed) {
+      router.replace('/ittp');
+    }
+  }, [isTrainingTeacher, pathname, router]);
+
+  useEffect(() => {
+    if (!pathname) return;
+    if (effectiveRole !== 'teacher') return;
+    if (!teacherStatus) return;
+    if (teacherStatus === 'Training') return;
+    if (pathname.startsWith('/ittp')) {
+      router.replace('/teachers/dashboard');
+    }
+  }, [effectiveRole, teacherStatus, pathname, router]);
+
 
   const sidebarStyles = useMemo(() => {
     if (effectiveRole === 'teacher') {
@@ -2304,6 +2501,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   const handleThemeChange = (nextTheme: ThemeMode) => {
     setTheme(nextTheme);
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    document.cookie = `${THEME_STORAGE_KEY}=${nextTheme}; Path=/; Max-Age=63072000; SameSite=Lax`;
     document.documentElement.dataset.theme = nextTheme;
   };
 
@@ -2431,8 +2629,13 @@ export default function AdminShell({ children }: AdminShellProps) {
   if (!isReady) {
     return (
       <div className="min-h-screen bg-[var(--c-f7f7f5)] text-[var(--c-1f1f1d)] flex items-center justify-center">
-        <div className="text-sm uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
-          Loading
+        <div className="rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-8 py-6 shadow-lg">
+          <p className="text-xs uppercase tracking-[0.4em] text-[var(--c-9a9892)]">
+            Loading Account
+          </p>
+          <div className="mt-3 h-2 w-52 rounded-full bg-[var(--c-f0efeb)]">
+            <div className="h-2 w-28 animate-pulse rounded-full bg-[var(--c-c8102e)]/70" />
+          </div>
         </div>
       </div>
     );
@@ -2442,7 +2645,11 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   return (
     <div className="app-shell-bg min-h-screen text-[var(--c-1f1f1d)]">
-      {notifications.length > 0 && !isMessagesPage ? (
+      {shouldBlockIttp ? (
+        <div className="min-h-screen bg-[var(--c-f8f7f4)]" />
+      ) : (
+        <>
+          {notifications.length > 0 && !isMessagesPage ? (
         <div className="fixed right-6 top-6 z-[70] flex w-full max-w-sm flex-col gap-3">
           {notifications.map(notification => (
             <div
@@ -2931,6 +3138,36 @@ export default function AdminShell({ children }: AdminShellProps) {
               </div>
             </div>
           </div>
+          {isTrainingTeacher ? (
+            <div className="mb-6 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+                Steps
+              </p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xl font-semibold text-[var(--c-1f1f1d)]">
+                  {trainingProgress.modulesCompleted} / 10
+                </p>
+                <span className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                  {trainingProgress.percent}%
+                </span>
+              </div>
+              <div className="mt-3 h-1.5 w-full rounded-full bg-[var(--c-ecebe7)]">
+                <div
+                  className="h-1.5 rounded-full bg-[var(--c-c8102e)] transition-all"
+                  style={{ width: `${trainingProgress.percent}%` }}
+                />
+              </div>
+              <p className="mt-3 text-xs uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
+                Module {trainingProgress.activeModule} Active
+              </p>
+                <a
+                  href="/ittp"
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white transition hover:brightness-110 whitespace-nowrap text-center"
+                >
+                  Continue Training
+                </a>
+            </div>
+          ) : null}
           <nav className="space-y-2 text-sm">
             {items.map(item => {
               if (effectiveRole === 'teacher' && item.label === 'Dashboard') {
@@ -2942,24 +3179,22 @@ export default function AdminShell({ children }: AdminShellProps) {
                     >
                       {item.label}
                     </a>
-                    <a
-                      href="/teachers/this-week"
-                      className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
-                    >
-                      This Week
-                    </a>
-                    <a
-                      href="/teachers?mode=teaching"
-                      className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
-                    >
-                      Teaching
-                    </a>
-                    <a
-                      href="/teachers?mode=training"
-                      className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
-                    >
-                      Training
-                    </a>
+                    {isTrainingTeacher ? null : (
+                      <>
+                        <a
+                          href="/teachers/this-week"
+                          className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
+                        >
+                          This Week
+                        </a>
+                        <a
+                          href="/teachers?mode=teaching"
+                          className="block rounded-lg px-3 py-2 font-medium text-[var(--c-3a3935)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)] hover:ring-1 hover:ring-[var(--sidebar-accent-border)]"
+                        >
+                          Teaching
+                        </a>
+                      </>
+                    )}
                   </div>
                 );
               }
@@ -3321,6 +3556,20 @@ export default function AdminShell({ children }: AdminShellProps) {
               <p className="mt-1 text-sm text-[var(--c-9a9892)]">
                 {accountInfo?.email ?? `${user.username}@simplymusic.com`}
               </p>
+              {effectiveRole === 'teacher' &&
+              teacherStatus === 'Training' &&
+              pathname?.startsWith('/ittp') &&
+              hasTeacherWelcome &&
+              !isIttpUsernameModalOpen ? (
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new Event('ittp-open-username-modal'));
+                  }}
+                  className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+                >
+                  Add Username
+                </button>
+              ) : null}
               <button
                 onClick={openAccountModal}
                 className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
@@ -3403,7 +3652,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           </div>
         ) : null}
-          {role === 'teacher' ? (
+          {role === 'teacher' && !isTrainingTeacher ? (
             <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-xs text-[var(--c-7a776f)]">
               <button
                 onClick={() => setIsStudentModalOpen(true)}
@@ -3478,7 +3727,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent', 'dev'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}
@@ -3497,7 +3746,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           </div>
         ) : null}
-        {role === 'teacher' ? (
+        {role === 'teacher' && !isTrainingTeacher ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
               {(['teacher', 'student'] as UserRole[]).map(option => (
@@ -3552,30 +3801,6 @@ export default function AdminShell({ children }: AdminShellProps) {
         >
           Log Out
         </button>
-        {effectiveRole === 'company' ? (
-          <a
-            href="/company/whats-next"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
-          >
-            What&#39;s Next
-          </a>
-        ) : null}
-        {effectiveRole === 'company' ? (
-          <a
-            href="/company/features-overview"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
-          >
-            Features Overview
-          </a>
-        ) : null}
-        {effectiveRole === 'company' ? (
-          <a
-            href="/company/what-we-offer"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
-          >
-            What We Offer
-          </a>
-        ) : null}
       </aside>
 
         <div className="flex-1 relative">
@@ -4426,7 +4651,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[color:var(--c-ffffff)]/80 p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent', 'dev'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}
@@ -4614,7 +4839,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         </div>
       ) : null}
 
-      {role === 'teacher' || role === 'company' ? (
+          {role === 'teacher' || role === 'company' ? (
         <div
           className={`fixed inset-0 z-[60] ${
             isStudentModalOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -4724,7 +4949,9 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
           </div>
         </div>
-      ) : null}
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

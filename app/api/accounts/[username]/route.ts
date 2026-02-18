@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student' | 'parent';
+  role: 'company' | 'teacher' | 'student' | 'parent' | 'dev';
   name: string;
   email: string;
   goesBy?: string;
@@ -21,7 +21,7 @@ export async function PATCH(
 ) {
   const { username } = await params;
   const body = (await request.json()) as {
-    role?: 'company' | 'teacher' | 'student' | 'parent';
+    role?: 'company' | 'teacher' | 'student' | 'parent' | 'dev';
     name?: string;
     email?: string;
     password?: string;

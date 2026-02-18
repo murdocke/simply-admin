@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db';
 
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student' | 'parent';
+  role: 'company' | 'teacher' | 'student' | 'parent' | 'dev';
   name: string;
   email: string;
   accountStatus?: string;
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   const db = getDb();
-  const account = db
+  let account = db
     .prepare(
       `
         SELECT
@@ -50,6 +50,38 @@ export async function POST(request: Request) {
         password: string | null;
       }
     | undefined;
+
+  if (!account) {
+    account = db
+      .prepare(
+        `
+          SELECT
+            username,
+            role,
+            account_status,
+            password
+          FROM accounts
+          WHERE LOWER(email) = ?
+          ORDER BY CASE role
+            WHEN 'teacher' THEN 0
+            WHEN 'student' THEN 1
+            WHEN 'parent' THEN 2
+            WHEN 'company' THEN 3
+            WHEN 'dev' THEN 4
+            ELSE 5
+          END
+          LIMIT 1
+        `,
+      )
+      .get(username) as
+      | {
+          username: string;
+          role: AccountRecord['role'];
+          account_status: string | null;
+          password: string | null;
+        }
+      | undefined;
+  }
 
   if (!account || (account.password ?? '') !== password) {
     return NextResponse.json(

@@ -50,7 +50,7 @@ type DragState = {
 };
 
 type DockSide = "left" | "right";
-type UserRole = "teacher" | "student" | "company" | "parent";
+type UserRole = "teacher" | "student" | "company" | "parent" | "dev";
 type CameraSource = "teacher1" | "teacher2" | "student";
 
 const CONTROL_PANEL_WIDTH = 300;

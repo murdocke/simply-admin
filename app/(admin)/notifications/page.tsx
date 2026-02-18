@@ -121,7 +121,7 @@ export default function NotificationsPage() {
           .filter(value => value.trim().length > 0),
       ),
     );
-    const defaults = ['Teacher Interest'];
+    const defaults = ['Teacher Interest', 'Questionnaire', 'Lead Form', 'Registration'];
     const merged = Array.from(new Set(['all', ...defaults, ...sources]));
     return merged.sort((a, b) => {
       if (a === 'all') return -1;
@@ -157,6 +157,12 @@ export default function NotificationsPage() {
     return match ? match[1] : null;
   };
 
+  const extractFirstUrl = (text: string) => {
+    if (!text) return null;
+    const match = text.match(/https?:\/\/[^\s]+/);
+    return match ? match[0] : null;
+  };
+
   const handleCopyCode = async (code: string) => {
     const fallbackCopy = () => {
       const textarea = document.createElement('textarea');
@@ -186,21 +192,51 @@ export default function NotificationsPage() {
     fallbackCopy();
   };
 
+  const handleCopyUrl = async (url: string) => {
+    const fallbackCopy = () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(textarea);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        return;
+      } catch {
+        fallbackCopy();
+        return;
+      }
+    }
+    fallbackCopy();
+  };
+
   const isVerificationEvent = (event: NotificationEvent) => {
     const subject = (event.subject ?? '').toLowerCase();
     const title = (event.title ?? '').toLowerCase();
     const body = (event.body ?? '').toLowerCase();
-    const hasVerificationWord =
+    const hasCode = Boolean(extractVerificationCode(event.body ?? ''));
+    const hasCodeIntent =
       subject.includes('verification') ||
       title.includes('verification') ||
+      subject.includes('code') ||
+      title.includes('code') ||
       body.includes('verification code') ||
-      body.includes('sms verification');
-    const hasCode = Boolean(extractVerificationCode(event.body ?? ''));
-    return (
-      hasVerificationWord ||
-      hasCode ||
-      Boolean(event.data?.verificationChannel)
-    );
+      body.includes('code is') ||
+      body.includes('code:') ||
+      body.includes('one-time') ||
+      body.includes('otp');
+    return hasCode && hasCodeIntent;
   };
 
   const CODE_TTL_MS = 10 * 60 * 1000;
@@ -373,6 +409,7 @@ export default function NotificationsPage() {
                     >
                       {(() => {
                         const code = extractVerificationCode(event.body ?? '');
+                        const url = extractFirstUrl(event.body ?? '');
                         return (
                           <>
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -388,15 +425,26 @@ export default function NotificationsPage() {
                         </div>
                         <div className="flex flex-col items-end gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                           <span>{formatTimestamp(event.createdAt)}</span>
-                          {code ? (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyCode(code)}
-                              className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                            >
-                              Copy Code
-                            </button>
-                          ) : null}
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {code && !url ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCode(code)}
+                                className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                              >
+                                Copy Code
+                              </button>
+                            ) : null}
+                            {url ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyUrl(url)}
+                                className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                              >
+                                Copy URL
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                       <div className="mt-3 text-sm text-[var(--c-6f6c65)]">
@@ -445,6 +493,7 @@ export default function NotificationsPage() {
                     >
                       {(() => {
                         const code = extractVerificationCode(event.body ?? '');
+                        const url = extractFirstUrl(event.body ?? '');
                         return (
                           <>
                       <div className="flex items-start justify-between gap-3">
@@ -462,15 +511,26 @@ export default function NotificationsPage() {
                           <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             {formatTimestamp(event.createdAt)}
                           </span>
-                          {code ? (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyCode(code)}
-                              className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                            >
-                              Copy Code
-                            </button>
-                          ) : null}
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {code && !url ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCode(code)}
+                                className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                              >
+                                Copy Code
+                              </button>
+                            ) : null}
+                            {url ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyUrl(url)}
+                                className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                              >
+                                Copy URL
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                       <p className="mt-2 text-sm text-[var(--c-6f6c65)]">

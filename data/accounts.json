@@ -23,6 +23,16 @@
       "accountStatus": "Active"
     },
     {
+      "username": "dev-brian",
+      "role": "dev",
+      "name": "Dev Brian",
+      "email": "dev-brian@simplymusic.com",
+      "lastLogin": null,
+      "password": "devel2026",
+      "membershipStatus": "Active",
+      "accountStatus": "Active"
+    },
+    {
       "username": "jason",
       "role": "teacher",
       "name": "Jason Stillwell",

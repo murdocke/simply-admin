@@ -158,6 +158,9 @@ export default function DashboardPage() {
   const [liveStatusTopMap, setLiveStatusTopMap] = useState<Record<string, number>>(
     {},
   );
+  const [liveStatusCollapsedMap, setLiveStatusCollapsedMap] = useState<
+    Record<string, boolean>
+  >({});
   const [questionnaireDetails, setQuestionnaireDetails] = useState<
     Record<
       string,
@@ -225,7 +228,12 @@ export default function DashboardPage() {
       const normalized = Array.isArray(rawAlerts) ? rawAlerts : [rawAlerts];
       setCompanyAlerts(
         normalized
-          .filter(alert => alert?.title && alert?.body)
+          .filter(
+            alert =>
+              alert?.title &&
+              alert?.body &&
+              !alert?.registrationCompletedAt,
+          )
           .sort((a, b) => {
             const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -466,6 +474,40 @@ export default function DashboardPage() {
     href: string;
     logoutOnClick?: boolean;
   }>;
+  const handleCopyRoute = useCallback(async (route: (typeof quickRoutes)[number]) => {
+    if (route.logoutOnClick) {
+      window.localStorage.removeItem('sm_user');
+      window.localStorage.removeItem('sm_view_role');
+      window.localStorage.removeItem('sm_view_teacher');
+      window.localStorage.removeItem('sm_view_student');
+    }
+    const url = `${window.location.origin}${route.href}`;
+    const fallbackCopy = () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(textarea);
+    };
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        return;
+      } catch {
+        fallbackCopy();
+        return;
+      }
+    }
+    fallbackCopy();
+  }, []);
 
   return (
     <div className="space-y-10">
@@ -488,22 +530,14 @@ export default function DashboardPage() {
             </p>
             <div className="mt-2 grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
               {quickRoutes.map(route => (
-                <Link
+                <button
                   key={route.href}
-                  href={route.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => {
-                    if (!route.logoutOnClick) return;
-                    window.localStorage.removeItem('sm_user');
-                    window.localStorage.removeItem('sm_view_role');
-                    window.localStorage.removeItem('sm_view_teacher');
-                    window.localStorage.removeItem('sm_view_student');
-                  }}
+                  type="button"
+                  onClick={() => void handleCopyRoute(route)}
                   className="flex items-center justify-center rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold text-[var(--c-1f1f1d)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
                 >
                   {route.label}
-                </Link>
+                </button>
               ))}
             </div>
           </div>
@@ -805,55 +839,112 @@ export default function DashboardPage() {
                           [alertKey]: center,
                         }));
                       }}
-                      className="pointer-events-none absolute right-4 top-1/2 z-20 w-[310px] -translate-y-1/2 rounded-2xl border border-white/25 bg-white/10 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85 shadow-[0_12px_28px_-18px_rgba(0,0,0,0.6)] backdrop-blur-sm"
+                      className={`absolute right-4 z-20 rounded-2xl border border-white/25 bg-white/10 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85 shadow-[0_12px_28px_-18px_rgba(0,0,0,0.6)] backdrop-blur-sm ${
+                        liveStatusCollapsedMap[alertKey]
+                          ? 'bottom-4 w-[180px]'
+                          : 'top-1/2 w-[310px] -translate-y-1/2'
+                      }`}
                       style={
+                        !liveStatusCollapsedMap[alertKey] &&
                         liveStatusTopMap[alertKey] !== undefined
                           ? { top: liveStatusTopMap[alertKey] }
                           : undefined
                       }
+                      onClick={event => event.stopPropagation()}
                     >
+                      <button
+                        type="button"
+                        onClick={event => {
+                          event.stopPropagation();
+                          setLiveStatusCollapsedMap(current => ({
+                            ...current,
+                            [alertKey]: !current[alertKey],
+                          }));
+                        }}
+                        className={`absolute inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/35 bg-white/5 text-white/70 shadow-[0_6px_16px_-10px_rgba(0,0,0,0.6)] transition hover:bg-white/15 hover:text-white ${
+                          liveStatusCollapsedMap[alertKey]
+                            ? 'bottom-2 right-2'
+                            : 'right-2 top-2'
+                        }`}
+                        aria-label={
+                          liveStatusCollapsedMap[alertKey]
+                            ? 'Expand live status'
+                            : 'Collapse live status'
+                        }
+                      >
+                        {liveStatusCollapsedMap[alertKey] ? (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M12 5v14" />
+                            <path d="M5 12h14" />
+                          </svg>
+                        ) : (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 12h14" />
+                          </svg>
+                        )}
+                      </button>
                       <div className="text-[10px] uppercase tracking-[0.28em] text-white/60">
                         Live Status
                       </div>
-                      <div className="mt-2 space-y-2">
-                        {liveStatus ? (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex h-2 w-2 rounded-full bg-white/80" />
-                            <span>{liveStatus}</span>
-                          </div>
-                        ) : null}
-                        {liveOpenedAt ? (
-                          <div className="text-white/65">
-                            Last opened{' '}
-                            {liveOpenedAt.toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        ) : null}
-                        {liveCompletedAt ? (
-                          <div className="text-white/65">
-                            Completed{' '}
-                            {liveCompletedAt.toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        ) : null}
-                        {liveActive ? (
-                          <div className="flex items-center gap-2 text-white/80">
-                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-                              <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-white/60" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
-                            </span>
-                            Currently Active
-                          </div>
-                        ) : null}
-                      </div>
+                      {liveStatusCollapsedMap[alertKey] ? null : (
+                        <div className="mt-2 space-y-2">
+                          {liveStatus ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-2 w-2 rounded-full bg-white/80" />
+                              <span>{liveStatus}</span>
+                            </div>
+                          ) : null}
+                          {liveOpenedAt ? (
+                            <div className="text-white/65">
+                              Last opened{' '}
+                              {liveOpenedAt.toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                          ) : null}
+                          {liveCompletedAt ? (
+                            <div className="text-white/65">
+                              Completed{' '}
+                              {liveCompletedAt.toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                          ) : null}
+                          {liveActive ? (
+                            <div className="flex items-center gap-2 text-white/80">
+                              <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+                                <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-white/60" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                              </span>
+                              Currently Active
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   ) : null}
                   {alert.id &&

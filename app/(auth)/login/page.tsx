@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AUTH_STORAGE_KEY,
+  VIEW_ROLE_STORAGE_KEY,
+  VIEW_TEACHER_STORAGE_KEY,
+  VIEW_STUDENT_STORAGE_KEY,
   roleHome,
   type AuthUser,
 } from '../../(admin)/components/auth';
+import { THEME_STORAGE_KEY, normalizeTheme } from '@/app/components/theme';
 import teachersData from '@/data/teachers.json';
 import studiosData from '@/data/studios.json';
 
@@ -14,11 +18,17 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roleParam = (searchParams.get('role') ?? '').toLowerCase();
+  const welcomeParam = searchParams.get('welcome') === '1';
+  const welcomeEmail = searchParams.get('email') ?? '';
+  const defaultEmail = welcomeParam ? '' : 'ella@simplymusic.com';
+  const welcomeName = searchParams.get('name') ?? '';
+  const displayName = welcomeName || (welcomeParam ? 'New Teacher' : 'Ella');
   const isTeacherRole = roleParam === 'teacher';
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [showDemo, setShowDemo] = useState(false);
+  const [showWelcomePanel, setShowWelcomePanel] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [bgIndex, setBgIndex] = useState(0);
   const [showForgot, setShowForgot] = useState(false);
@@ -36,8 +46,15 @@ export default function LoginPage() {
       role: string;
       name: string;
       studio?: { name: string; isAdmin: boolean };
+      autoLoginPassword?: string | null;
     }[]
   >([]);
+  const [trainingDemo, setTrainingDemo] = useState<{
+    username: string;
+    role: string;
+    name: string;
+    autoLoginPassword?: string | null;
+  } | null>(null);
   const groupedDemoAccounts = useMemo(
     () => [
       {
@@ -62,6 +79,11 @@ export default function LoginPage() {
         ),
       },
       {
+        key: 'training',
+        label: 'Teachers In Training',
+        accounts: trainingDemo ? [trainingDemo] : [],
+      },
+      {
         key: 'parent',
         label: 'Parents',
         accounts: demoAccounts.filter(account => account.role === 'parent'),
@@ -72,7 +94,7 @@ export default function LoginPage() {
         accounts: demoAccounts.filter(account => account.role === 'student'),
       },
     ],
-    [demoAccounts],
+    [demoAccounts, trainingDemo],
   );
 
   const backgroundImages = useMemo(
@@ -86,19 +108,85 @@ export default function LoginPage() {
     [],
   );
 
+  const resolveTeacherRoute = async (authUser: AuthUser) => {
+    if (authUser.role !== 'teacher') return roleHome[authUser.role];
+    try {
+      const response = await fetch(
+        `/api/account?username=${encodeURIComponent(
+          authUser.username,
+        )}&role=${encodeURIComponent(authUser.role)}`,
+        { cache: 'no-store' },
+      );
+      if (!response.ok) return roleHome[authUser.role];
+      const data = (await response.json()) as {
+        account?: { status?: string | null };
+      };
+      const status = data.account?.status?.toLowerCase() ?? '';
+      if (status === 'training') return '/ittp';
+    } catch {
+      // ignore
+    }
+    return roleHome[authUser.role];
+  };
+
   useEffect(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as AuthUser;
         if (parsed?.role) {
-          router.replace(roleHome[parsed.role]);
+          resolveTeacherRoute(parsed).then(nextRoute => {
+            router.replace(nextRoute);
+          });
         }
       } catch {
         window.localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    if (welcomeParam) {
+      try {
+        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+        window.localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
+        window.localStorage.removeItem(VIEW_TEACHER_STORAGE_KEY);
+        window.localStorage.removeItem(VIEW_STUDENT_STORAGE_KEY);
+      } catch {
+        // ignore storage failures
+      }
+      setUser(welcomeEmail);
+      setPass('');
+      setShowDemo(false);
+      setShowWelcomePanel(true);
+      try {
+        window.localStorage.setItem(
+          'sm_teacher_welcome',
+          JSON.stringify({ email: welcomeEmail, name: welcomeName }),
+        );
+      } catch {
+        // ignore storage failures
+      }
+      return;
+    }
+    setUser(defaultEmail);
+    setPass('');
+    setShowWelcomePanel(false);
+  }, [welcomeParam, welcomeEmail, welcomeName, defaultEmail]);
+
+  useEffect(() => {
+    if (roleParam === 'teacher' || roleParam === 'student') {
+      document.documentElement.dataset.theme = 'light';
+      return;
+    }
+    const cookieValue = document.cookie
+      .split('; ')
+      .find(row => row.startsWith(`${THEME_STORAGE_KEY}=`))
+      ?.split('=')[1];
+    const nextTheme = normalizeTheme(cookieValue ?? null);
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+  }, [roleParam]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -116,7 +204,7 @@ export default function LoginPage() {
         };
         return data.accounts ?? [];
       })
-      .then(list => {
+      .then(async list => {
         const allowed = new Set([
           'neil',
           'brian',
@@ -149,19 +237,63 @@ export default function LoginPage() {
             isAdmin: teacher.studioRole === 'Admin',
           });
         });
-        setDemoAccounts(
-          list
-            .filter(account => allowed.has(account.username.toLowerCase()))
-            .map(account => ({
-              username: account.username,
-              role: account.role,
-              name: account.name ?? '',
-              studio: studioByUsername.get(account.username.toLowerCase()),
-            })),
-        );
+        const demoList = list
+          .filter(account => allowed.has(account.username.toLowerCase()))
+          .map(account => ({
+            username: account.username,
+            role: account.role,
+            name: account.name ?? '',
+            studio: studioByUsername.get(account.username.toLowerCase()),
+            autoLoginPassword: 'Coffee@Sunrise@2026',
+          }));
+        setDemoAccounts(demoList);
+
+        try {
+          const teachersResponse = await fetch('/api/teachers', {
+            cache: 'no-store',
+          });
+          if (!teachersResponse.ok) return;
+          const teachersData = (await teachersResponse.json()) as {
+            teachers?: { username?: string; name?: string; email?: string; status?: string; updatedAt?: string }[];
+          };
+          const trainingTeachers = (teachersData.teachers ?? []).filter(
+            teacher => teacher.status === 'Training',
+          );
+          if (trainingTeachers.length === 0) return;
+          const latestTraining = trainingTeachers.sort((a, b) => {
+            const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return bTime - aTime;
+          })[0];
+          const trainingPassword =
+            (latestTraining as { password?: string }).password ?? '';
+          const trainingAccount =
+            list.find(
+              account =>
+                account.role === 'teacher' &&
+                account.username?.toLowerCase() ===
+                  (latestTraining.username ?? '').toLowerCase(),
+            ) ??
+            list.find(
+              account =>
+                account.role === 'teacher' &&
+                account.email?.toLowerCase() ===
+                  (latestTraining.email ?? '').toLowerCase(),
+            );
+          if (!trainingAccount) return;
+          setTrainingDemo({
+            username: trainingAccount.username,
+            role: trainingAccount.role,
+            name: trainingAccount.name ?? latestTraining.name ?? 'Training Teacher',
+            autoLoginPassword: trainingPassword || null,
+          });
+        } catch {
+          // ignore
+        }
       })
       .catch(() => {
         setDemoAccounts([]);
+        setTrainingDemo(null);
       });
   }, []);
 
@@ -191,7 +323,8 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: authUser.username, role: authUser.role }),
       });
-      router.replace(roleHome[authUser.role]);
+      const nextRoute = await resolveTeacherRoute(authUser);
+      router.replace(nextRoute);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -205,12 +338,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white text-[var(--c-1f1f1d)] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-white text-[var(--c-1f1f1d)] relative overflow-hidden [[data-theme=dark]_&]:bg-[var(--c-f7f7f5)] [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]">
       <div className="absolute inset-0 z-0">
         {backgroundImages.map((src, index) => (
           <div
             key={src}
-            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] -translate-x-[110%] -translate-y-[100%] bg-contain bg-no-repeat transition-opacity duration-[2000ms] md:block ${
+            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] bg-contain bg-no-repeat transition-opacity duration-[2000ms] md:block ${
+              showWelcomePanel
+                ? '-translate-x-[calc(110%+100px)] -translate-y-[calc(100%+100px)]'
+                : '-translate-x-[110%] -translate-y-[100%]'
+            } ${
               index === bgIndex ? 'opacity-100' : 'opacity-0'
             }`}
             style={{
@@ -222,45 +359,47 @@ export default function LoginPage() {
       </div>
       <div
         className={`relative z-10 w-full ${
-          error || showDemo ? 'max-w-5xl' : 'max-w-md'
+          error || showDemo || showWelcomePanel ? 'max-w-5xl' : 'max-w-md'
         }`}
       >
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div
-            className="relative w-full rounded-2xl border border-[var(--c-ecebe7)] bg-white/70 backdrop-blur-md p-8 shadow-sm select-none"
+            className="relative w-full rounded-2xl border border-[var(--c-ecebe7)] bg-white/70 backdrop-blur-md p-8 shadow-sm select-none [[data-theme=dark]_&]:bg-[var(--c-efece6)]/90 [[data-theme=dark]_&]:border-[var(--c-e5e3dd)]"
             style={{ maxWidth: 460 }}
           >
-            <button
-              type="button"
-              onClick={() =>
-                setShowDemo(current => {
-                  const next = !current;
-                  if (!next) {
-                    setError('');
-                    setUser('');
-                    setPass('');
-                  }
-                  return next;
-                })
-              }
-              className="absolute right-4 top-4 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-2 text-[var(--c-6f6c65)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-              aria-label="Demo accounts"
-              title="Demo accounts"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {!showWelcomePanel ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setShowDemo(current => {
+                    const next = !current;
+                    if (!next) {
+                      setError('');
+                      setUser('');
+                      setPass('');
+                    }
+                    return next;
+                  })
+                }
+                className="absolute right-4 top-4 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-2 text-[var(--c-6f6c65)] shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)]"
+                aria-label="Demo accounts"
+                title="Demo accounts"
               >
-                <path d="M20 21a8 8 0 0 0-16 0" />
-                <circle cx="12" cy="8" r="4" />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 21a8 8 0 0 0-16 0" />
+                  <circle cx="12" cy="8" r="4" />
+                </svg>
+              </button>
+            ) : null}
             <div className="mb-6 flex items-center justify-center gap-3">
               <img
                 src="https://simplymusic.com/wp-content/uploads/2024/02/simply-music-logo.svg"
@@ -269,10 +408,12 @@ export default function LoginPage() {
                 style={{ borderRadius: 12 }}
               />
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                   Login
                 </p>
-                <h1 className="text-xl font-semibold">Simply Music</h1>
+                <h1 className="text-xl font-semibold [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]">
+                  Simply Music
+                </h1>
               </div>
             </div>
 
@@ -281,26 +422,31 @@ export default function LoginPage() {
                 e.preventDefault();
                 handleLogin();
               }}
+              autoComplete="off"
             >
               <input
-                className="w-full mb-3 px-4 py-2 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)]"
+                className="w-full mb-3 px-4 py-2 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]"
                 placeholder="Username"
+                name="sm-username"
+                autoComplete="off"
                 value={user}
                 onChange={e => setUser(e.target.value)}
               />
 
               <div className="relative mb-5">
                 <input
-                  className="w-full px-4 py-2 pr-12 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)]"
+                  className="w-full px-4 py-2 pr-12 text-base rounded-lg border border-[var(--c-e5e3dd)] bg-white/70 backdrop-blur-md outline-none focus:border-[var(--c-c8102e)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Password"
+                  name="sm-password"
+                  autoComplete="new-password"
                   value={pass}
                   onChange={e => setPass(e.target.value)}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(current => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[var(--c-6f6c65)] transition hover:text-[var(--c-1f1f1d)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -338,7 +484,7 @@ export default function LoginPage() {
               </div>
 
               {error ? (
-                <div className="mb-4 rounded-lg border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-2 text-sm text-[var(--c-8f2f3b)]">
+                <div className="mb-4 rounded-lg border border-[var(--c-f2d7db)] bg-[var(--c-fff5f6)] px-3 py-2 text-sm text-[var(--c-8f2f3b)] [[data-theme=dark]_&]:bg-[var(--c-f2d7db)]/30">
                   <p className="uppercase tracking-[0.2em]">{error}</p>
                 </div>
               ) : null}
@@ -359,46 +505,41 @@ export default function LoginPage() {
                   setLookupValue('');
                   setDeliveryMethod('authenticator');
                 }}
-                className="mt-3 w-full rounded-lg border py-2 text-sm font-medium transition hover:border-[color:var(--c-c8102e)]/40"
-                style={{
-                  backgroundColor: '#ffffff',
-                  color: '#111111',
-                  borderColor: '#e5e3dd',
-                }}
+                className="mt-3 w-full rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-sm font-medium text-[var(--c-2b2b27)] transition hover:border-[color:var(--c-c8102e)]/40 [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:text-[var(--c-3a3935)]"
               >
                 Forgot Password
               </button>
 
               {isTeacherRole ? (
-                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5">
+                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5 [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)]">
                   <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
                     Inquire About Teaching
                   </p>
-                  <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  <p className="mt-2 text-sm text-[var(--c-6f6c65)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                     Curious about becoming a Simply Music Teacher?
                     <br />
                     We can help you explore the next steps.
                   </p>
                   <a
                     href="/embed/lead-form"
-                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40 [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)]"
                   >
                     Learn More
                   </a>
                 </div>
               ) : roleParam === 'student' ? (
-                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5">
+                <div className="mt-6 rounded-2xl border border-[var(--c-e5e3dd)] bg-[var(--c-fcfcfb)] p-5 [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)]">
                   <p className="text-base font-semibold text-[var(--c-1f1f1d)]">
                     Create An Account
                   </p>
-                  <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  <p className="mt-2 text-sm text-[var(--c-6f6c65)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                     New to Simply Music?
                     <br />
                     Create your account to get started.
                   </p>
                   <a
-                    href="/simplymusic/students"
-                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
+                    href="/student-registration"
+                    className="mt-4 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40 [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)]"
                   >
                     Create Account
                   </a>
@@ -407,8 +548,49 @@ export default function LoginPage() {
             </form>
           </div>
 
-          {showDemo ? (
-            <div className="w-full max-w-2xl rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+          {showWelcomePanel ? (
+            <div className="w-full max-w-2xl select-none rounded-2xl border border-[var(--c-c8102e)] bg-[var(--c-c8102e)] p-6 shadow-sm">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-white p-6 [[data-theme=dark]_&]:bg-white">
+                <p className="text-sm uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+                  Congratulations
+                </p>
+                <h2 className="mt-3 text-[34px] font-semibold text-[var(--c-1f1f1d)]">
+                  Welcome to Simply Music!
+                </h2>
+                <p className="mt-3 text-xl font-semibold text-[var(--c-3a3935)]">
+                  {displayName}, your Simply Music Teaching Journey Starts Now.
+                  We are super excited to have you as part of the Teaching Team!
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[var(--c-3a3935)]">
+                  Log in to set your username, access your training hub, and
+                  begin your curriculum roadmap.
+                </p>
+                <div className="mt-6 flex flex-col gap-4">
+                  <div className="rounded-xl border border-[var(--c-ecebe7)] bg-white p-5 shadow-sm">
+                    <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                      Next Steps
+                    </p>
+                    <p className="mt-2 text-base text-[var(--c-6f6c65)]">
+                      Log in now to explore your dashboard, start your training,
+                      and get comfortable with the flow — you’ll be teaching in
+                      no time.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--c-ecebe7)] bg-white p-5 shadow-sm">
+                    <p className="text-sm uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                      Need Help?
+                    </p>
+                    <p className="mt-2 text-base text-[var(--c-6f6c65)]">
+                      Our Training Team &amp; Coaches are standing by to help guide
+                      you through your first training steps. You can always reach
+                      out from your dashboard.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : showDemo ? (
+            <div className="w-full max-w-2xl rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)]">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
@@ -443,14 +625,14 @@ export default function LoginPage() {
                     }
                     fallbackCopy();
                   }}
-                  className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                  className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1 text-xs text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]"
                   title="Copy password"
                 >
                   Coffee@Sunrise@2026
                 </button>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-[var(--c-ecebe7)]">
-                <div className="grid grid-cols-[32px_1.2fr_0.8fr_1.2fr] gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                <div className="grid grid-cols-[32px_1.2fr_0.8fr_1.2fr] gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] [[data-theme=dark]_&]:bg-[var(--c-efece6)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                   <div />
                   <div>Username</div>
                   <div>Role</div>
@@ -458,7 +640,7 @@ export default function LoginPage() {
                 </div>
                 <div className="divide-y divide-[var(--c-ecebe7)]">
                   {demoAccounts.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-[var(--c-6f6c65)]">
+                    <div className="px-4 py-3 text-sm text-[var(--c-6f6c65)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                       No demo accounts found.
                     </div>
                   ) : (
@@ -466,11 +648,11 @@ export default function LoginPage() {
                       let lastStudio: string | null = null;
                       return (
                         <div key={group.key}>
-                          <div className="bg-[var(--c-f7f7f5)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          <div className="bg-[var(--c-f7f7f5)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] [[data-theme=dark]_&]:bg-[var(--c-efece6)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                             {group.label}
                           </div>
                           {group.accounts.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-[var(--c-6f6c65)]">
+                            <div className="px-4 py-3 text-sm text-[var(--c-6f6c65)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                               No demo accounts available.
                             </div>
                           ) : (
@@ -484,16 +666,23 @@ export default function LoginPage() {
                               return (
                                 <div key={`${account.username}-${account.role}`}>
                                   {showStudioHeader ? (
-                                    <div className="bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                                    <div className="bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-9a9892)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                                       {studioName}
                                     </div>
                                   ) : null}
                                   <div
-                                    className="grid cursor-pointer grid-cols-[32px_1.2fr_0.8fr_1.2fr] items-center gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm"
+                                    className="grid cursor-pointer grid-cols-[32px_1.2fr_0.8fr_1.2fr] items-center gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm [[data-theme=dark]_&]:hover:bg-[var(--c-efece6)]"
                                     onClick={() => {
                                       setUser(account.username);
-                                      setPass('Coffee@Sunrise@2026');
-                                      handleLogin(account.username, 'Coffee@Sunrise@2026');
+                                      if (account.autoLoginPassword) {
+                                        setPass(account.autoLoginPassword);
+                                        handleLogin(
+                                          account.username,
+                                          account.autoLoginPassword,
+                                        );
+                                      } else {
+                                        setPass('');
+                                      }
                                     }}
                                   >
                                     <div className="flex items-center gap-1 text-[var(--c-6f6c65)]">
@@ -644,7 +833,7 @@ export default function LoginPage() {
                         Create your account to get started.
                       </p>
                       <a
-                        href="/simplymusic/students"
+                        href="/student-registration"
                         className="mt-3 inline-flex items-center justify-center rounded-lg border border-[var(--c-e5e3dd)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)] transition hover:border-[color:var(--c-c8102e)]/40"
                       >
                         Create Account

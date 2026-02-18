@@ -990,7 +990,7 @@ export default function TeacherDashboardPage() {
             Your studio snapshot, schedule, and fees in one place.
           </p>
         </header>
-        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm">
+        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm select-none">
           <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
             Local Time
           </p>
@@ -1438,10 +1438,10 @@ export default function TeacherDashboardPage() {
                         event.stopPropagation();
                         setCommunicationsViewerOpen(true);
                       }}
-                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]"
                     >
                       Viewed By
-                      <span className="rounded-full bg-[var(--c-e7eddc)] px-2 py-1 text-[10px] font-semibold text-[var(--c-3a3935)]">
+                      <span className="rounded-full bg-[var(--c-e7eddc)] px-2 py-1 text-[10px] font-semibold text-[var(--c-3a3935)] [[data-theme=dark]_&]:bg-[var(--c-2d6a4f)]/20 [[data-theme=dark]_&]:text-[var(--c-2d6a4f)]">
                         {communicationsViewedBy.length}
                       </span>
                     </button>
@@ -1452,10 +1452,10 @@ export default function TeacherDashboardPage() {
                         event.stopPropagation();
                         setCommunicationsViewerOpen(true);
                       }}
-                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                      className="inline-flex items-center gap-2 rounded-full border border-[var(--c-e5e3dd)] bg-white px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)] [[data-theme=dark]_&]:border-[var(--c-ecebe7)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]"
                     >
                       Not Seen By
-                      <span className="rounded-full bg-[var(--c-fce8d6)] px-2 py-1 text-[10px] font-semibold text-[var(--c-8a5b2b)]">
+                      <span className="rounded-full bg-[var(--c-fce8d6)] px-2 py-1 text-[10px] font-semibold text-[var(--c-8a5b2b)] [[data-theme=dark]_&]:bg-[var(--c-7a4a17)]/20 [[data-theme=dark]_&]:text-[var(--c-7a4a17)]">
                         {communicationsNotSeenBy.length}
                       </span>
                     </button>

@@ -27,6 +27,7 @@ type Teacher = {
   name: string;
   email: string;
   username?: string;
+  status?: string;
 };
 
 type Message = {
@@ -86,11 +87,14 @@ export default function TeacherMessagesPage() {
   );
   const [activeTeacher, setActiveTeacher] = useState<Teacher | null>(null);
   const [viewerRole, setViewerRole] = useState<string | null>(null);
+  const [teacherStatus, setTeacherStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (!stored) {
-      setActiveTeacher(teachers[0] ?? null);
+      const fallback = teachers[0] ?? null;
+      setActiveTeacher(fallback);
+      setTeacherStatus(fallback?.status ?? null);
       return;
     }
     try {
@@ -102,12 +106,15 @@ export default function TeacherMessagesPage() {
             (teacher) => teacher.username === parsed.username
           ) ?? teachers[0] ?? null;
         setActiveTeacher(match);
+        setTeacherStatus(match?.status ?? null);
         return;
       }
       if (parsed?.role === "company") {
         const storedView = window.localStorage.getItem(VIEW_ROLE_STORAGE_KEY);
         if (storedView !== "teacher") {
-          setActiveTeacher(teachers[0] ?? null);
+          const fallback = teachers[0] ?? null;
+          setActiveTeacher(fallback);
+          setTeacherStatus(fallback?.status ?? null);
           return;
         }
         const viewTeacherKey = parsed?.username
@@ -124,18 +131,27 @@ export default function TeacherMessagesPage() {
                 (teacher) => teacher.username === selected?.username
               ) ?? teachers[0] ?? null;
             setActiveTeacher(match);
+            setTeacherStatus(match?.status ?? null);
             return;
           } catch {
-            setActiveTeacher(teachers[0] ?? null);
+            const fallback = teachers[0] ?? null;
+            setActiveTeacher(fallback);
+            setTeacherStatus(fallback?.status ?? null);
             return;
           }
         }
-        setActiveTeacher(teachers[0] ?? null);
+        const fallback = teachers[0] ?? null;
+        setActiveTeacher(fallback);
+        setTeacherStatus(fallback?.status ?? null);
         return;
       }
-      setActiveTeacher(teachers[0] ?? null);
+      const fallback = teachers[0] ?? null;
+      setActiveTeacher(fallback);
+      setTeacherStatus(fallback?.status ?? null);
     } catch {
-      setActiveTeacher(teachers[0] ?? null);
+      const fallback = teachers[0] ?? null;
+      setActiveTeacher(fallback);
+      setTeacherStatus(fallback?.status ?? null);
       setViewerRole(null);
     }
   }, [teachers]);
@@ -245,6 +261,14 @@ export default function TeacherMessagesPage() {
   const activeStudent = students.find(
     (student) => student.id === selectedStudentId
   );
+  const isTrainingTeacher =
+    viewerRole === "teacher" && teacherStatus === "Training";
+
+  useEffect(() => {
+    if (!isTrainingTeacher) return;
+    setRecipientType("corporate");
+    setIsRecipientModalOpen(false);
+  }, [isTrainingTeacher]);
 
   const activeThreadId =
     recipientType === "corporate"
@@ -435,23 +459,25 @@ export default function TeacherMessagesPage() {
           Messages
         </h1>
         <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-          Keep track of student conversations and studio updates in one place.
+          Reach out if you have any questions regarding your ITTP. We are here to help!
         </p>
       </header>
 
-      <section className="min-h-[calc(100vh-220px)] rounded-[28px] border border-[var(--c-ecebe7)] bg-[linear-gradient(160deg,var(--c-f7f7f5),var(--c-ffffff)_55%,var(--c-f8f6f1))] p-6 shadow-[0_20px_60px_-40px_rgba(15,15,15,0.35)]">
+      <section className="rounded-[28px] border border-[var(--c-ecebe7)] bg-[linear-gradient(160deg,var(--c-f7f7f5),var(--c-ffffff)_55%,var(--c-f8f6f1))] px-6 pt-6 pb-6 shadow-[0_20px_60px_-40px_rgba(15,15,15,0.35)]">
         <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] pb-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-[var(--c-1f1f1d)]">
               Send a message
             </h2>
-            <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
-              Select a recipient and send a quick update or note.
-            </p>
+            {!isTrainingTeacher ? (
+              <p className="mt-1 text-sm text-[var(--c-6f6c65)]">
+                Select a recipient and send a quick update or note.
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="mt-6 grid items-stretch gap-6 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-6">
             <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/80 p-4 backdrop-blur">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
@@ -485,12 +511,14 @@ export default function TeacherMessagesPage() {
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => setIsRecipientModalOpen(true)}
-                className="mt-4 w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-1f1f1d)] hover:text-[var(--c-1f1f1d)]"
-              >
-                Choose Recipient
-              </button>
+              {isTrainingTeacher ? null : (
+                <button
+                  onClick={() => setIsRecipientModalOpen(true)}
+                  className="mt-4 w-full rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-1f1f1d)] hover:text-[var(--c-1f1f1d)]"
+                >
+                  Choose Recipient
+                </button>
+              )}
             </div>
 
             <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/85 p-4 backdrop-blur">
@@ -584,7 +612,7 @@ export default function TeacherMessagesPage() {
           </aside>
 
           <div className="flex min-h-[calc(100vh-420px)] flex-col rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/90 backdrop-blur overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 border-b border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
                   Conversation
@@ -601,7 +629,7 @@ export default function TeacherMessagesPage() {
                 ) : null}
                 {recipientType === "corporate" ? (
                   <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
-                    Shared studio line
+                    Corporate inbox
                   </p>
                 ) : activeStudent ? null : (
                   <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
@@ -714,8 +742,8 @@ export default function TeacherMessagesPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-[var(--c-ecebe7)] bg-[var(--c-e6f4ff)] px-5 py-4">
-              <div className="rounded-2xl border border-[var(--c-d9e2ef)] bg-[var(--c-d9e2ef)] px-4 py-3">
+            <div className="border-t border-[var(--c-ecebe7)] bg-[var(--c-e7eddc)] px-5 py-4">
+              <div className="rounded-2xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--c-6f6c65)]">
@@ -865,14 +893,11 @@ export default function TeacherMessagesPage() {
                 Selected
               </p>
               {recipientType === "corporate" ? (
-                <div className="mt-2">
-                  <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
-                    Corporate Inbox
-                  </p>
-                  <p className="text-xs text-[var(--c-6f6c65)]">
-                    Shared by studio leadership.
-                  </p>
-                </div>
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
+                      Corporate Inbox
+                    </p>
+                  </div>
               ) : activeStudent ? (
                 <div className="mt-2">
                   <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">

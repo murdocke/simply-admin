@@ -1,22 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { AUTH_STORAGE_KEY, roleHome, type AuthUser } from '../../(admin)/components/auth';
-
-const menuItems = [
-  { label: 'Teachers', href: '/simplymusic/teachers' },
-  { label: 'Students', href: '/simplymusic/students' },
-  { label: 'Self-study', href: 'https://simplymusic.com/self-study/' },
-  { label: 'Special Needs', href: 'https://simplymusic.com/special-needs/' },
-  { label: 'Locate', href: '/simplymusic/locator', active: true },
-  { label: 'About', href: 'https://simplymusic.com/about/' },
-  { label: 'Blog', href: 'https://simplymusic.com/blog/' },
-];
+import PublicTopNav from '../components/public-top-nav';
 
 const statusOrder = ['Master', 'Advanced', 'Certified', 'Licensed'] as const;
 
-type TeacherStatus = (typeof statusOrder)[number] | 'Trainee';
+type TeacherStatus = (typeof statusOrder)[number];
 
 type Teacher = {
   id: string;
@@ -30,78 +19,43 @@ type Teacher = {
   coordinates: { x: number; y: number };
 };
 
-const teachers: Teacher[] = [
-  {
-    id: 't1',
-    name: 'Ava Bennett',
-    status: 'Master',
-    distance: 3.2,
-    address: '3810 Laurel Heights Dr',
-    zip: '75024',
-    online: true,
-    specialNeeds: false,
-    coordinates: { x: 62, y: 42 },
-  },
-  {
-    id: 't2',
-    name: 'Brian Gray',
-    status: 'Advanced',
-    distance: 5.7,
-    address: 'Riffs & Chops Studio',
-    zip: '75075',
-    online: false,
-    specialNeeds: true,
-    coordinates: { x: 54, y: 58 },
-  },
-  {
-    id: 't3',
-    name: 'Kim Nelson',
-    status: 'Certified',
-    distance: 8.9,
-    address: '7309 Hillview Dr',
-    zip: '75023',
-    online: true,
-    specialNeeds: true,
-    coordinates: { x: 40, y: 64 },
-  },
-  {
-    id: 't4',
-    name: 'Lanette Saetre',
-    status: 'Licensed',
-    distance: 12.2,
-    address: 'Sergey Synergy',
-    zip: '75001',
+type TeacherApiRecord = {
+  id: string;
+  name: string;
+  username: string;
+  region?: string;
+  status?: string;
+};
+
+const normalizeStatus = (status?: string): TeacherStatus => {
+  if (statusOrder.includes(status as TeacherStatus)) {
+    return status as TeacherStatus;
+  }
+  return 'Licensed';
+};
+
+const toTeacher = (teacher: TeacherApiRecord, index: number): Teacher => {
+  const distance = 2 + index * 1.7;
+  return {
+    id: teacher.id,
+    name: teacher.name || teacher.username || 'Simply Music Teacher',
+    status: normalizeStatus(teacher.status),
+    distance,
+    address: teacher.region || 'Simply Music Studio',
+    zip: '',
     online: false,
     specialNeeds: false,
-    coordinates: { x: 68, y: 70 },
-  },
-  {
-    id: 't5',
-    name: 'Tamar Milenewicz',
-    status: 'Certified',
-    distance: 14.6,
-    address: 'Blue Jay Piano Academy',
-    zip: '75013',
-    online: true,
-    specialNeeds: false,
-    coordinates: { x: 74, y: 50 },
-  },
-  {
-    id: 't6',
-    name: 'Owen Carlisle',
-    status: 'Trainee',
-    distance: 1.9,
-    address: 'Piano Launchpad',
-    zip: '75024',
-    online: true,
-    specialNeeds: false,
-    coordinates: { x: 36, y: 46 },
-  },
-];
+    coordinates: {
+      x: 18 + ((index * 13) % 70),
+      y: 20 + ((index * 17) % 60),
+    },
+  };
+};
 
 export default function LocatorPage() {
-  const [accountHref, setAccountHref] = useState('/login');
-  const [accountLabel, setAccountLabel] = useState('Login');
+  useEffect(() => {
+    document.documentElement.dataset.theme = 'light';
+  }, []);
 
   useEffect(() => {
     document.title = 'Teacher Locator | Simply Music';
@@ -117,19 +71,37 @@ export default function LocatorPage() {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sortOption, setSortOption] = useState<'Any' | 'Relevance' | 'Distance'>('Any');
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as AuthUser;
-      if (parsed?.role && roleHome[parsed.role]) {
-        setAccountHref(roleHome[parsed.role]);
-        setAccountLabel('My Account');
+    let isMounted = true;
+    const loadTeachers = async () => {
+      try {
+        const response = await fetch('/api/teachers');
+        const data = (await response.json()) as { teachers?: TeacherApiRecord[] };
+        if (!isMounted) return;
+        const next = (data.teachers ?? [])
+          .filter(
+            teacher =>
+              teacher.status !== 'Training' && teacher.status !== 'Interested',
+          )
+          .map(toTeacher);
+        setTeachers(next);
+      } catch {
+        if (isMounted) {
+          setTeachers([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTeachers(false);
+        }
       }
-    } catch {
-      // ignore
-    }
+    };
+    loadTeachers();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredTeachers = useMemo(() => {
@@ -140,7 +112,6 @@ export default function LocatorPage() {
     const normalizedZip = zipQuery.trim();
 
     return teachers
-      .filter(t => t.status !== 'Trainee')
       .filter(t => t.distance <= maxDistance)
       .filter(t => (normalizedZip ? t.zip.startsWith(normalizedZip) : true))
       .filter(t => (normalizedName ? t.name.toLowerCase().includes(normalizedName) : true))
@@ -165,72 +136,7 @@ export default function LocatorPage() {
 
   return (
     <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
-      <header>
-        <div
-          style={{
-            maxWidth: 1170,
-            margin: '0 auto',
-            padding: '20px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 24,
-          }}
-        >
-          <Link href="/simplymusic/teachers" aria-label="Simply Music">
-            <img
-              src="https://simplymusic.com/wp-content/uploads/2024/02/simply-music-logo.svg"
-              alt="Simply Music"
-              style={{ width: 70, height: 70, display: 'block', borderRadius: 12 }}
-            />
-          </Link>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-            <nav style={{ display: 'flex', gap: 28, fontSize: 16 }}>
-              {menuItems.map(item => {
-                const isExternal = item.href.startsWith('http');
-                const color = item.active ? '#E31F26' : '#222';
-                if (isExternal) {
-                  return (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      style={{ color, textDecoration: 'none', fontWeight: 400 }}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {item.label}
-                    </a>
-                  );
-                }
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    style={{ color, textDecoration: 'none', fontWeight: 400 }}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-            <Link
-              href={accountHref}
-              style={{
-                background: '#E31F26',
-                color: '#fff',
-                padding: '10px 20px',
-                borderRadius: 10,
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              {accountLabel}
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicTopNav activeHref="/simplymusic/locator" />
 
       <main style={{ maxWidth: 1170, margin: '0 auto', padding: '40px 24px 90px' }}>
         <section
@@ -602,7 +508,20 @@ export default function LocatorPage() {
             }}
           >
             <div style={{ display: 'grid', gap: 18 }}>
-              {hasSearched && filteredTeachers.length === 0 ? (
+              {isLoadingTeachers && hasSearched ? (
+                <div
+                  style={{
+                    padding: '20px 24px',
+                    borderRadius: 16,
+                    border: '1px solid #ece8e1',
+                    background: '#faf7f1',
+                    color: '#6d6d6d',
+                  }}
+                >
+                  Loading teachers...
+                </div>
+              ) : null}
+              {hasSearched && !isLoadingTeachers && filteredTeachers.length === 0 ? (
                 <div
                   style={{
                     padding: '20px 24px',

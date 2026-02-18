@@ -40,6 +40,10 @@ const initialState: FormState = {
 };
 
 export default function QuestionnairePage() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = 'light';
+  }, []);
+
   const searchParams = useSearchParams();
   const token = searchParams.get('token') ?? '';
   const [interestName, setInterestName] = useState<string | null>(null);
@@ -86,7 +90,19 @@ export default function QuestionnairePage() {
         const data = (await response.json()) as {
           name?: string | null;
           alertId?: string | null;
+          isRegisteredTraining?: boolean;
+          teacherName?: string | null;
+          teacherEmail?: string | null;
         };
+        if (data?.isRegisteredTraining) {
+          const params = new URLSearchParams();
+          params.set('role', 'teacher');
+          params.set('welcome', '1');
+          if (data.teacherEmail) params.set('email', data.teacherEmail);
+          if (data.teacherName) params.set('name', data.teacherName);
+          window.location.replace(`/login?${params.toString()}`);
+          return null;
+        }
         if (data?.alertId) {
           setAlertId(data.alertId);
         }

@@ -16,6 +16,7 @@ type TeacherRecord = {
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -57,6 +58,7 @@ const normalizeTeacherStatus = (
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -68,6 +70,7 @@ const statusStyles: Record<string, string> = {
   Certified: 'bg-[var(--c-e6eef8)] text-[var(--c-28527a)]',
   Advanced: 'bg-[var(--c-f4f0ff)] text-[var(--c-47308a)]',
   Master: 'bg-[var(--c-fff2d9)] text-[var(--c-7a4a17)]',
+  Training: 'bg-emerald-100 text-emerald-800',
   Onboarding: 'bg-[var(--c-fff2d9)] text-[var(--c-8a5b2b)]',
   Interested: 'bg-[var(--c-e6f4ff)] text-[var(--c-28527a)]',
   Inactive: 'bg-[var(--c-f3e5e5)] text-[var(--c-7a3b3b)]',
@@ -94,6 +97,12 @@ export default function AccountsPage() {
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentPage, setStudentPage] = useState(1);
   const [unlinkedPage, setUnlinkedPage] = useState(1);
+  const [teacherSearch, setTeacherSearch] = useState('');
+  const [teacherStatusFilter, setTeacherStatusFilter] = useState('All');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentStatusFilter, setStudentStatusFilter] = useState('All');
+  const [unlinkedSearch, setUnlinkedSearch] = useState('');
+  const [unlinkedStatusFilter, setUnlinkedStatusFilter] = useState('All');
   const teacherPageSize = 20;
   const studentPageSize = 10;
   const unlinkedPageSize = 10;
@@ -202,7 +211,10 @@ export default function AccountsPage() {
         );
         const data = (await response.json()) as { teachers: TeacherRecord[] };
         if (isActive) {
-          setTeachers(data.teachers ?? []);
+          const filtered = (data.teachers ?? []).filter(
+            teacher => teacher.status !== 'Interested',
+          );
+          setTeachers(filtered);
         }
       } catch {
         if (isActive) setError('Unable to load teachers right now.');
@@ -271,30 +283,97 @@ export default function AccountsPage() {
   }, []);
 
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
+  const teacherStatusOptions = useMemo(() => {
+    const values = teachers.map(teacher =>
+      normalizeTeacherStatus(teacher.status),
+    );
+    return Array.from(new Set(values)).sort();
+  }, [teachers]);
+  const studentStatusOptions = useMemo(() => {
+    const values = students.map(student => student.status);
+    return Array.from(new Set(values)).sort();
+  }, [students]);
+  const unlinkedStatusOptions = useMemo(() => {
+    const values = unlinkedStudents.map(student => student.status);
+    return Array.from(new Set(values)).sort();
+  }, [unlinkedStudents]);
+
+  const filteredTeachers = useMemo(() => {
+    const search = teacherSearch.trim().toLowerCase();
+    return teachers.filter(teacher => {
+      const normalizedStatus = normalizeTeacherStatus(teacher.status);
+      if (teacherStatusFilter !== 'All' && normalizedStatus !== teacherStatusFilter) {
+        return false;
+      }
+      if (!search) return true;
+      return (
+        teacher.name.toLowerCase().includes(search) ||
+        (teacher.email ?? '').toLowerCase().includes(search) ||
+        (teacher.username ?? '').toLowerCase().includes(search) ||
+        (teacher.region ?? '').toLowerCase().includes(search)
+      );
+    });
+  }, [teachers, teacherSearch, teacherStatusFilter]);
+
+  const filteredStudents = useMemo(() => {
+    const search = studentSearch.trim().toLowerCase();
+    return students.filter(student => {
+      if (studentStatusFilter !== 'All' && student.status !== studentStatusFilter) {
+        return false;
+      }
+      if (!search) return true;
+      return (
+        student.name.toLowerCase().includes(search) ||
+        (student.email ?? '').toLowerCase().includes(search)
+      );
+    });
+  }, [students, studentSearch, studentStatusFilter]);
+
+  const filteredUnlinked = useMemo(() => {
+    const search = unlinkedSearch.trim().toLowerCase();
+    return unlinkedStudents.filter(student => {
+      if (unlinkedStatusFilter !== 'All' && student.status !== unlinkedStatusFilter) {
+        return false;
+      }
+      if (!search) return true;
+      return (
+        student.name.toLowerCase().includes(search) ||
+        (student.email ?? '').toLowerCase().includes(search)
+      );
+    });
+  }, [unlinkedStudents, unlinkedSearch, unlinkedStatusFilter]);
+
+  useEffect(() => {
+    setTeacherPage(1);
+  }, [teacherSearch, teacherStatusFilter]);
+
+  useEffect(() => {
+    setStudentPage(1);
+  }, [studentSearch, studentStatusFilter]);
+
+  useEffect(() => {
+    setUnlinkedPage(1);
+  }, [unlinkedSearch, unlinkedStatusFilter]);
   const statusCounts = useMemo(() => {
     return teachers.reduce(
       (acc, teacher) => {
         const status = normalizeTeacherStatus(teacher.status);
         if (status === 'Licensed') {
-          acc.total += 1;
           acc.licensed += 1;
         }
         if (status === 'Certified') {
-          acc.total += 1;
           acc.certified += 1;
         }
         if (status === 'Advanced') {
-          acc.total += 1;
           acc.advanced += 1;
         }
         if (status === 'Master') {
-          acc.total += 1;
           acc.master += 1;
         }
         return acc;
       },
       {
-        total: 0,
+        total: teachers.length,
         licensed: 0,
         certified: 0,
         advanced: 0,
@@ -303,13 +382,13 @@ export default function AccountsPage() {
     );
   }, [teachers]);
   const teacherTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(teachers.length / teacherPageSize)),
-    [teachers.length],
+    () => Math.max(1, Math.ceil(filteredTeachers.length / teacherPageSize)),
+    [filteredTeachers.length],
   );
   const pagedTeachers = useMemo(() => {
     const start = (teacherPage - 1) * teacherPageSize;
-    return teachers.slice(start, start + teacherPageSize);
-  }, [teacherPage, teacherPageSize, teachers]);
+    return filteredTeachers.slice(start, start + teacherPageSize);
+  }, [teacherPage, teacherPageSize, filteredTeachers]);
   const selectedTeacherInfo = useMemo(() => {
     if (!selectedTeacher) return null;
     return (
@@ -317,21 +396,21 @@ export default function AccountsPage() {
     );
   }, [selectedTeacher, teachers]);
   const studentTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(students.length / studentPageSize)),
-    [students.length],
+    () => Math.max(1, Math.ceil(filteredStudents.length / studentPageSize)),
+    [filteredStudents.length],
   );
   const pagedStudents = useMemo(() => {
     const start = (studentPage - 1) * studentPageSize;
-    return students.slice(start, start + studentPageSize);
-  }, [studentPage, studentPageSize, students]);
+    return filteredStudents.slice(start, start + studentPageSize);
+  }, [studentPage, studentPageSize, filteredStudents]);
   const unlinkedTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(unlinkedStudents.length / unlinkedPageSize)),
-    [unlinkedStudents.length],
+    () => Math.max(1, Math.ceil(filteredUnlinked.length / unlinkedPageSize)),
+    [filteredUnlinked.length],
   );
   const pagedUnlinked = useMemo(() => {
     const start = (unlinkedPage - 1) * unlinkedPageSize;
-    return unlinkedStudents.slice(start, start + unlinkedPageSize);
-  }, [unlinkedPage, unlinkedPageSize, unlinkedStudents]);
+    return filteredUnlinked.slice(start, start + unlinkedPageSize);
+  }, [unlinkedPage, unlinkedPageSize, filteredUnlinked]);
 
   const openCreateModal = () => {
     setEditing(null);
@@ -618,6 +697,17 @@ export default function AccountsPage() {
               <p className="text-sm text-[var(--c-6f6c65)] mt-1">
                 {selectedTeacherInfo?.email ?? 'Email on file'}
               </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                <span>{students.length} students</span>
+                <span>•</span>
+                <span>
+                  {students.filter(student => student.status === 'Active').length} active
+                </span>
+                <span>•</span>
+                <span>
+                  {students.filter(student => student.status === 'Archived').length} archived
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
               {selectedTeacherInfo?.region ? (
@@ -636,9 +726,6 @@ export default function AccountsPage() {
                   {normalizeTeacherStatus(selectedTeacherInfo.status)}
                 </span>
               ) : null}
-              <span className="rounded-full border border-[var(--c-e5e3dd)] px-3 py-1">
-                {students.length} students
-              </span>
             </div>
           </div>
         </section>
@@ -655,6 +742,34 @@ export default function AccountsPage() {
             </p>
           </div>
         </div>
+        {unlinkedStudents.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input
+              value={unlinkedSearch}
+              onChange={event => {
+                const nextValue = event.target.value;
+                setUnlinkedSearch(nextValue);
+                if (nextValue.trim()) {
+                  setUnlinkedStatusFilter('All');
+                }
+              }}
+              placeholder="Search unlinked students..."
+              className="min-w-[220px] flex-1 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+            />
+            <select
+              value={unlinkedStatusFilter}
+              onChange={event => setUnlinkedStatusFilter(event.target.value)}
+              className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+            >
+              <option value="All">All Statuses</option>
+              {unlinkedStatusOptions.map(option => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
           <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
@@ -671,6 +786,10 @@ export default function AccountsPage() {
             ) : unlinkedStudents.length === 0 ? (
               <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
                 No unlinked students yet.
+              </div>
+            ) : filteredUnlinked.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                No students match this search.
               </div>
             ) : (
               pagedUnlinked.map(student => (
@@ -704,15 +823,15 @@ export default function AccountsPage() {
             )}
           </div>
         </div>
-        {unlinkedStudents.length > 0 ? (
+        {filteredUnlinked.length > 0 ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
             <span>
               Showing {(unlinkedPage - 1) * unlinkedPageSize + 1}-
               {Math.min(
                 unlinkedPage * unlinkedPageSize,
-                unlinkedStudents.length,
+                filteredUnlinked.length,
               )}{' '}
-              of {unlinkedStudents.length}
+              of {filteredUnlinked.length}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -775,6 +894,34 @@ export default function AccountsPage() {
             </p>
           ) : null}
         </div>
+        {teachers.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input
+              value={teacherSearch}
+              onChange={event => {
+                const nextValue = event.target.value;
+                setTeacherSearch(nextValue);
+                if (nextValue.trim()) {
+                  setTeacherStatusFilter('All');
+                }
+              }}
+              placeholder="Search teachers..."
+              className="min-w-[220px] flex-1 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+            />
+            <select
+              value={teacherStatusFilter}
+              onChange={event => setTeacherStatusFilter(event.target.value)}
+              className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+            >
+              <option value="All">All Statuses</option>
+              {teacherStatusOptions.map(option => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
           <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
@@ -792,6 +939,10 @@ export default function AccountsPage() {
             ) : teachers.length === 0 ? (
               <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
                 No teachers yet. Add your first teacher to get started.
+              </div>
+            ) : filteredTeachers.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                No teachers match this search.
               </div>
             ) : (
               pagedTeachers.map(teacher => (
@@ -855,12 +1006,12 @@ export default function AccountsPage() {
             )}
           </div>
         </div>
-        {teachers.length > 0 ? (
+        {filteredTeachers.length > 0 ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
             <span>
               Showing {(teacherPage - 1) * teacherPageSize + 1}-
-              {Math.min(teacherPage * teacherPageSize, teachers.length)} of{' '}
-              {teachers.length}
+              {Math.min(teacherPage * teacherPageSize, filteredTeachers.length)} of{' '}
+              {filteredTeachers.length}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -914,11 +1065,47 @@ export default function AccountsPage() {
                 <p className="text-sm font-semibold text-[var(--c-1f1f1d)]">
                   Student Roster
                 </p>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                  {students.length} students
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  <span>{students.length} students</span>
+                  <span>•</span>
+                  <span>
+                    {students.filter(student => student.status === 'Active').length} active
+                  </span>
+                  <span>•</span>
+                  <span>
+                    {students.filter(student => student.status === 'Archived').length} archived
+                  </span>
+                </div>
               </div>
             </div>
+            {students.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <input
+                  value={studentSearch}
+                  onChange={event => {
+                    const nextValue = event.target.value;
+                    setStudentSearch(nextValue);
+                    if (nextValue.trim()) {
+                      setStudentStatusFilter('All');
+                    }
+                  }}
+                  placeholder="Search students..."
+                  className="min-w-[220px] flex-1 rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-sm text-[var(--c-1f1f1d)] outline-none focus:border-[var(--c-c8102e)]"
+                />
+                <select
+                  value={studentStatusFilter}
+                  onChange={event => setStudentStatusFilter(event.target.value)}
+                  className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
+                >
+                  <option value="All">All Statuses</option>
+                  {studentStatusOptions.map(option => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--c-ecebe7)]">
               <div className="grid grid-cols-12 gap-2 bg-[var(--c-f7f7f5)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
@@ -935,6 +1122,10 @@ export default function AccountsPage() {
                 ) : students.length === 0 ? (
                   <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
                     No students yet for this teacher.
+                  </div>
+                ) : filteredStudents.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-[var(--c-6f6c65)]">
+                    No students match this search.
                   </div>
                 ) : (
                   pagedStudents.map(student => (
@@ -969,12 +1160,12 @@ export default function AccountsPage() {
                 )}
               </div>
             </div>
-            {students.length > 0 ? (
+            {filteredStudents.length > 0 ? (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--c-6f6c65)]">
                 <span>
                   Showing {(studentPage - 1) * studentPageSize + 1}-
-                  {Math.min(studentPage * studentPageSize, students.length)} of{' '}
-                  {students.length}
+                  {Math.min(studentPage * studentPageSize, filteredStudents.length)} of{' '}
+                  {filteredStudents.length}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -1160,6 +1351,7 @@ export default function AccountsPage() {
                       'Certified',
                       'Advanced',
                       'Master',
+                      'Training',
                       'Onboarding',
                       'Interested',
                       'Inactive',

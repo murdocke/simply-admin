@@ -14,6 +14,7 @@ type TeacherRecord = {
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -34,6 +35,7 @@ const normalizeStatus = (
     | 'Certified'
     | 'Advanced'
     | 'Master'
+    | 'Training'
     | 'Onboarding'
     | 'Interested'
     | 'Inactive'
@@ -43,7 +45,7 @@ const normalizeStatus = (
 
 type AccountRecord = {
   username: string;
-  role: 'company' | 'teacher' | 'student' | 'parent';
+  role: 'company' | 'teacher' | 'student' | 'parent' | 'dev';
   name: string;
   email: string;
   status: string;
@@ -95,6 +97,7 @@ export async function POST(request: Request) {
       | 'Certified'
       | 'Advanced'
       | 'Master'
+      | 'Training'
       | 'Onboarding'
       | 'Interested'
       | 'Inactive'

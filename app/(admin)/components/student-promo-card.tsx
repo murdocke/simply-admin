@@ -58,7 +58,13 @@ export default function StudentPromoCard({
           className={`h-full w-full ${fitClass}`}
         />
         <div className={`absolute inset-0 ${overlayClass}`} />
-        <div className="absolute bottom-3 left-4 rounded-full border border-white/50 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-white">
+        <div
+          className={`absolute bottom-3 left-4 rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.32em] shadow-[0_16px_28px_-16px_rgba(0,0,0,0.75)] ${
+            theme === 'dark'
+              ? 'border-white/50 bg-white/10 text-white'
+              : 'border-black/15 bg-white/70 text-[var(--c-3a3935)]'
+          }`}
+        >
           {pillLabel}
         </div>
       </div>

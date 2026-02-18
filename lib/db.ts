@@ -216,6 +216,26 @@ function initSchema(db: Database.Database) {
       studio_role TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS teacher_training_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progress REAL,
+      created_at TEXT,
+      updated_at TEXT,
+      UNIQUE (username, item_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS teacher_training_activity (
+      username TEXT PRIMARY KEY,
+      first_opened_at TEXT,
+      last_opened_at TEXT,
+      last_session_seconds INTEGER,
+      updated_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS companies (
       username TEXT PRIMARY KEY,
       name TEXT,
@@ -464,6 +484,36 @@ function initSchema(db: Database.Database) {
       created_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS avatar_onboarding_videos (
+      id TEXT PRIMARY KEY,
+      video_key TEXT NOT NULL UNIQUE,
+      title TEXT,
+      description TEXT,
+      provider TEXT,
+      vimeo_id TEXT,
+      video_path TEXT,
+      open_on_load INTEGER DEFAULT 0,
+      auto_play INTEGER DEFAULT 1,
+      auto_close_on_end INTEGER DEFAULT 1,
+      open_after_modal_key TEXT,
+      open_button_label TEXT,
+      ui_ref_key TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS avatar_onboarding_images (
+      id TEXT PRIMARY KEY,
+      video_key TEXT NOT NULL,
+      image_path TEXT,
+      start_seconds REAL,
+      end_seconds REAL,
+      sort_order INTEGER,
+      ui_ref_key TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username);
     CREATE INDEX IF NOT EXISTS idx_students_teacher ON students(teacher);
     CREATE INDEX IF NOT EXISTS idx_teachers_company ON teachers(company);
@@ -475,6 +525,8 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notification_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_reg_verifications_alert ON registration_verification_codes(alert_id);
     CREATE INDEX IF NOT EXISTS idx_reg_verifications_channel ON registration_verification_codes(channel);
+    CREATE INDEX IF NOT EXISTS idx_avatar_onboarding_key ON avatar_onboarding_videos(video_key);
+    CREATE INDEX IF NOT EXISTS idx_avatar_onboarding_images_key ON avatar_onboarding_images(video_key);
   `);
 }
 
