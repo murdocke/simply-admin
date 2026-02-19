@@ -338,12 +338,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white text-[var(--c-1f1f1d)] relative overflow-hidden [[data-theme=dark]_&]:bg-[var(--c-f7f7f5)] [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white py-6 text-[var(--c-1f1f1d)] sm:py-8 md:py-0 [[data-theme=dark]_&]:bg-[var(--c-f7f7f5)] [[data-theme=dark]_&]:text-[var(--c-1f1f1d)]">
       <div className="absolute inset-0 z-0">
         {backgroundImages.map((src, index) => (
           <div
             key={src}
-            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] bg-contain bg-no-repeat transition-opacity duration-[2000ms] md:block ${
+            className={`absolute left-1/2 top-1/2 hidden h-[520px] w-[520px] bg-contain bg-no-repeat transition-opacity duration-[2000ms] lg:block ${
               showWelcomePanel
                 ? '-translate-x-[calc(110%+100px)] -translate-y-[calc(100%+100px)]'
                 : '-translate-x-[110%] -translate-y-[100%]'
@@ -359,13 +359,18 @@ export default function LoginPage() {
       </div>
       <div
         className={`relative z-10 w-full ${
-          error || showDemo || showWelcomePanel ? 'max-w-5xl' : 'max-w-md'
-        }`}
+          error || showDemo || showWelcomePanel ? 'xl:max-w-5xl' : 'md:max-w-md'
+        } px-4 sm:px-6`}
       >
-        <div className="flex flex-col gap-6 md:flex-row md:items-start">
+        <div
+          className={`flex flex-col gap-6 ${
+            showWelcomePanel ? 'xl:flex-row xl:items-start' : 'md:flex-row md:items-start'
+          }`}
+        >
           <div
-            className="relative w-full rounded-2xl border border-[var(--c-ecebe7)] bg-white/70 backdrop-blur-md p-8 shadow-sm select-none [[data-theme=dark]_&]:bg-[var(--c-efece6)]/90 [[data-theme=dark]_&]:border-[var(--c-e5e3dd)]"
-            style={{ maxWidth: 460 }}
+            className={`relative w-full max-w-full rounded-2xl border border-[var(--c-ecebe7)] bg-white/70 p-8 shadow-sm backdrop-blur-md select-none ${
+              showWelcomePanel ? 'xl:max-w-[460px]' : 'md:max-w-[460px]'
+            } [[data-theme=dark]_&]:bg-[var(--c-efece6)]/90 [[data-theme=dark]_&]:border-[var(--c-e5e3dd)]`}
           >
             {!showWelcomePanel ? (
               <button
@@ -549,7 +554,7 @@ export default function LoginPage() {
           </div>
 
           {showWelcomePanel ? (
-            <div className="w-full max-w-2xl select-none rounded-2xl border border-[var(--c-c8102e)] bg-[var(--c-c8102e)] p-6 shadow-sm">
+            <div className="w-full max-w-full select-none rounded-2xl border border-[var(--c-c8102e)] bg-[var(--c-c8102e)] p-6 shadow-sm xl:max-w-2xl">
               <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-white p-6 [[data-theme=dark]_&]:bg-white">
                 <p className="text-sm uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
                   Congratulations

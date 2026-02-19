@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useLessonData } from './use-lesson-data';
+import { type ChangeEvent, type MouseEvent, useEffect, useRef, useState } from 'react';
 
 type LastViewedVideo = {
   material: string;
@@ -23,10 +22,27 @@ type LastViewedVideoCardProps = {
   expandedShowOverlay?: boolean;
 };
 
-const LAST_VIEWED_KEY = 'sm_last_viewed_video';
+const DASHBOARD_VIDEOS = [
+  {
+    src: '/reference/videos/dreams-1.1.1.mp4',
+    title: 'Dreams Come True - 1.1.1',
+  },
+  {
+    src: '/reference/videos/night-storm-1.2.1.mp4',
+    title: 'Night Storm - 1.2.1',
+  },
+] as const;
 
-const sectionTitleFor = (material: string) =>
-  material.replace(/^\s*\d+(\.\d+)?\s*[–-]\s*/i, '').trim();
+const materialToVideoIndex = (material: string) =>
+  material.toLowerCase().includes('night storm') ? 1 : 0;
+
+const formatTime = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+  const total = Math.floor(seconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
 
 export default function LastViewedVideoCard({
   data,
@@ -40,71 +56,29 @@ export default function LastViewedVideoCard({
   expandedShowCenterText = true,
   expandedShowOverlay = true,
 }: LastViewedVideoCardProps) {
-  const { lessonParts } = useLessonData();
-  const [material, setMaterial] = useState(data.material);
-  const [part, setPart] = useState<string | null>(data.part ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpandedLocal, setIsExpandedLocal] = useState(false);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(() =>
+    materialToVideoIndex(data.material),
+  );
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.6);
+  const inlineVideoRef = useRef<HTMLVideoElement | null>(null);
+  const expandedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const pendingExpandedStartTimeRef = useRef<number | null>(null);
+  const isExpanded = expandedOpen ?? isExpandedLocal;
 
-  useEffect(() => {
-    setMaterial(data.material);
-    setPart(data.part ?? null);
-  }, [data.material, data.part]);
-
-  useEffect(() => {
-    if (expandedOpen === undefined) return;
-    setIsExpanded(expandedOpen);
-  }, [expandedOpen]);
-
-  const lessonPartItems = useMemo(() => {
-    const partsMap = lessonParts as Record<string, string[]>;
-    const matchedKey = Object.keys(partsMap).find(prefix =>
-      material.startsWith(prefix),
-    );
-    return matchedKey ? partsMap[matchedKey] ?? [] : [];
-  }, [lessonParts, material]);
-
-  useEffect(() => {
-    if (lessonPartItems.length === 0) {
-      setPart(null);
-      return;
-    }
-    if (!part || !lessonPartItems.includes(part)) {
-      setPart(lessonPartItems[0]);
-    }
-  }, [lessonPartItems, part]);
-
-  const materialIndex = data.materials
-    ? data.materials.indexOf(material)
-    : -1;
-  const hasNextMaterial =
-    data.materials &&
-    materialIndex >= 0 &&
-    materialIndex < data.materials.length - 1;
-  const hasPrevMaterial = data.materials && materialIndex > 0;
-
-  const partIndex = part ? lessonPartItems.indexOf(part) : -1;
-  const hasNextPart =
-    lessonPartItems.length > 0 &&
-    partIndex >= 0 &&
-    partIndex < lessonPartItems.length - 1;
-  const hasPrevPart = lessonPartItems.length > 0 && partIndex > 0;
-
-  const updateLastViewed = (next: Partial<LastViewedVideo>) => {
-    const payload: LastViewedVideo = {
-      material,
-      part: part ?? undefined,
-      materials: data.materials,
-      viewedAt: data.viewedAt,
-      ...next,
-    };
-    try {
-      window.localStorage.setItem(LAST_VIEWED_KEY, JSON.stringify(payload));
-      window.dispatchEvent(new Event('sm-last-viewed-video'));
-    } catch {
-      window.dispatchEvent(new Event('sm-last-viewed-video'));
+  const playVideo = (videoEl: HTMLVideoElement | null) => {
+    if (!videoEl) return;
+    const playPromise = videoEl.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => undefined);
     }
   };
+
+  const activeVideoRef = () =>
+    (isExpanded ? expandedVideoRef : inlineVideoRef).current;
 
   const closePip = () => {
     try {
@@ -122,42 +96,137 @@ export default function LastViewedVideoCard({
     }
   };
 
+  const openExpanded = () => {
+    const inlineVideo = inlineVideoRef.current;
+    pendingExpandedStartTimeRef.current = inlineVideo?.currentTime ?? currentTime;
+    if (inlineVideo) {
+      inlineVideo.pause();
+    }
+    if (expandedOpen === undefined) {
+      setIsExpandedLocal(true);
+    }
+    onExpandedChange?.(true);
+  };
+
+  const closeExpanded = () => {
+    const expandedVideo = expandedVideoRef.current;
+    const inlineVideo = inlineVideoRef.current;
+    const syncedTime = expandedVideo?.currentTime ?? currentTime;
+    if (expandedVideo) {
+      expandedVideo.pause();
+    }
+    if (inlineVideo) {
+      inlineVideo.currentTime = syncedTime;
+      inlineVideo.volume = volume;
+      if (isPlaying) {
+        playVideo(inlineVideo);
+      }
+    }
+    setCurrentTime(syncedTime);
+    if (expandedOpen === undefined) {
+      setIsExpandedLocal(false);
+    }
+    onExpandedChange?.(false);
+  };
+
   const handlePrev = () => {
-    if (hasPrevPart) {
-      const nextPart = lessonPartItems[partIndex - 1];
-      setPart(nextPart);
-      updateLastViewed({ part: nextPart });
-      return;
-    }
-    if (hasPrevMaterial && data.materials) {
-      const nextMaterial = data.materials[materialIndex - 1];
-      setMaterial(nextMaterial);
-      setPart(null);
-      updateLastViewed({ material: nextMaterial, part: undefined });
-    }
+    setCurrentVideoIndex(current => Math.max(0, current - 1));
+    setCurrentTime(0);
+    setDuration(0);
   };
 
   const handleNext = () => {
-    if (hasNextPart) {
-      const nextPart = lessonPartItems[partIndex + 1];
-      setPart(nextPart);
-      updateLastViewed({ part: nextPart });
+    setCurrentVideoIndex(current =>
+      Math.min(DASHBOARD_VIDEOS.length - 1, current + 1),
+    );
+    setCurrentTime(0);
+    setDuration(0);
+  };
+
+  const handleTimeUpdate = (player: 'inline' | 'expanded') => {
+    const isActivePlayer =
+      (player === 'expanded' && isExpanded) || (player === 'inline' && !isExpanded);
+    if (!isActivePlayer) return;
+    const source = player === 'expanded' ? expandedVideoRef.current : inlineVideoRef.current;
+    if (!source) return;
+    setCurrentTime(source.currentTime);
+  };
+
+  const handleMetadataLoad = (player: 'inline' | 'expanded') => {
+    const source = player === 'expanded' ? expandedVideoRef.current : inlineVideoRef.current;
+    if (!source) return;
+
+    if (player === 'expanded' && pendingExpandedStartTimeRef.current !== null) {
+      source.currentTime = pendingExpandedStartTimeRef.current;
+      pendingExpandedStartTimeRef.current = null;
+    }
+
+    const isActivePlayer =
+      (player === 'expanded' && isExpanded) || (player === 'inline' && !isExpanded);
+    if (!isActivePlayer) return;
+    setDuration(source.duration || 0);
+    setCurrentTime(source.currentTime || 0);
+  };
+
+  const handleSeek = (event: MouseEvent<HTMLDivElement>) => {
+    const activeVideo = activeVideoRef();
+    if (!activeVideo || !Number.isFinite(activeVideo.duration) || activeVideo.duration <= 0) {
       return;
     }
-    if (hasNextMaterial && data.materials) {
-      const nextMaterial = data.materials[materialIndex + 1];
-      setMaterial(nextMaterial);
-      setPart(null);
-      updateLastViewed({ material: nextMaterial, part: undefined });
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientX - bounds.left) / bounds.width;
+    const clampedRatio = Math.max(0, Math.min(1, ratio));
+    const nextTime = activeVideo.duration * clampedRatio;
+    activeVideo.currentTime = nextTime;
+    setCurrentTime(nextTime);
+    setDuration(activeVideo.duration);
+  };
+
+  const handleVolumeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextVolume = Number(event.target.value);
+    setVolume(nextVolume);
+    if (inlineVideoRef.current) {
+      inlineVideoRef.current.volume = nextVolume;
+    }
+    if (expandedVideoRef.current) {
+      expandedVideoRef.current.volume = nextVolume;
     }
   };
 
-  const lessonTitle = sectionTitleFor(material) || material;
-  const canGoPrev = hasPrevPart || hasPrevMaterial;
-  const canGoNext = hasNextPart || hasNextMaterial;
+  const currentVideo = DASHBOARD_VIDEOS[currentVideoIndex];
+  const canGoPrev = currentVideoIndex > 0;
+  const canGoNext = currentVideoIndex < DASHBOARD_VIDEOS.length - 1;
   const headerLabel = expandedLabel ?? (isPlaying ? 'Now Playing' : 'Viewing');
-  const headerTitle = expandedTitle ?? lessonTitle;
-  const headerSubtitle = expandedSubtitle ?? (part ?? 'Select a lesson part to begin.');
+  const headerTitle = expandedTitle ?? currentVideo.title;
+  const headerSubtitle = expandedSubtitle ?? currentVideo.title;
+  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
+  useEffect(() => {
+    if (inlineVideoRef.current) {
+      inlineVideoRef.current.volume = volume;
+    }
+    if (expandedVideoRef.current) {
+      expandedVideoRef.current.volume = volume;
+    }
+
+    const activeVideo = (isExpanded ? expandedVideoRef : inlineVideoRef).current;
+    const inactiveVideo = (isExpanded ? inlineVideoRef : expandedVideoRef).current;
+    if (inactiveVideo) {
+      inactiveVideo.pause();
+    }
+    if (!activeVideo) return;
+
+    if (isExpanded && pendingExpandedStartTimeRef.current !== null) {
+      activeVideo.currentTime = pendingExpandedStartTimeRef.current;
+      pendingExpandedStartTimeRef.current = null;
+    }
+
+    if (isPlaying) {
+      playVideo(activeVideo);
+    } else {
+      activeVideo.pause();
+    }
+  }, [isPlaying, currentVideoIndex, isExpanded, volume]);
 
   return (
     <section
@@ -176,23 +245,43 @@ export default function LastViewedVideoCard({
 
       <div className="mt-4 overflow-hidden rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
         <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-[#070707]">
-          <img
-            src="/reference/StudentVideo.png"
-            alt="Lesson video preview"
+          <video
+            ref={inlineVideoRef}
+            src={currentVideo.src}
             className="absolute inset-0 h-full w-full object-cover"
+            playsInline
+            preload="metadata"
+            poster={expandedCoverImage}
+            onLoadedMetadata={() => handleMetadataLoad('inline')}
+            onTimeUpdate={() => handleTimeUpdate('inline')}
+            onEnded={() => setIsPlaying(false)}
           />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.6),rgba(3,3,3,0.9))]" />
-          <div className="relative z-10 px-6 text-center">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
-              {isPlaying ? 'Now Playing' : 'Viewing'}
-            </p>
-            <h4 className="mt-2 text-xl font-semibold text-white">
-              {lessonTitle}
-            </h4>
-            <p className="mt-2 text-sm text-white/70">
-              {part ?? 'Select a lesson part to begin.'}
-            </p>
-          </div>
+          {!isPlaying ? (
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.6),rgba(3,3,3,0.9))]" />
+          ) : null}
+          {isPlaying ? (
+            <div className="absolute right-4 top-4 z-20 rounded-2xl border border-white/30 bg-white/15 px-4 py-2 text-right backdrop-blur-md">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/75">
+                Now Playing
+              </p>
+              <p className="mt-1 text-sm font-semibold text-white">
+                {currentVideo.title}
+              </p>
+            </div>
+          ) : null}
+          {!isPlaying ? (
+            <div className="relative z-10 px-6 text-center">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+                Viewing
+              </p>
+              <h4 className="mt-2 text-xl font-semibold text-white">
+                {currentVideo.title}
+              </h4>
+              <p className="mt-2 text-sm text-white/70">
+                {currentVideo.title}
+              </p>
+            </div>
+          ) : null}
           <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
             <button
               type="button"
@@ -216,23 +305,40 @@ export default function LastViewedVideoCard({
               </svg>
             </button>
             <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold tracking-wide">
-              02:39
+              {formatTime(currentTime)} / {formatTime(duration)}
             </span>
-            <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/20">
-              <div className="h-full w-[55%] rounded-full bg-white" />
+            <div
+              className="relative h-1 flex-1 cursor-pointer overflow-hidden rounded-full bg-white/20"
+              role="slider"
+              aria-label="Seek"
+              aria-valuemin={0}
+              aria-valuemax={duration || 0}
+              aria-valuenow={currentTime}
+              onClick={handleSeek}
+            >
+              <div
+                className="h-full rounded-full bg-white"
+                style={{ width: `${progressPercent}%` }}
+              />
             </div>
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/70">
               <span>Vol</span>
-              <div className="h-1 w-12 rounded-full bg-white/20">
-                <div className="h-full w-[60%] rounded-full bg-white/70" />
-              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={handleVolumeChange}
+                aria-label="Volume"
+                className="h-1 w-14 cursor-pointer accent-white"
+              />
             </div>
             <button
               type="button"
               onClick={() => {
                 closePip();
-                setIsExpanded(true);
-                onExpandedChange?.(true);
+                openExpanded();
               }}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-white/80 transition hover:border-white/40 hover:text-white"
               aria-label="Expand video"
@@ -289,15 +395,12 @@ export default function LastViewedVideoCard({
       </div>
 
       {isExpanded ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-4">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => {
-              setIsExpanded(false);
-              onExpandedChange?.(false);
-            }}
+            onClick={closeExpanded}
           />
-          <div className="relative w-full max-w-5xl rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 text-white shadow-2xl">
+          <div className="relative h-[85vh] w-[85vw] max-w-[1700px] rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">
@@ -309,10 +412,7 @@ export default function LastViewedVideoCard({
                 </p>
               </div>
               <button
-                onClick={() => {
-                  setIsExpanded(false);
-                  onExpandedChange?.(false);
-                }}
+                onClick={closeExpanded}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white/70 transition hover:border-white/40 hover:text-white"
                 aria-label="Close"
               >
@@ -331,15 +431,31 @@ export default function LastViewedVideoCard({
               </button>
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
-              <div className="relative flex aspect-video items-center justify-center overflow-hidden">
-                <img
-                  src={expandedCoverImage}
-                  alt="Lesson video preview"
+            <div className="mt-6 h-[calc(100%-6.5rem)] overflow-hidden rounded-3xl border border-white/10 bg-[#070707]">
+              <div className="relative flex h-full items-center justify-center overflow-hidden">
+                <video
+                  ref={expandedVideoRef}
+                  src={currentVideo.src}
                   className="absolute inset-0 h-full w-full object-cover"
+                  playsInline
+                  preload="metadata"
+                  poster={expandedCoverImage}
+                  onLoadedMetadata={() => handleMetadataLoad('expanded')}
+                  onTimeUpdate={() => handleTimeUpdate('expanded')}
+                  onEnded={() => setIsPlaying(false)}
                 />
-                {expandedShowOverlay ? (
+                {expandedShowOverlay && !isPlaying ? (
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,6,6,0.65),rgba(3,3,3,0.95))]" />
+                ) : null}
+                {isPlaying ? (
+                  <div className="absolute right-4 top-4 z-20 rounded-2xl border border-white/30 bg-white/15 px-4 py-2 text-right backdrop-blur-md">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/75">
+                      Now Playing
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {currentVideo.title}
+                    </p>
+                  </div>
                 ) : null}
                 <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 text-white">
                   <button
@@ -361,16 +477,34 @@ export default function LastViewedVideoCard({
                     </svg>
                   </button>
                   <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold tracking-wide">
-                    02:39
+                    {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
-                  <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/20">
-                    <div className="h-full w-[55%] rounded-full bg-white" />
+                  <div
+                    className="relative h-1 flex-1 cursor-pointer overflow-hidden rounded-full bg-white/20"
+                    role="slider"
+                    aria-label="Seek"
+                    aria-valuemin={0}
+                    aria-valuemax={duration || 0}
+                    aria-valuenow={currentTime}
+                    onClick={handleSeek}
+                  >
+                    <div
+                      className="h-full rounded-full bg-white"
+                      style={{ width: `${progressPercent}%` }}
+                    />
                   </div>
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/70">
                     <span>Vol</span>
-                    <div className="h-1 w-12 rounded-full bg-white/20">
-                      <div className="h-full w-[60%] rounded-full bg-white/70" />
-                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={volume}
+                      onChange={handleVolumeChange}
+                      aria-label="Volume"
+                      className="h-1 w-14 cursor-pointer accent-white"
+                    />
                   </div>
                   <div className="ml-auto flex items-center gap-2">
                     <button
@@ -399,7 +533,7 @@ export default function LastViewedVideoCard({
                     </button>
                   </div>
                 </div>
-                {expandedShowCenterText ? (
+                {expandedShowCenterText && !isPlaying ? (
                   <div className="relative z-10 px-6 text-center">
                     <p className="text-xs uppercase tracking-[0.3em] text-white/70">
                       {headerLabel}

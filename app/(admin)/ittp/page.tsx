@@ -1034,9 +1034,7 @@ export default function IttpPage() {
                 setShowVideo(false);
                 setSlideIn(false);
                 setSlideAway(false);
-                window.setTimeout(() => {
-                  guideRef.current?.playWithSound();
-                }, 250);
+                guideRef.current?.playWithSound();
               }}
               className="rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110"
             >
@@ -3662,63 +3660,64 @@ export default function IttpPage() {
         </div>
       </section>
 
-      {showVideo ? (
-        <div
-          className={`fixed right-20 top-20 z-[60] -translate-x-1 transition-all duration-700 ease-in-out ${
-            slideAway
+      <div
+        className={`fixed right-20 top-20 z-[60] -translate-x-1 transition-all duration-700 ease-in-out ${
+          !showVideo
+            ? 'pointer-events-none translate-x-[140%] opacity-0'
+            : slideAway
               ? 'translate-x-[140%] opacity-0'
               : slideIn
                 ? 'translate-x-0 opacity-100'
                 : 'translate-x-[140%] opacity-0'
-          }`}
-        >
-          <VimeoGuidePanel
-            ref={guideRef}
-            videoId="1166063740"
-            title="ITTP Guided Walkthrough"
-            description="Follow this guide to complete each step with confidence."
-            autoShow
-            autoPlay={false}
-            autoCloseOnEnd={false}
-            frameAspectClass="aspect-[2/3]"
-            videoAspectClass="aspect-[2/3]"
-            videoWrapClass="h-full max-w-[300px] scale-[1.18]"
-            prebuffer
-            minimalFrame
-            className="w-[300px]"
-            onPlay={() => {
-              setSlideIn(true);
-            }}
-            onEnded={() => {
+        }`}
+        style={{ display: showVideo ? 'block' : 'none' }}
+      >
+        <VimeoGuidePanel
+          ref={guideRef}
+          videoId="1166063740"
+          title="ITTP Guided Walkthrough"
+          description="Follow this guide to complete each step with confidence."
+          autoShow={showVideo}
+          autoPlay={false}
+          autoCloseOnEnd={false}
+          frameAspectClass="aspect-[2/3]"
+          videoAspectClass="aspect-[2/3]"
+          videoWrapClass="h-full max-w-[300px] scale-[1.18]"
+          prebuffer
+          minimalFrame
+          className="w-[300px]"
+          onPlay={() => {
+            setSlideIn(true);
+          }}
+          onEnded={() => {
+            document.cookie =
+              'ittp_intro_watched=true; Max-Age=2592000; path=/; SameSite=Lax';
+            setHasWatchedIntro(true);
+            setIntroEndedAt(Date.now());
+            window.setTimeout(() => {
+              setSlideAway(true);
+            }, 1500);
+          }}
+          onProgress={(seconds, duration) => {
+            if (duration <= 0) return;
+            if (seconds / duration >= 0.5 && !hasWatchedIntro) {
               document.cookie =
                 'ittp_intro_watched=true; Max-Age=2592000; path=/; SameSite=Lax';
               setHasWatchedIntro(true);
-              setIntroEndedAt(Date.now());
+            }
+            if (seconds >= 12 && !module1PulseTriggered.current) {
+              module1PulseTriggered.current = true;
+              setModule1Pulse(true);
               window.setTimeout(() => {
-                setSlideAway(true);
-              }, 1500);
-            }}
-            onProgress={(seconds, duration) => {
-              if (duration <= 0) return;
-              if (seconds / duration >= 0.5 && !hasWatchedIntro) {
-                document.cookie =
-                  'ittp_intro_watched=true; Max-Age=2592000; path=/; SameSite=Lax';
-                setHasWatchedIntro(true);
-              }
-              if (seconds >= 12 && !module1PulseTriggered.current) {
-                module1PulseTriggered.current = true;
-                setModule1Pulse(true);
-                window.setTimeout(() => {
-                  setModule1Pulse(false);
-                }, 10400);
-              }
-              if (duration - seconds <= 2.5) {
-                setModule1Glow(true);
-              }
-            }}
-          />
-        </div>
-      ) : null}
+                setModule1Pulse(false);
+              }, 10400);
+            }
+            if (duration - seconds <= 2.5) {
+              setModule1Glow(true);
+            }
+          }}
+        />
+      </div>
 
       </div>
 
@@ -3746,9 +3745,7 @@ export default function IttpPage() {
                 onClick={() => {
                   setIntroTriggered(true);
                   setShowWelcome(false);
-                  window.setTimeout(() => {
-                    guideRef.current?.playWithSound();
-                  }, 250);
+                  guideRef.current?.playWithSound();
                 }}
                 className="w-full rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-5 py-2 text-base font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110"
               >

@@ -23,6 +23,7 @@ type PlayerApi = {
   unload: () => Promise<void>;
   getDuration?: () => Promise<number>;
   setMuted?: (muted: boolean) => Promise<void>;
+  setVolume?: (volume: number) => Promise<void>;
   getIframe?: () => Promise<HTMLIFrameElement>;
 };
 
@@ -159,8 +160,8 @@ const VimeoGuidePanel = forwardRef<VimeoGuidePanelHandle, VimeoGuidePanelProps>(
 
         const player = new Vimeo.Player(containerRef.current, {
           id: Number(videoId),
-          autoplay: autoPlay ? 1 : 0,
-          muted: autoPlay ? 1 : 0,
+          autoplay: autoPlay,
+          muted: autoPlay,
           controls: 1,
           title: 0,
           byline: 0,
@@ -285,7 +286,13 @@ const VimeoGuidePanel = forwardRef<VimeoGuidePanelHandle, VimeoGuidePanelProps>(
       if (player.setMuted) {
         await player.setMuted(!withSound);
       }
+      if (withSound && player.setVolume) {
+        await player.setVolume(1);
+      }
       await player.play();
+      if (withSound && player.setMuted) {
+        await player.setMuted(false);
+      }
       setNeedsInteraction(false);
     } catch {
       setNeedsInteraction(true);

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useApiData } from '../components/use-api-data';
@@ -233,13 +234,21 @@ export default function RoyaltiesPage() {
             fee plus student access subscription, based on current student counts.
           </p>
         </div>
-        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Assumptions Used
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-            {assumptions.lessonsPerStudent} lessons per student · tiered royalty rate · ${assumptions.teacherFee} teacher fee · ${assumptions.studentFee} student access
-          </p>
+        <div className="flex flex-col items-start gap-3 md:items-end">
+          <Link
+            href="/company/reporting"
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] shadow-sm transition hover:border-[var(--c-1f1f1d)] hover:text-[var(--c-1f1f1d)]"
+          >
+            Back to Reporting
+          </Link>
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Assumptions Used
+            </p>
+            <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+              {assumptions.lessonsPerStudent} lessons per student · tiered royalty rate · ${assumptions.teacherFee} teacher fee · ${assumptions.studentFee} student access
+            </p>
+          </div>
         </div>
       </header>
 

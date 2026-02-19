@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useApiData } from '../components/use-api-data';
 import AssumptionsBar, { type Assumptions } from '../components/assumptions-bar';
@@ -140,16 +141,24 @@ export default function SubscriptionsPage() {
             monthly charge billed at the start of each month.
           </p>
         </div>
-        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-            Monthly Fees
-          </p>
-          <p className="text-2xl font-semibold mt-2 text-[var(--c-1f1f1d)]">
-            ${assumptions.teacherFee} teacher · ${assumptions.studentFee} student access
-          </p>
-          <p className="text-sm text-[var(--c-6f6c65)] mt-1">
-            Charged on the 1st of every month
-          </p>
+        <div className="flex flex-col items-start gap-3 md:items-end">
+          <Link
+            href="/company/reporting"
+            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] shadow-sm transition hover:border-[var(--c-1f1f1d)] hover:text-[var(--c-1f1f1d)]"
+          >
+            Back to Reporting
+          </Link>
+          <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Monthly Fees
+            </p>
+            <p className="text-2xl font-semibold mt-2 text-[var(--c-1f1f1d)]">
+              ${assumptions.teacherFee} teacher · ${assumptions.studentFee} student access
+            </p>
+            <p className="text-sm text-[var(--c-6f6c65)] mt-1">
+              Charged on the 1st of every month
+            </p>
+          </div>
         </div>
       </header>
 

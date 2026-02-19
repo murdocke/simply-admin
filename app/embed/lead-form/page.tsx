@@ -819,13 +819,23 @@ export default function LeadFormEmbedPage() {
           </p>
           <div className="mx-auto mt-4 h-1 w-16 rounded-full bg-red-600" />
           <p className="mt-4 text-lg text-neutral-500 sm:text-xl">
-            The first step is to contact us and set up a one-on-one call with
-            <br />
-            Simply Music’s Founder, Neil Moore.
+            <span className="sm:hidden">
+              Set up a one-on-one call with
+              <br />
+              Simply Music’s Founder, Neil Moore.
+            </span>
+            <span className="hidden sm:inline">
+              The first step is to contact us and set up a one-on-one call with
+              <br className="hidden sm:block" />
+              Simply Music’s Founder, Neil Moore.
+            </span>
           </p>
           <p className="mt-3 text-lg text-neutral-500 sm:text-xl">
-            Please complete the form below and let us know a little about
-            yourself.
+            <span className="sm:hidden">Please complete the form below.</span>
+            <span className="hidden sm:inline">
+              Please complete the form below and let us know a little about
+              yourself.
+            </span>
           </p>
         </header>
 
@@ -863,13 +873,16 @@ export default function LeadFormEmbedPage() {
               }
               aria-hidden
             />
-          <div className="relative z-10 mx-auto w-full max-w-4xl rounded-[28px] border border-white/60 bg-white/60 px-6 py-4 shadow-[0_18px_45px_-30px_rgba(17,17,17,0.35)] backdrop-blur-md">
-            <div className="flex items-center justify-center gap-4">
+          <div className="relative z-10 mx-auto w-full max-w-4xl rounded-[28px] border border-white/60 bg-white/60 px-4 py-4 shadow-[0_18px_45px_-30px_rgba(17,17,17,0.35)] backdrop-blur-md sm:px-6">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:justify-center sm:gap-5">
               {[1, 2, 3, 4].map((number) => {
                 const isComplete = number < step;
                 const isActive = number === step;
                 return (
-                  <div key={number} className="flex items-center gap-4">
+                  <div
+                    key={number}
+                    className="flex flex-1 items-center justify-center gap-4 sm:flex-none sm:gap-5"
+                  >
                     <div className="flex flex-col items-center gap-2">
                       <div
                         className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-semibold shadow-sm transition ${
@@ -900,15 +913,22 @@ export default function LeadFormEmbedPage() {
                           number
                         )}
                       </div>
-                      <div className="text-[12px] font-semibold uppercase tracking-[0.22em] text-neutral-600">
+                      <div className="max-w-[90px] text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-600 sm:max-w-none sm:text-[12px] sm:tracking-[0.22em]">
                         {number === 1 && "Details"}
-                        {number === 2 && "Email Verification"}
+                        {number === 2 && (
+                          <>
+                            <span className="sm:hidden">Email</span>
+                            <span className="hidden sm:inline">
+                              Email Verification
+                            </span>
+                          </>
+                        )}
                         {number === 3 && "Address"}
                         {number === 4 && "Submit"}
                       </div>
                     </div>
                     {number !== 4 && (
-                      <div className="h-[2px] w-16 rounded-full bg-neutral-200">
+                      <div className="hidden h-[2px] w-10 rounded-full bg-neutral-200 sm:block sm:w-16">
                         <div
                           className={`h-full rounded-full transition-all ${
                             step > number ? "bg-red-600" : "bg-transparent"

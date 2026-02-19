@@ -2107,6 +2107,17 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   useEffect(() => {
     if (!sidebarHiddenKey) return;
+    if (!pathname?.startsWith('/students/vid-example')) return;
+    setIsSidebarHidden(true);
+    try {
+      window.localStorage.setItem(sidebarHiddenKey, 'true');
+    } catch {
+      // ignore storage errors
+    }
+  }, [pathname, sidebarHiddenKey]);
+
+  useEffect(() => {
+    if (!sidebarHiddenKey) return;
     try {
       window.localStorage.setItem(
         sidebarHiddenKey,
@@ -2116,6 +2127,18 @@ export default function AdminShell({ children }: AdminShellProps) {
       // ignore storage errors
     }
   }, [sidebarHiddenKey, isSidebarHidden]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    const originalTouch = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouch;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!pathname) return;
@@ -3153,7 +3176,7 @@ export default function AdminShell({ children }: AdminShellProps) {
               </div>
               <div className="mt-3 h-1.5 w-full rounded-full bg-[var(--c-ecebe7)]">
                 <div
-                  className="h-1.5 rounded-full bg-[var(--c-c8102e)] transition-all"
+                  className="h-1.5 rounded-full bg-[var(--sidebar-accent-bg)] transition-all"
                   style={{ width: `${trainingProgress.percent}%` }}
                 />
               </div>
@@ -3556,26 +3579,36 @@ export default function AdminShell({ children }: AdminShellProps) {
               <p className="mt-1 text-sm text-[var(--c-9a9892)]">
                 {accountInfo?.email ?? `${user.username}@simplymusic.com`}
               </p>
-              {effectiveRole === 'teacher' &&
-              teacherStatus === 'Training' &&
-              pathname?.startsWith('/ittp') &&
-              hasTeacherWelcome &&
-              !isIttpUsernameModalOpen ? (
+              <div className="mt-4 flex flex-col gap-2">
+                {role === 'company' && user?.username === 'neil' ? (
+                  <a
+                    href="/schedule"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+                  >
+                    My Schedule
+                  </a>
+                ) : null}
+                {effectiveRole === 'teacher' &&
+                teacherStatus === 'Training' &&
+                pathname?.startsWith('/ittp') &&
+                hasTeacherWelcome &&
+                !isIttpUsernameModalOpen ? (
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new Event('ittp-open-username-modal'));
+                    }}
+                    className="w-full rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+                  >
+                    Add Username
+                  </button>
+                ) : null}
                 <button
-                  onClick={() => {
-                    window.dispatchEvent(new Event('ittp-open-username-modal'));
-                  }}
-                  className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-bg)] bg-[var(--sidebar-accent-bg)] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:brightness-110"
+                  onClick={openAccountModal}
+                  className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
                 >
-                  Add Username
+                  Account Details
                 </button>
-              ) : null}
-              <button
-                onClick={openAccountModal}
-                className="mt-4 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
-              >
-                Account Details
-              </button>
+              </div>
               <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
                 Account
               </div>
@@ -4112,7 +4145,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 transform border-r px-6 py-8 shadow-xl backdrop-blur-xl transition-transform ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 transform border-r px-6 py-8 shadow-xl backdrop-blur-xl transition-transform overflow-y-auto overscroll-contain ${
           sidebarStyles.bg
         } ${sidebarStyles.border} ${
           isOpen ? 'translate-x-0' : '-translate-x-full'

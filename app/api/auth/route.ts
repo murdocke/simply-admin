@@ -97,10 +97,21 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     account: {
       username: account.username,
       role: account.role,
     },
   });
+  response.cookies.set('sm_admin', account.username, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+  });
+  response.cookies.set('sm_role', account.role, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+  });
+  return response;
 }

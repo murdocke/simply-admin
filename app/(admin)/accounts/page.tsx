@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { VIEW_TEACHER_STORAGE_KEY } from '../components/auth';
 
@@ -103,6 +103,8 @@ export default function AccountsPage() {
   const [studentStatusFilter, setStudentStatusFilter] = useState('All');
   const [unlinkedSearch, setUnlinkedSearch] = useState('');
   const [unlinkedStatusFilter, setUnlinkedStatusFilter] = useState('All');
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const teacherPageSize = 20;
   const studentPageSize = 10;
   const unlinkedPageSize = 10;
@@ -190,6 +192,21 @@ export default function AccountsPage() {
       window.removeEventListener('storage', handleStorage);
     };
   }, [role, viewTeacherKey]);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (event.target instanceof Node && menuRef.current.contains(event.target)) {
+        return;
+      }
+      setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+    };
+  }, [openMenu]);
 
   const notifyTeachersUpdated = () => {
     try {
@@ -591,7 +608,7 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Company
@@ -603,35 +620,105 @@ export default function AccountsPage() {
             Manage teacher accounts and view roster details.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={openCreateModal}
-            className="rounded-full bg-[var(--c-c8102e)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-white transition hover:brightness-110"
-          >
-            Add Teacher
-          </button>
-          <button
-            onClick={() => router.push('/teacher-interest')}
-            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Teacher Interest
-          </button>
-          <button
-            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Comany Accounts
-          </button>
-          <button
-            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            My Acount
-          </button>
-          <button
-            onClick={() => router.push('/account-permissions')}
-            className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-          >
-            Account Permissions
-          </button>
+        <div
+          ref={menuRef}
+          className="relative flex justify-end"
+          onMouseLeave={() => setOpenMenu(null)}
+        >
+          <div className="inline-flex items-center overflow-hidden rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] shadow-sm">
+            <button
+              type="button"
+              onMouseEnter={() => setOpenMenu('actions')}
+              onClick={() =>
+                setOpenMenu(current => (current === 'actions' ? null : 'actions'))
+              }
+              className={`px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                openMenu === 'actions'
+                  ? 'bg-[var(--c-f7f7f5)] text-[var(--c-1f1f1d)]'
+                  : 'text-[var(--c-1f1f1d)] hover:bg-[var(--c-f7f7f5)]'
+              }`}
+            >
+              Actions
+            </button>
+            <span className="h-5 w-px bg-[var(--c-ecebe7)]" />
+            <button
+              type="button"
+              onMouseEnter={() => setOpenMenu('navigate')}
+              onClick={() =>
+                setOpenMenu(current => (current === 'navigate' ? null : 'navigate'))
+              }
+              className={`px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                openMenu === 'navigate'
+                  ? 'bg-[var(--c-f7f7f5)] text-[var(--c-1f1f1d)]'
+                  : 'text-[var(--c-1f1f1d)] hover:bg-[var(--c-f7f7f5)]'
+              }`}
+            >
+              Navigate
+            </button>
+          </div>
+
+          {openMenu === 'actions' ? (
+            <div className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/95 p-2 shadow-[0_18px_45px_-30px_rgba(17,17,17,0.45)] backdrop-blur-sm">
+              <div className="px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]">
+                Teacher Actions
+              </div>
+              <button
+                onClick={openCreateModal}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] transition hover:bg-[var(--c-f7f7f5)]"
+              >
+                <span className="min-w-[140px] text-left">Add Teacher</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Create
+                </span>
+              </button>
+              <div className="my-2 h-px bg-[var(--c-ecebe7)]/70" />
+              <button
+                onClick={() => router.push('/account-permissions')}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] transition hover:bg-[var(--c-f7f7f5)]"
+              >
+                <span className="min-w-[140px] text-left">
+                  Account Permissions
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Admin
+                </span>
+              </button>
+            </div>
+          ) : null}
+
+          {openMenu === 'navigate' ? (
+            <div className="absolute right-0 top-12 z-20 w-64 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)]/95 p-2 shadow-[0_18px_45px_-30px_rgba(17,17,17,0.45)] backdrop-blur-sm">
+              <div className="px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]">
+                Views
+              </div>
+              <button
+                onClick={() => router.push('/teacher-interest')}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] transition hover:bg-[var(--c-f7f7f5)]"
+              >
+                <span className="min-w-[140px] text-left">Teacher Interest</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  View
+                </span>
+              </button>
+              <div className="my-2 h-px bg-[var(--c-ecebe7)]/70" />
+              <button
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] transition hover:bg-[var(--c-f7f7f5)]"
+              >
+                <span className="min-w-[140px] text-left">Company Accounts</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Manage
+                </span>
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs uppercase tracking-[0.18em] text-[var(--c-1f1f1d)] transition hover:bg-[var(--c-f7f7f5)]"
+              >
+                <span className="min-w-[140px] text-left">My Account</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                  Profile
+                </span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </header>
 

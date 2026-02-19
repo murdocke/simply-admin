@@ -441,6 +441,17 @@ function initSchema(db: Database.Database) {
       current_students INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      buyer TEXT NOT NULL,
+      items TEXT NOT NULL,
+      total REAL NOT NULL,
+      status TEXT NOT NULL,
+      date TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS typing (
       key TEXT PRIMARY KEY,
       last_seen TEXT
@@ -514,6 +525,97 @@ function initSchema(db: Database.Database) {
       updated_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS meeting_types (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE,
+      name TEXT NOT NULL,
+      location TEXT,
+      duration_minutes INTEGER NOT NULL,
+      buffer_before_minutes INTEGER NOT NULL,
+      buffer_after_minutes INTEGER NOT NULL,
+      min_notice_minutes INTEGER NOT NULL,
+      max_horizon_days INTEGER NOT NULL,
+      timezone_default TEXT NOT NULL,
+      availability_mode TEXT NOT NULL DEFAULT 'all',
+      busy_buffer_percent INTEGER NOT NULL DEFAULT 60,
+      busy_pattern_version INTEGER NOT NULL DEFAULT 1,
+      daily_limit INTEGER NOT NULL DEFAULT 0,
+      show_simply_music_header INTEGER NOT NULL DEFAULT 0,
+      simply_music_subheader_text TEXT NOT NULL DEFAULT 'Set up a One-On-One Zoom Call with Simply Music’s Founder, Neil Moore',
+      no_overnight_slots INTEGER NOT NULL DEFAULT 1,
+      travel_mode_enabled INTEGER NOT NULL DEFAULT 0,
+      travel_timezone TEXT,
+      travel_start_date TEXT,
+      travel_end_date TEXT,
+      global_unavailable INTEGER NOT NULL DEFAULT 0,
+      admin_username TEXT NOT NULL,
+      allow_public_reschedule INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_availability (
+      id TEXT PRIMARY KEY,
+      meeting_type_id TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      start_time_minutes INTEGER NOT NULL,
+      end_time_minutes INTEGER NOT NULL,
+      created_at TEXT,
+      updated_at TEXT,
+      FOREIGN KEY (meeting_type_id) REFERENCES meeting_types(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_blackouts (
+      id TEXT PRIMARY KEY,
+      meeting_type_id TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      start_time_minutes INTEGER NOT NULL,
+      end_time_minutes INTEGER NOT NULL,
+      created_at TEXT,
+      updated_at TEXT,
+      FOREIGN KEY (meeting_type_id) REFERENCES meeting_types(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS blackouts (
+      id TEXT PRIMARY KEY,
+      meeting_type_id TEXT NOT NULL,
+      starts_at_utc TEXT NOT NULL,
+      ends_at_utc TEXT NOT NULL,
+      all_day INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      FOREIGN KEY (meeting_type_id) REFERENCES meeting_types(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS bookings (
+      id TEXT PRIMARY KEY,
+      meeting_type_id TEXT NOT NULL,
+      starts_at_utc TEXT NOT NULL,
+      ends_at_utc TEXT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      notes TEXT,
+      status TEXT NOT NULL,
+      public_token TEXT,
+      booking_timezone TEXT,
+      zoom_join_url TEXT,
+      zoom_start_url TEXT,
+      created_at TEXT,
+      FOREIGN KEY (meeting_type_id) REFERENCES meeting_types(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS schedule_settings (
+      admin_username TEXT PRIMARY KEY,
+      primary_timezone TEXT NOT NULL,
+      travel_mode_enabled INTEGER NOT NULL DEFAULT 0,
+      travel_timezone TEXT,
+      travel_start_date TEXT,
+      travel_end_date TEXT,
+      global_unavailable INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username);
     CREATE INDEX IF NOT EXISTS idx_students_teacher ON students(teacher);
     CREATE INDEX IF NOT EXISTS idx_teachers_company ON teachers(company);
@@ -527,6 +629,14 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_reg_verifications_channel ON registration_verification_codes(channel);
     CREATE INDEX IF NOT EXISTS idx_avatar_onboarding_key ON avatar_onboarding_videos(video_key);
     CREATE INDEX IF NOT EXISTS idx_avatar_onboarding_images_key ON avatar_onboarding_images(video_key);
+    CREATE INDEX IF NOT EXISTS idx_meeting_types_slug ON meeting_types(slug);
+    CREATE INDEX IF NOT EXISTS idx_meeting_types_admin ON meeting_types(admin_username);
+    CREATE INDEX IF NOT EXISTS idx_weekly_availability_meeting ON weekly_availability(meeting_type_id);
+    CREATE INDEX IF NOT EXISTS idx_blackouts_meeting ON blackouts(meeting_type_id);
+    CREATE INDEX IF NOT EXISTS idx_blackouts_starts ON blackouts(starts_at_utc);
+    CREATE INDEX IF NOT EXISTS idx_bookings_meeting ON bookings(meeting_type_id);
+    CREATE INDEX IF NOT EXISTS idx_bookings_starts ON bookings(starts_at_utc);
+    CREATE INDEX IF NOT EXISTS idx_bookings_public_token ON bookings(public_token);
   `);
 }
 
@@ -1615,8 +1725,9 @@ export function getDb(): Database.Database {
     dbInstance = new Database(DB_PATH);
     dbInstance.pragma('foreign_keys = ON');
     initSchema(dbInstance);
-    ensureCompanyAlertsColumns(dbInstance);
   }
+  ensureCompanyAlertsColumns(dbInstance);
+  ensureScheduleColumns(dbInstance);
   return dbInstance;
 }
 
@@ -1637,4 +1748,99 @@ function ensureCompanyAlertsColumns(db: Database.Database) {
   ensure('registration_opened_at', 'TEXT');
   ensure('registration_active_at', 'TEXT');
   ensure('registration_completed_at', 'TEXT');
+}
+
+function ensureScheduleColumns(db: Database.Database) {
+  const meetingTypeColumns = db
+    .prepare(`PRAGMA table_info(meeting_types)`)
+    .all()
+    .map(entry => String(entry.name));
+  if (!meetingTypeColumns.includes('admin_username')) {
+    db.prepare(`ALTER TABLE meeting_types ADD COLUMN admin_username TEXT`).run();
+  }
+  db.prepare(`UPDATE meeting_types SET admin_username = 'company' WHERE admin_username IS NULL OR admin_username = ''`).run();
+  if (!meetingTypeColumns.includes('allow_public_reschedule')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN allow_public_reschedule INTEGER DEFAULT 0`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('availability_mode')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN availability_mode TEXT DEFAULT 'all'`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('busy_buffer_percent')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN busy_buffer_percent INTEGER DEFAULT 40`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('busy_pattern_version')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN busy_pattern_version INTEGER DEFAULT 1`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('daily_limit')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN daily_limit INTEGER DEFAULT 0`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('show_simply_music_header')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN show_simply_music_header INTEGER DEFAULT 0`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('simply_music_subheader_text')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN simply_music_subheader_text TEXT DEFAULT ''`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('no_overnight_slots')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN no_overnight_slots INTEGER DEFAULT 1`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('travel_mode_enabled')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN travel_mode_enabled INTEGER DEFAULT 0`,
+    ).run();
+  }
+  if (!meetingTypeColumns.includes('travel_timezone')) {
+    db.prepare(`ALTER TABLE meeting_types ADD COLUMN travel_timezone TEXT`).run();
+  }
+  if (!meetingTypeColumns.includes('travel_start_date')) {
+    db.prepare(`ALTER TABLE meeting_types ADD COLUMN travel_start_date TEXT`).run();
+  }
+  if (!meetingTypeColumns.includes('travel_end_date')) {
+    db.prepare(`ALTER TABLE meeting_types ADD COLUMN travel_end_date TEXT`).run();
+  }
+  if (!meetingTypeColumns.includes('global_unavailable')) {
+    db.prepare(
+      `ALTER TABLE meeting_types ADD COLUMN global_unavailable INTEGER DEFAULT 0`,
+    ).run();
+  }
+  const bookingColumns = db
+    .prepare(`PRAGMA table_info(bookings)`)
+    .all()
+    .map(entry => String(entry.name));
+  if (!bookingColumns.includes('public_token')) {
+    db.prepare(`ALTER TABLE bookings ADD COLUMN public_token TEXT`).run();
+  }
+  if (!bookingColumns.includes('booking_timezone')) {
+    db.prepare(`ALTER TABLE bookings ADD COLUMN booking_timezone TEXT`).run();
+  }
+
+  db.prepare(
+    `
+      CREATE TABLE IF NOT EXISTS schedule_settings (
+        admin_username TEXT PRIMARY KEY,
+        primary_timezone TEXT NOT NULL,
+        travel_mode_enabled INTEGER NOT NULL DEFAULT 0,
+        travel_timezone TEXT,
+        travel_start_date TEXT,
+        travel_end_date TEXT,
+        global_unavailable INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT
+      )
+    `,
+  ).run();
 }
