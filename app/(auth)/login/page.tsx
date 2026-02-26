@@ -14,6 +14,17 @@ import { THEME_STORAGE_KEY, normalizeTheme } from '@/app/components/theme';
 import teachersData from '@/data/teachers.json';
 import studiosData from '@/data/studios.json';
 
+const TEACHER_WELCOME_PENDING_KEY = 'sm_teacher_welcome_pending';
+
+type DemoAccount = {
+  username: string;
+  role: string;
+  name: string;
+  studio?: { name: string; isAdmin: boolean };
+  autoLoginPassword?: string | null;
+  parentUsername?: string;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,7 +33,9 @@ export default function LoginPage() {
   const welcomeEmail = searchParams.get('email') ?? '';
   const defaultEmail = welcomeParam ? '' : 'ella@simplymusic.com';
   const welcomeName = searchParams.get('name') ?? '';
-  const displayName = welcomeName || (welcomeParam ? 'New Teacher' : 'Ella');
+  const [welcomeNameOverride, setWelcomeNameOverride] = useState('');
+  const displayName =
+    welcomeNameOverride || welcomeName || (welcomeParam ? 'New Teacher' : 'Ella');
   const isTeacherRole = roleParam === 'teacher';
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
@@ -40,15 +53,7 @@ export default function LoginPage() {
     'authenticator' | 'email' | 'sms'
   >('authenticator');
   const [forgotStatus, setForgotStatus] = useState('');
-  const [demoAccounts, setDemoAccounts] = useState<
-    {
-      username: string;
-      role: string;
-      name: string;
-      studio?: { name: string; isAdmin: boolean };
-      autoLoginPassword?: string | null;
-    }[]
-  >([]);
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>([]);
   const [trainingDemo, setTrainingDemo] = useState<{
     username: string;
     role: string;
@@ -80,22 +85,39 @@ export default function LoginPage() {
       },
       {
         key: 'training',
-        label: 'Teachers In Training',
+        label: 'ITTP Teachers',
         accounts: trainingDemo ? [trainingDemo] : [],
       },
       {
         key: 'parent',
-        label: 'Parents',
+        label: 'Family Accounts',
         accounts: demoAccounts.filter(account => account.role === 'parent'),
-      },
-      {
-        key: 'student',
-        label: 'Students',
-        accounts: demoAccounts.filter(account => account.role === 'student'),
       },
     ],
     [demoAccounts, trainingDemo],
   );
+  const familyStudentsByParent = useMemo(() => {
+    const map = new Map<string, DemoAccount[]>();
+    demoAccounts
+      .filter(account => account.role === 'student' && account.parentUsername)
+      .forEach(account => {
+        const parentUsername = (account.parentUsername ?? '').toLowerCase();
+        if (!parentUsername) return;
+        const list = map.get(parentUsername) ?? [];
+        list.push(account);
+        map.set(parentUsername, list);
+      });
+    for (const list of map.values()) {
+      list.sort((a, b) => a.username.localeCompare(b.username));
+    }
+    return map;
+  }, [demoAccounts]);
+  const isDemoAllowed = useMemo(() => {
+    if (process.env.NODE_ENV !== 'production') return true;
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  }, []);
 
   const backgroundImages = useMemo(
     () => [
@@ -130,6 +152,7 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    if (welcomeParam) return;
     const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
       try {
@@ -143,7 +166,7 @@ export default function LoginPage() {
         window.localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
-  }, [router]);
+  }, [router, welcomeParam]);
 
   useEffect(() => {
     if (welcomeParam) {
@@ -152,6 +175,7 @@ export default function LoginPage() {
         window.localStorage.removeItem(VIEW_ROLE_STORAGE_KEY);
         window.localStorage.removeItem(VIEW_TEACHER_STORAGE_KEY);
         window.localStorage.removeItem(VIEW_STUDENT_STORAGE_KEY);
+        window.localStorage.removeItem(TEACHER_WELCOME_PENDING_KEY);
       } catch {
         // ignore storage failures
       }
@@ -159,6 +183,7 @@ export default function LoginPage() {
       setPass('');
       setShowDemo(false);
       setShowWelcomePanel(true);
+      setWelcomeNameOverride(welcomeName);
       try {
         window.localStorage.setItem(
           'sm_teacher_welcome',
@@ -169,9 +194,31 @@ export default function LoginPage() {
       }
       return;
     }
+    try {
+      const pendingRaw = window.localStorage.getItem(TEACHER_WELCOME_PENDING_KEY);
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw) as { email?: string; name?: string };
+        window.localStorage.removeItem(TEACHER_WELCOME_PENDING_KEY);
+        const pendingEmail = pending.email ?? '';
+        const pendingName = pending.name ?? '';
+        setUser(pendingEmail);
+        setPass('');
+        setShowDemo(false);
+        setShowWelcomePanel(true);
+        setWelcomeNameOverride(pendingName);
+        window.localStorage.setItem(
+          'sm_teacher_welcome',
+          JSON.stringify({ email: pendingEmail, name: pendingName }),
+        );
+        return;
+      }
+    } catch {
+      // ignore storage failures
+    }
     setUser(defaultEmail);
     setPass('');
     setShowWelcomePanel(false);
+    setWelcomeNameOverride('');
   }, [welcomeParam, welcomeEmail, welcomeName, defaultEmail]);
 
   useEffect(() => {
@@ -196,6 +243,11 @@ export default function LoginPage() {
   }, [backgroundImages.length]);
 
   useEffect(() => {
+    if (!isDemoAllowed) {
+      setDemoAccounts([]);
+      setTrainingDemo(null);
+      return;
+    }
     void fetch('/api/accounts')
       .then(async response => {
         if (!response.ok) return [];
@@ -237,7 +289,40 @@ export default function LoginPage() {
             isAdmin: teacher.studioRole === 'Admin',
           });
         });
-        const demoList = list
+
+        let parentByStudentUsername = new Map<string, string>();
+        try {
+          const [parentsResponse, studentsResponse] = await Promise.all([
+            fetch('/api/parents', { cache: 'no-store' }),
+            fetch('/api/students', { cache: 'no-store' }),
+          ]);
+          if (parentsResponse.ok && studentsResponse.ok) {
+            const parentsData = (await parentsResponse.json()) as {
+              parents?: { username?: string; students?: string[] }[];
+            };
+            const studentsData = (await studentsResponse.json()) as {
+              students?: { id?: string; username?: string }[];
+            };
+            const studentUsernameById = new Map<string, string>();
+            (studentsData.students ?? []).forEach(student => {
+              if (!student.id || !student.username) return;
+              studentUsernameById.set(student.id, student.username.toLowerCase());
+            });
+            (parentsData.parents ?? []).forEach(parent => {
+              const parentUsername = (parent.username ?? '').toLowerCase();
+              if (!parentUsername) return;
+              (parent.students ?? []).forEach(studentId => {
+                const studentUsername = studentUsernameById.get(studentId);
+                if (!studentUsername) return;
+                parentByStudentUsername.set(studentUsername, parentUsername);
+              });
+            });
+          }
+        } catch {
+          parentByStudentUsername = new Map();
+        }
+
+        const demoList: DemoAccount[] = list
           .filter(account => allowed.has(account.username.toLowerCase()))
           .map(account => ({
             username: account.username,
@@ -245,6 +330,10 @@ export default function LoginPage() {
             name: account.name ?? '',
             studio: studioByUsername.get(account.username.toLowerCase()),
             autoLoginPassword: 'Coffee@Sunrise@2026',
+            parentUsername:
+              account.role === 'student'
+                ? parentByStudentUsername.get(account.username.toLowerCase())
+                : undefined,
           }));
         setDemoAccounts(demoList);
 
@@ -295,7 +384,13 @@ export default function LoginPage() {
         setDemoAccounts([]);
         setTrainingDemo(null);
       });
-  }, []);
+  }, [isDemoAllowed]);
+
+  useEffect(() => {
+    if (!isDemoAllowed && showDemo) {
+      setShowDemo(false);
+    }
+  }, [isDemoAllowed, showDemo]);
 
   const handleLogin = async (nextUser?: string, nextPass?: string) => {
     const normalized = (nextUser ?? user).trim().toLowerCase();
@@ -364,7 +459,11 @@ export default function LoginPage() {
       >
         <div
           className={`flex flex-col gap-6 ${
-            showWelcomePanel ? 'xl:flex-row xl:items-start' : 'md:flex-row md:items-start'
+            showWelcomePanel
+              ? 'xl:flex-row xl:items-start'
+              : showDemo
+                ? 'md:flex-row md:items-end'
+                : 'md:flex-row md:items-start'
           }`}
         >
           <div
@@ -372,7 +471,7 @@ export default function LoginPage() {
               showWelcomePanel ? 'xl:max-w-[460px]' : 'md:max-w-[460px]'
             } [[data-theme=dark]_&]:bg-[var(--c-efece6)]/90 [[data-theme=dark]_&]:border-[var(--c-e5e3dd)]`}
           >
-            {!showWelcomePanel ? (
+            {!showWelcomePanel && isDemoAllowed ? (
               <button
                 type="button"
                 onClick={() =>
@@ -594,7 +693,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-          ) : showDemo ? (
+          ) : showDemo && isDemoAllowed ? (
             <div className="w-full max-w-2xl rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)]">
               <div className="flex items-center justify-between">
                 <div>
@@ -640,7 +739,7 @@ export default function LoginPage() {
                 <div className="grid grid-cols-[32px_1.2fr_0.8fr_1.2fr] gap-2 bg-[var(--c-f7f7f5)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] [[data-theme=dark]_&]:bg-[var(--c-efece6)] [[data-theme=dark]_&]:text-[var(--c-7a776f)]">
                   <div />
                   <div>Username</div>
-                  <div>Role</div>
+                  <div className="text-left">Role</div>
                   <div>Name</div>
                 </div>
                 <div className="divide-y divide-[var(--c-ecebe7)]">
@@ -667,6 +766,12 @@ export default function LoginPage() {
                                 group.key === 'studio' &&
                                 studioName &&
                                 studioName !== lastStudio;
+                              const familyStudents =
+                                group.key === 'parent'
+                                  ? familyStudentsByParent.get(
+                                      account.username.toLowerCase(),
+                                    ) ?? []
+                                  : [];
                               if (showStudioHeader) lastStudio = studioName;
                               return (
                                 <div key={`${account.username}-${account.role}`}>
@@ -727,13 +832,47 @@ export default function LoginPage() {
                                     <div className="font-medium text-[var(--c-1f1f1d)]">
                                       {account.username}
                                     </div>
-                                    <div className="text-[var(--c-6f6c65)]">
+                                    <div className="text-left text-[var(--c-6f6c65)]">
                                       {account.studio?.isAdmin ? 'studio' : account.role}
                                     </div>
                                     <div className="text-[var(--c-6f6c65)]">
                                       {account.name || '—'}
                                     </div>
                                   </div>
+                                  {group.key === 'parent' &&
+                                  familyStudents.length > 0 ? (
+                                    <div className="border-t border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] [[data-theme=dark]_&]:bg-[var(--c-f1f1ef)]">
+                                      {familyStudents.map(student => (
+                                        <div
+                                          key={`${account.username}-${student.username}`}
+                                          className="grid cursor-pointer grid-cols-[32px_1.2fr_0.8fr_1.2fr] items-center gap-2 px-4 py-3 text-sm transition hover:bg-[var(--c-f1f0ec)] hover:shadow-sm [[data-theme=dark]_&]:hover:bg-[var(--c-efece6)]"
+                                          onClick={() => {
+                                            setUser(student.username);
+                                            if (student.autoLoginPassword) {
+                                              setPass(student.autoLoginPassword);
+                                              handleLogin(
+                                                student.username,
+                                                student.autoLoginPassword,
+                                              );
+                                            } else {
+                                              setPass('');
+                                            }
+                                          }}
+                                        >
+                                          <div className="text-[var(--c-9a9892)]">{'->'}</div>
+                                          <div className="font-medium text-[var(--c-1f1f1d)]">
+                                            {student.username}
+                                          </div>
+                                          <div className="text-left text-[var(--c-6f6c65)]">
+                                            {student.role}
+                                          </div>
+                                          <div className="text-[var(--c-6f6c65)]">
+                                            {student.name || '—'}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                 </div>
                               );
                             })

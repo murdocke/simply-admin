@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     });
     token.addGrant({
       roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
       room,
     });
 

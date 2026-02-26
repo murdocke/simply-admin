@@ -128,6 +128,12 @@ export default function DevDashboardPage() {
             >
               What&#39;s Next
             </a>
+            <a
+              href="/rev-streams"
+              className="inline-flex items-center justify-center rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+            >
+              Rev Streams
+            </a>
           </div>
         </div>
       </section>

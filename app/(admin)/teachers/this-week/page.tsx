@@ -1768,14 +1768,14 @@ export default function TeacherThisWeekPage() {
                             : 0;
                         const gapLabel = formatGap(gapMinutes);
                         const gapHeight = Math.min(
-                          Math.max(28, Math.round(gapMinutes * 1.1)),
-                          180,
+                          Math.max(40, Math.round(gapMinutes * 1.4)),
+                          240,
                         );
                         const duration = lesson.kind === 'lesson'
                           ? lesson.lessonDuration
                           : lesson.duration;
                         const durationLabel = formatDurationLabel(duration);
-                        const baseHeight30 = 70;
+                        const baseHeight30 = 82;
                         const cardHeight =
                           lesson.kind === 'lesson'
                             ? Math.min(
@@ -1859,8 +1859,10 @@ export default function TeacherThisWeekPage() {
                                 {formatDate(date)} ·{' '}
                                 {lesson.kind === 'lesson'
                                   ? lesson.lessonTime ?? 'Time TBA'
-                                  : lesson.time}{' '}
-                                · {durationLabel}
+                                  : lesson.time}
+                              </p>
+                              <p className="text-xs text-[var(--c-6f6c65)]">
+                                Duration · {durationLabel}
                               </p>
                             </button>
                             {gapLabel ? (
@@ -1910,7 +1912,7 @@ export default function TeacherThisWeekPage() {
                     return (
                       <div
                         className="rounded-2xl border border-dashed border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-9a9892)]"
-                        style={{ height: '30px' }}
+                        style={{ height: '36px' }}
                       >
                         Finished At {displayTime}
                       </div>

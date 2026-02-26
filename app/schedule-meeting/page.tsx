@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Space_Grotesk } from 'next/font/google';
+import { spaceGrotesk } from '@/app/fonts';
 
 const TIMEZONES = [
   'America/Los_Angeles',
@@ -27,8 +27,6 @@ const WEEKDAY_TO_INDEX: Record<string, number> = {
 };
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
 
 type MeetingType = {
   id: string;

@@ -68,7 +68,7 @@ export default function LessonSectionGate({
             {sectionName}
           </h2>
           <p className="text-sm text-[var(--c-6f6c65)] opacity-70">
-            Purchase 4 Development sections to unlock Extensions materials.
+            Purchase any Development section to unlock Extensions materials.
           </p>
         </div>
         <div className="flex flex-col items-start gap-3">

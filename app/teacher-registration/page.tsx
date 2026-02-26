@@ -1,13 +1,9 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
-import { Space_Grotesk } from "next/font/google";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
+import { spaceGrotesk } from "@/app/fonts";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -44,11 +40,11 @@ const initialState: FormState = {
   phone: "",
   phoneCode: "",
   plan: "standard",
-  cardName: "Lucy Barnes",
+  cardName: "",
   cardNumber: "4242 4242 4242 4242",
   cardExpiry: "12/28",
   cardCvc: "123",
-  cardZip: "95814",
+  cardZip: "",
   password: "",
   confirmPassword: "",
   agreement: false,
@@ -77,11 +73,12 @@ export default function TeacherRegistrationPage() {
   const token = searchParams.get("token") ?? "";
   const [step, setStep] = useState<Step>(1);
   const [state, setState] = useState<FormState>(initialState);
-  const mode: "wizard" = "wizard";
+  const mode = "wizard" as const;
   const [interestName, setInterestName] = useState<string | null>(null);
   const [alertId, setAlertId] = useState<string | null>(null);
   const [smsSentStatus, setSmsSentStatus] = useState(false);
   const [smsExpiresAt, setSmsExpiresAt] = useState<string | null>(null);
+  const [demoVerificationCode, setDemoVerificationCode] = useState<string | null>(null);
   const [smsCanResend, setSmsCanResend] = useState(true);
   const [smsExpired, setSmsExpired] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -89,7 +86,38 @@ export default function TeacherRegistrationPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [last4, setLast4] = useState("");
-  const smsVerifyingRef = useRef(false);
+  const buildAutoPassword = useCallback((name: string | null) => {
+    const firstName = (name ?? "")
+      .trim()
+      .split(/\s+/)[0]
+      ?.replace(/[^a-zA-Z0-9]/g, "");
+    const seed = firstName || "Teacher";
+    return `${seed}${seed}`;
+  }, []);
+  const buildInitials = useCallback((name: string | null, email?: string | null) => {
+    const words = (name ?? "")
+      .trim()
+      .split(/\s+/)
+      .map(part => part.replace(/[^a-zA-Z0-9]/g, ""))
+      .filter(Boolean);
+    if (words.length >= 2) {
+      const first = words[0] ?? "";
+      const last = words[words.length - 1] ?? "";
+      return `${first}${last}`.toUpperCase();
+    }
+    if (words.length === 1) {
+      return words[0].toUpperCase();
+    }
+    const emailPrefix = (email ?? "").split("@")[0] ?? "";
+    const emailParts = emailPrefix
+      .split(/[._-]+/)
+      .map(part => part.replace(/[^a-zA-Z0-9]/g, ""))
+      .filter(Boolean);
+    if (emailParts.length >= 2) {
+      return `${emailParts[0]}${emailParts[emailParts.length - 1]}`.toUpperCase();
+    }
+    return emailPrefix.toUpperCase();
+  }, []);
   const maskPhone = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
     if (!digits) return "";
@@ -110,7 +138,7 @@ export default function TeacherRegistrationPage() {
   };
 
   const CODE_TTL_SECONDS = 600;
-  const RESEND_AFTER_SECONDS = 60;
+  const RESEND_AFTER_SECONDS = 10;
   const canResend = (remaining: number | null, sent: boolean) => {
     if (!sent) return true;
     if (remaining === null) return true;
@@ -163,7 +191,11 @@ export default function TeacherRegistrationPage() {
           channel: "sms",
         }),
       });
-      const data = (await response.json()) as { expiresAt?: string; error?: string };
+      const data = (await response.json()) as {
+        expiresAt?: string;
+        demoCode?: string | null;
+        error?: string;
+      };
       if (!response.ok) {
         setStepError(data.error ?? "We couldn’t send a code just yet.");
         return;
@@ -171,6 +203,7 @@ export default function TeacherRegistrationPage() {
       setState(current => ({ ...current, phoneCode: "" }));
       setSmsSentStatus(true);
       setSmsExpiresAt(data.expiresAt ?? null);
+      setDemoVerificationCode(data.demoCode ?? null);
       setSmsResetKey(current => current + 1);
       setSmsCanResend(false);
       setSmsExpired(false);
@@ -184,16 +217,18 @@ export default function TeacherRegistrationPage() {
     label,
     name,
     resetKey,
+    initialValue,
   }: {
     onChange: (next: string) => void;
     label: string;
     name: string;
     resetKey: number;
+    initialValue?: string;
   }) => {
     const [localValue, setLocalValue] = useState("");
     useEffect(() => {
-      setLocalValue("");
-    }, [resetKey]);
+      setLocalValue(initialValue ?? "");
+    }, [resetKey, initialValue]);
     return (
       <div className="mt-4">
         <p className="text-base font-semibold">{label}</p>
@@ -262,27 +297,60 @@ export default function TeacherRegistrationPage() {
     [],
   );
 
-  const progress = Math.round(((step - 1) / (steps.length - 1)) * 100);
+  const baseProgress = Math.round(((step - 1) / (steps.length - 1)) * 100);
+  const phoneLast4Digits = state.phone.replace(/\D/g, "").slice(-4);
+  const agreementChecklist = [
+    state.agreement,
+    state.terms,
+    state.communications,
+    state.policyMedia,
+    state.policyTrademark,
+    state.policyCurriculum,
+    state.policyPractice,
+    state.policyBackground,
+    state.policyInsurance,
+    state.policyCode,
+    state.policyData,
+    state.policyPayments,
+    state.policyTermination,
+    Boolean(state.initials.trim()),
+    Boolean(last4.trim()) && last4.trim() === phoneLast4Digits,
+  ];
+  const agreementCompletionCount = agreementChecklist.filter(Boolean).length;
+  const agreementProgressBoost = Math.round(
+    (agreementCompletionCount / agreementChecklist.length) * 25,
+  );
+  const progress = step < 4 ? baseProgress : Math.min(100, 75 + agreementProgressBoost);
 
-  const verifyCode = async (code: string) => {
-    if (!token) {
-      return { ok: false, error: "Missing registration token." };
-    }
-    const response = await fetch("/api/teacher-registration", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token,
-        action: "verify-code",
-        channel: "sms",
-        code,
-      }),
-    });
-    const data = (await response.json()) as { ok?: boolean; error?: string };
-    if (!response.ok) {
-      return { ok: false, error: data.error ?? "Unable to verify yet." };
-    }
-    return data;
+  const verifyCode = useCallback(
+    async (code: string) => {
+      if (!token) {
+        return { ok: false, error: "Missing registration token." };
+      }
+      const response = await fetch("/api/teacher-registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          action: "verify-code",
+          channel: "sms",
+          code,
+        }),
+      });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        return { ok: false, error: data.error ?? "Unable to verify yet." };
+      }
+      return data;
+    },
+    [token],
+  );
+
+  const useDemoCode = () => {
+    if (!demoVerificationCode) return;
+    setState(current => ({ ...current, phoneCode: demoVerificationCode }));
+    setSmsResetKey(current => current + 1);
+    setStepError(null);
   };
 
   const handleNext = async () => {
@@ -376,32 +444,6 @@ export default function TeacherRegistrationPage() {
   }, [smsExpiresAt, smsSentStatus]);
 
 
-  useEffect(() => {
-    if (step !== 1) return;
-    if (!smsSentStatus) return;
-    if (state.phoneCode.trim().length !== 6) return;
-    if (smsVerifyingRef.current) return;
-    smsVerifyingRef.current = true;
-    void verifyCode(state.phoneCode.trim())
-      .then(result => {
-        if (result.ok) {
-          setStepError(null);
-          setStep(2);
-          return;
-        }
-        setStepError(
-          result.error === "expired"
-            ? "That code expired — send a new one."
-            : "That code doesn’t match yet. Double-check and try again.",
-        );
-        setState(current => ({ ...current, phoneCode: "" }));
-        setSmsResetKey(current => current + 1);
-      })
-      .finally(() => {
-        smsVerifyingRef.current = false;
-      });
-  }, [step, state.phoneCode, smsSentStatus]);
-
   const handleComplete = async () => {
     if (step !== 4) return;
     const checks = [
@@ -457,8 +499,18 @@ export default function TeacherRegistrationPage() {
       const params = new URLSearchParams();
       params.set("role", "teacher");
       params.set("welcome", "1");
-      if (data.email) params.set("email", data.email);
-      if (data.name) params.set("name", data.name);
+      const nextEmail = data.email ?? state.email.trim();
+      const nextName = data.name ?? interestName ?? "";
+      if (nextEmail) params.set("email", nextEmail);
+      if (nextName) params.set("name", nextName);
+      try {
+        window.localStorage.setItem(
+          "sm_teacher_welcome_pending",
+          JSON.stringify({ email: nextEmail, name: nextName }),
+        );
+      } catch {
+        // ignore storage failures
+      }
       router.replace(`/login?${params.toString()}`);
     } catch {
       setStepError("We couldn’t finalize your registration. Try again.");
@@ -475,11 +527,13 @@ export default function TeacherRegistrationPage() {
         if (!response.ok) return null;
         const data = (await response.json()) as {
           name?: string | null;
+          fullName?: string | null;
           alertId?: string | null;
           email?: string | null;
           phone?: string | null;
           city?: string | null;
           region?: string | null;
+          postalCode?: string | null;
           smsCodeExpiresAt?: string | null;
           isRegisteredTraining?: boolean;
           teacherName?: string | null;
@@ -489,19 +543,38 @@ export default function TeacherRegistrationPage() {
           const params = new URLSearchParams();
           params.set("role", "teacher");
           params.set("welcome", "1");
-          if (data.teacherEmail) params.set("email", data.teacherEmail);
-          if (data.teacherName) params.set("name", data.teacherName);
+          const nextEmail = data.teacherEmail ?? data.email ?? "";
+          const nextName = data.teacherName ?? data.name ?? "";
+          if (nextEmail) params.set("email", nextEmail);
+          if (nextName) params.set("name", nextName);
+          try {
+            window.localStorage.setItem(
+              "sm_teacher_welcome_pending",
+              JSON.stringify({ email: nextEmail, name: nextName }),
+            );
+          } catch {
+            // ignore storage failures
+          }
           router.replace(`/login?${params.toString()}`);
           return null;
         }
         if (data?.alertId) {
           setAlertId(data.alertId);
         }
+        const autoPassword = buildAutoPassword(data?.name ?? null);
+        const autoInitials = buildInitials(data?.name ?? null, data?.email ?? null);
+        const phoneLast4 = (data?.phone ?? "").replace(/\D/g, "").slice(-4);
         setState(current => ({
           ...current,
           email: data?.email ?? current.email,
           phone: data?.phone ?? current.phone,
+          password: current.password || autoPassword,
+          confirmPassword: current.confirmPassword || autoPassword,
+          initials: current.initials || autoInitials,
+          cardName: current.cardName || data?.fullName || current.cardName,
+          cardZip: current.cardZip || data?.postalCode || current.cardZip,
         }));
+        setLast4(current => current || phoneLast4);
         if (data?.smsCodeExpiresAt) {
           setSmsExpiresAt(data.smsCodeExpiresAt);
           setSmsSentStatus(true);
@@ -517,7 +590,39 @@ export default function TeacherRegistrationPage() {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, router, buildAutoPassword, buildInitials]);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    if (state.password.trim() && state.confirmPassword.trim()) return;
+    const autoPassword = buildAutoPassword(interestName);
+    setState(current => ({
+      ...current,
+      password: current.password || autoPassword,
+      confirmPassword: current.confirmPassword || autoPassword,
+    }));
+  }, [
+    step,
+    interestName,
+    state.password,
+    state.confirmPassword,
+    buildAutoPassword,
+  ]);
+
+  useEffect(() => {
+    if (step !== 4) return;
+    const nextInitials = buildInitials(interestName, state.email);
+    const phoneLast4 = state.phone.replace(/\D/g, "").slice(-4);
+    if (!state.initials.trim() && nextInitials) {
+      setState(current => ({
+        ...current,
+        initials: current.initials || nextInitials,
+      }));
+    }
+    if (!last4.trim() && phoneLast4) {
+      setLast4(phoneLast4);
+    }
+  }, [step, state.initials, state.phone, state.email, interestName, last4, buildInitials]);
 
   useEffect(() => {
     if (!token) return;
@@ -701,7 +806,20 @@ export default function TeacherRegistrationPage() {
                         }
                         name="sms-code"
                         resetKey={smsResetKey}
+                        initialValue={state.phoneCode}
                       />
+                      {demoVerificationCode ? (
+                        <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-700">
+                          <span>Demo code: {demoVerificationCode}</span>
+                          <button
+                            type="button"
+                            onClick={useDemoCode}
+                            className="rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-700 transition hover:border-red-300 hover:text-red-600"
+                          >
+                            USE
+                          </button>
+                        </div>
+                      ) : null}
                       {smsSentStatus ? (
                         <SuccessCallout
                           title="Text Sent"
@@ -906,12 +1024,25 @@ export default function TeacherRegistrationPage() {
                       <input
                         type="checkbox"
                         checked={state.agreement}
-                        onChange={event =>
+                        onChange={event => {
+                          const checked = event.target.checked;
                           setState(current => ({
                             ...current,
-                            agreement: event.target.checked,
-                          }))
-                        }
+                            agreement: checked,
+                            terms: checked ? true : current.terms,
+                            communications: checked ? true : current.communications,
+                            policyMedia: checked ? true : current.policyMedia,
+                            policyTrademark: checked ? true : current.policyTrademark,
+                            policyCurriculum: checked ? true : current.policyCurriculum,
+                            policyPractice: checked ? true : current.policyPractice,
+                            policyBackground: checked ? true : current.policyBackground,
+                            policyInsurance: checked ? true : current.policyInsurance,
+                            policyCode: checked ? true : current.policyCode,
+                            policyData: checked ? true : current.policyData,
+                            policyPayments: checked ? true : current.policyPayments,
+                            policyTermination: checked ? true : current.policyTermination,
+                          }));
+                        }}
                         className="mt-1 h-5 w-5 rounded-md border-neutral-300 text-red-600 focus:ring-red-200"
                       />
                       <span>

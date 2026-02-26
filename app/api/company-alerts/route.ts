@@ -42,6 +42,9 @@ type AlertPayload = {
   registrationOpenedAt?: string;
   registrationActiveAt?: string;
   registrationCompletedAt?: string;
+  trainingLastOpenedAt?: string;
+  trainingUpdatedAt?: string;
+  trainingLastSessionSeconds?: number | null;
   qualifiedAt?: string;
   notQualifiedAt?: string;
   username?: string;
@@ -69,9 +72,19 @@ export async function GET() {
           c.interest_referral, c.interest_about,
           c.call_scheduled_at, c.questionnaire_emailed_at, c.questionnaire_token, c.questionnaire_opened_at, c.questionnaire_active_at, c.questionnaire_completed_at,
           c.registration_token, c.registration_emailed_at, c.registration_opened_at, c.registration_active_at, c.registration_completed_at,
-          c.qualified_at, c.not_qualified_at,
+          c.qualified_at, c.not_qualified_at, tta.last_opened_at as training_last_opened_at, tta.updated_at as training_updated_at, tta.last_session_seconds as training_last_session_seconds,
           qr.submitted_at as questionnaire_response_at
         FROM company_alerts c
+        LEFT JOIN teachers t ON (
+          LOWER(t.email) = LOWER(c.interest_email)
+          OR (
+            c.username IS NOT NULL
+            AND c.username != ''
+            AND LOWER(t.username) = LOWER(c.username)
+          )
+        )
+        LEFT JOIN teacher_training_activity tta
+          ON LOWER(tta.username) = LOWER(COALESCE(NULLIF(c.username, ''), t.username))
         LEFT JOIN (
           SELECT alert_id, MAX(submitted_at) as submitted_at
           FROM questionnaire_responses
@@ -129,6 +142,11 @@ export async function GET() {
     registrationOpenedAt: row.registration_opened_at ?? undefined,
     registrationActiveAt: row.registration_active_at ?? undefined,
     registrationCompletedAt: row.registration_completed_at ?? undefined,
+    trainingLastOpenedAt: row.training_last_opened_at ?? undefined,
+    trainingUpdatedAt: row.training_updated_at ?? undefined,
+    trainingLastSessionSeconds: row.training_last_session_seconds
+      ? Number(row.training_last_session_seconds)
+      : null,
     qualifiedAt: row.qualified_at ?? undefined,
     notQualifiedAt: row.not_qualified_at ?? undefined,
   };
@@ -143,10 +161,20 @@ export async function GET() {
           c.interest_referral, c.interest_about,
           c.call_scheduled_at, c.questionnaire_emailed_at, c.questionnaire_token, c.questionnaire_opened_at, c.questionnaire_active_at, c.questionnaire_completed_at,
           c.registration_token, c.registration_emailed_at, c.registration_opened_at, c.registration_active_at, c.registration_completed_at,
-          c.qualified_at, c.not_qualified_at,
+          c.qualified_at, c.not_qualified_at, tta.last_opened_at as training_last_opened_at, tta.updated_at as training_updated_at, tta.last_session_seconds as training_last_session_seconds,
           qr.submitted_at as questionnaire_response_at
         FROM company_alerts_active a
         JOIN company_alerts c ON c.id = a.alert_id
+        LEFT JOIN teachers t ON (
+          LOWER(t.email) = LOWER(c.interest_email)
+          OR (
+            c.username IS NOT NULL
+            AND c.username != ''
+            AND LOWER(t.username) = LOWER(c.username)
+          )
+        )
+        LEFT JOIN teacher_training_activity tta
+          ON LOWER(tta.username) = LOWER(COALESCE(NULLIF(c.username, ''), t.username))
         LEFT JOIN (
           SELECT alert_id, MAX(submitted_at) as submitted_at
           FROM questionnaire_responses
@@ -240,6 +268,17 @@ export async function GET() {
       registrationCompletedAt: row.registration_completed_at
         ? String(row.registration_completed_at)
         : undefined,
+      trainingLastOpenedAt: row.training_last_opened_at
+        ? String(row.training_last_opened_at)
+        : undefined,
+      trainingUpdatedAt: row.training_updated_at
+        ? String(row.training_updated_at)
+        : undefined,
+      trainingLastSessionSeconds:
+        row.training_last_session_seconds !== null &&
+        row.training_last_session_seconds !== undefined
+          ? Number(row.training_last_session_seconds)
+          : null,
       qualifiedAt: row.qualified_at ? String(row.qualified_at) : undefined,
       notQualifiedAt: row.not_qualified_at
         ? String(row.not_qualified_at)

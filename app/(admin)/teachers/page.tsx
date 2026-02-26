@@ -12,7 +12,14 @@ import LockedSectionCard from '../components/locked-section-card';
 import LessonCartPurchaseButton from '../components/lesson-cart-actions';
 import StudentPromoCard from '../components/student-promo-card';
 import LessonPackPromoCard from '../components/lesson-pack-promo-card';
+import HarmonyAssistant from '../components/harmony/harmony-assistant';
+import MidiPlayground from '@/app/components/midi-playground';
+import LessonPrepModal from '../components/lesson-prep-modal';
 import type { LessonPack } from '../components/lesson-pack-types';
+import { useLessonCart } from '../components/lesson-cart';
+import { useLessonCartScope } from '../components/lesson-cart-scope';
+import { isTeacherAutoUnlocked } from '../components/lesson-pricing';
+import { makeLessonId, slugifyLessonValue } from '../components/lesson-utils';
 import { useApiData } from '../components/use-api-data';
 import { useLessonData } from '../components/use-lesson-data';
 
@@ -110,6 +117,8 @@ export default function TeachersPage() {
     { students: [] },
   );
   const { lessonTypes, lessonSections } = useLessonData();
+  const { scope } = useLessonCartScope();
+  const { isPurchased, hasDevelopmentUnlock } = useLessonCart(scope);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [viewRole, setViewRole] = useState<string | null>(null);
@@ -117,11 +126,32 @@ export default function TeachersPage() {
   const [teacherName, setTeacherName] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [quickNote, setQuickNote] = useState('');
+  const [teachingMidiOpen, setTeachingMidiOpen] = useState(false);
+  const [isPrepOpen, setIsPrepOpen] = useState(false);
+  const [prepStudent, setPrepStudent] = useState<StudentRecord | null>(null);
+  const [expandedUpcomingLessonId, setExpandedUpcomingLessonId] = useState<
+    string | null
+  >(null);
+  const [prepForm, setPrepForm] = useState({
+    curriculumType: '',
+    section: '',
+    part: '',
+    material: '',
+    focus: '',
+    materials: '',
+    goal: '',
+    warmup: '',
+    notes: '',
+  });
   const [prepByStudent, setPrepByStudent] = useState<
     Record<
       string,
       {
         dateKey: string;
+        curriculumType: string;
+        section: string;
+        part: string;
+        material: string;
         focus: string;
         materials: string;
         goal: string;
@@ -599,6 +629,22 @@ export default function TeachersPage() {
     if (!record || record.dateKey !== todayKey) return null;
     return record.notes?.trim() ? record.notes.trim() : null;
   };
+  const hasAnyPrepData = (student?: StudentRecord | null) => {
+    if (!student) return false;
+    const record = prepByStudent[student.id];
+    if (!record || record.dateKey !== todayKey) return false;
+    return Boolean(
+      record.curriculumType?.trim() ||
+        record.section?.trim() ||
+        record.part?.trim() ||
+        record.material?.trim() ||
+        record.focus?.trim() ||
+        record.materials?.trim() ||
+        record.goal?.trim() ||
+        record.warmup?.trim() ||
+        record.notes?.trim(),
+    );
+  };
 
   const handleQuickNoteSave = () => {
     if (typeof window === 'undefined') return;
@@ -608,6 +654,70 @@ export default function TeachersPage() {
     } catch {
       // ignore storage failures
     }
+  };
+
+  const openPrepModal = (student: StudentRecord) => {
+    setPrepStudent(student);
+    const existing = prepByStudent[student.id];
+    if (existing && existing.dateKey === todayKey) {
+      setPrepForm({
+        curriculumType: existing.curriculumType ?? '',
+        section: existing.section ?? '',
+        part: existing.part ?? '',
+        material: existing.material ?? '',
+        focus: existing.focus,
+        materials: existing.materials,
+        goal: existing.goal,
+        warmup: existing.warmup,
+        notes: existing.notes,
+      });
+    } else {
+      setPrepForm({
+        curriculumType: '',
+        section: '',
+        part: '',
+        material: '',
+        focus: '',
+        materials: '',
+        goal: '',
+        warmup: '',
+        notes: '',
+      });
+    }
+    setIsPrepOpen(true);
+  };
+
+  const closePrepModal = () => {
+    setIsPrepOpen(false);
+    setPrepStudent(null);
+  };
+
+  const savePrepStore = (next: typeof prepByStudent) => {
+    setPrepByStudent(next);
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('sm_lesson_prep', JSON.stringify(next));
+  };
+
+  const handlePrepSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!prepStudent) return;
+    const next = {
+      ...prepByStudent,
+      [prepStudent.id]: {
+        dateKey: todayKey,
+        curriculumType: prepForm.curriculumType.trim(),
+        section: prepForm.section.trim(),
+        part: prepForm.part.trim(),
+        material: prepForm.material.trim(),
+        focus: prepForm.focus.trim(),
+        materials: prepForm.materials.trim(),
+        goal: prepForm.goal.trim(),
+        warmup: prepForm.warmup.trim(),
+        notes: prepForm.notes.trim(),
+      },
+    };
+    savePrepStore(next);
+    closePrepModal();
   };
 
   useEffect(() => {
@@ -653,6 +763,44 @@ export default function TeachersPage() {
   }, [searchParams, router, effectiveRole]);
 
   const rosterCount = useMemo(() => teachers.length, [teachers.length]);
+
+  const isSectionUnlocked = useMemo(() => {
+    return (programName: string, sectionName: string) => {
+      const sectionId = makeLessonId(programName, sectionName);
+      const isExtensionsProgram =
+        slugifyLessonValue(programName) ===
+        slugifyLessonValue('Extensions Program');
+      const autoUnlocked =
+        effectiveRole === 'teacher' &&
+        isTeacherAutoUnlocked(programName, sectionName);
+      return (
+        isPurchased(sectionId) ||
+        autoUnlocked ||
+        (isExtensionsProgram && hasDevelopmentUnlock)
+      );
+    };
+  }, [effectiveRole, hasDevelopmentUnlock, isPurchased]);
+  const showGatewayCard =
+    hubMode !== 'teaching' || isSectionUnlocked('Simply Music Gateway', 'Materials');
+
+  const getCurriculumProgress = (student?: StudentRecord | null) => {
+    if (!student) return null;
+    const record = prepByStudent[student.id];
+    if (!record) return null;
+    if (!record.curriculumType || !record.section) return null;
+    const material = record.material?.trim() ?? '';
+    const part = record.part?.trim() ?? '';
+    const query = new URLSearchParams({ mode: hubMode });
+    if (material) query.set('material', material);
+    if (part) query.set('part', part);
+    return {
+      href: `/teachers/programs/${toProgramSlug(record.curriculumType)}/${toProgramSlug(record.section)}?${query.toString()}`,
+      curriculumType: record.curriculumType,
+      section: record.section,
+      part,
+      material,
+    };
+  };
 
   const handleHubModeChange = (nextMode: 'training' | 'teaching') => {
     router.push(`/teachers?mode=${nextMode}`, { scroll: false });
@@ -772,11 +920,230 @@ export default function TeachersPage() {
     }
   };
 
+  const curriculumSection = (
+    <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+            Curriculum
+          </p>
+          <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
+            Program Library
+          </h2>
+          <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+            Browse each program and open a section to see materials.
+          </p>
+        </div>
+        <div className="md:pt-4" />
+      </div>
+      <div className="mt-6 space-y-6">
+        {lessonTypes
+          .filter(
+            type =>
+              type !== 'Learn-at-Home' && type !== 'Simply Music Gateway',
+          )
+          .map(type => {
+            const sectionData =
+              (lessonSections[type as keyof typeof lessonSections] as
+                | string[]
+                | Record<string, string[]>
+                | undefined) ?? [];
+            const sections = Array.isArray(sectionData)
+              ? sectionData
+              : sectionData
+                ? Object.values(sectionData).flat()
+                : [];
+            const visibleSections =
+              hubMode === 'teaching'
+                ? sections.filter(section => isSectionUnlocked(type, section))
+                : sections;
+            const visibleGroupedSections =
+              !Array.isArray(sectionData) && sectionData
+                ? Object.entries(sectionData)
+                    .map(([group, groupSections]) => [
+                      group,
+                      hubMode === 'teaching'
+                        ? groupSections.filter(section =>
+                            isSectionUnlocked(type, section),
+                          )
+                        : groupSections,
+                    ] as const)
+                    .filter(([, groupSections]) => groupSections.length > 0)
+                : [];
+            if (hubMode === 'teaching' && visibleSections.length === 0) {
+              return null;
+            }
+            return (
+              <div
+                key={type}
+                id={type === 'Development Program' ? 'development-program' : undefined}
+                className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="w-full">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                      {type}
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                      {visibleSections.length > 0
+                        ? 'Choose a section to view materials.'
+                        : 'No sections available yet.'}
+                    </p>
+                    {type === 'Extensions Program' ? (
+                      <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                        The Extensions Program is a further collection of
+                        pieces that provide additional source material for
+                        both beginning or more advanced students. It consists
+                        of new or re-purposed compositions and arrangements,
+                        many of which have two or three presentation versions
+                        provided, each pertaining to students who may be at
+                        different stages of their learning.
+                      </p>
+                    ) : null}
+                  </div>
+                  {hubMode !== 'teaching' ? (
+                    <div className="sm:pt-1">
+                      <Link
+                        href={`/teachers/programs/${toProgramSlug(type)}?mode=${hubMode}`}
+                        className="inline-flex items-center whitespace-nowrap rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                      >
+                        View all
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
+                {visibleSections.length > 0 ? (
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+                    {Array.isArray(sectionData) ? (
+                      <>
+                        <div className="min-w-0 space-y-4">
+                          {visibleSections
+                            .slice(0, Math.ceil(visibleSections.length / 2))
+                            .map(section => (
+                              <LockedSectionCard
+                                key={section}
+                                programName={type}
+                                sectionName={section}
+                                href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                hideWhenLocked={hubMode === 'teaching'}
+                              />
+                            ))}
+                        </div>
+                        <div className="min-w-0 space-y-4">
+                          {visibleSections
+                            .slice(Math.ceil(visibleSections.length / 2))
+                            .map(section => (
+                              <LockedSectionCard
+                                key={section}
+                                programName={type}
+                                sectionName={section}
+                                href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                hideWhenLocked={hubMode === 'teaching'}
+                              />
+                            ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-full space-y-10">
+                        {visibleGroupedSections.map(([group, groupSections]) => (
+                          <div key={group} className="space-y-4">
+                            <p className="text-sm font-semibold tracking-[0.2em] text-white">
+                              {group}
+                            </p>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                              {groupSections.map(section => (
+                                <LockedSectionCard
+                                  key={section}
+                                  programName={type}
+                                  sectionName={section}
+                                  href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
+                                  hideWhenLocked={hubMode === 'teaching'}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {showGatewayCard ? (
+            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                Special Needs Program
+              </p>
+              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
+                Simply Music Gateway
+              </p>
+              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                The Simply Music Gateway Program is a playing-based piano
+                method designed for anybody with special needs and learning
+                differences, including those on the Autism spectrum, as well
+                as those with learning disabilities, neurological
+                dysfunction, developmental delays, and ADHD.
+              </p>
+              <div className="mt-4">
+                <LockedSectionCard
+                  programName="Simply Music Gateway"
+                  sectionName="Materials"
+                  href={`/teachers/programs/${toProgramSlug('Simply Music Gateway')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
+                  hideWhenLocked={hubMode === 'teaching'}
+                />
+              </div>
+            </div>
+          ) : null}
+          <div
+            className={`rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 ${
+              showGatewayCard ? '' : 'md:col-span-2'
+            }`}
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+              Self-Study Programs
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]">
+                Music &amp; Creativity
+              </button>
+              <Link
+                href={`/teachers/programs/${toProgramSlug('Learn-at-Home')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
+                className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+              >
+                Learn-at-Home
+              </Link>
+            </div>
+            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+              Many students who complete our self-study programs continue
+              into lessons with a Simply Music Teacher. So you are aware of
+              the content provided, you may access these programs for
+              reference in case you acquire a self-study student.
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              We highly recommend that you create your own free Music &amp;
+              Creativity Program (MAC) account and familiarize yourself
+              with the contents. MAC replaces a prior self-study course,
+              the Learn-at-Home Program (LAH), that was produced and
+              released in 1999.
+            </p>
+            <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+              For more information on self-study programs please review the
+              Extras portion of Module 10 of the Initial Teacher Training
+              Program (ITTP).
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
   if (effectiveRole !== 'company') {
     return (
       <div className="space-y-6">
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="md:max-w-[50%]">
+        <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="w-full md:w-1/2">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               Teachers
             </p>
@@ -789,26 +1156,62 @@ export default function TeachersPage() {
                 : 'Curriculum paths, practice coaching, and studio readiness tools.'}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex w-full flex-col items-end gap-3 md:w-1/2">
             {hubMode === 'teaching' ? (
-              <div className="text-right">
-                <span className="text-base font-semibold uppercase tracking-[0.3em] text-[var(--c-1f1f1d)]">
-                  {new Intl.DateTimeFormat('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  }).format(offsetNow)}{' '}
-                  ·{' '}
-                  {new Intl.DateTimeFormat('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  }).format(offsetNow)}
-                </span>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]/70">
-                  Fast clock
-                </p>
+              <div className="grid w-full items-start gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="flex flex-col items-end gap-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                        hubMode === 'training'
+                          ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                          : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
+                      }`}
+                      onClick={() => handleHubModeChange('training')}
+                    >
+                      Training
+                    </button>
+                    <button
+                      className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                        hubMode === 'teaching'
+                          ? 'border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] text-[var(--sidebar-accent-text)]'
+                          : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] text-[var(--c-6f6c65)] hover:border-[var(--sidebar-accent-border)] hover:text-[var(--sidebar-accent-text)]'
+                      }`}
+                      onClick={() => handleHubModeChange('teaching')}
+                    >
+                      Teaching
+                    </button>
+                  </div>
+                  <div className="pt-1 text-right">
+                    <span className="text-base font-semibold uppercase tracking-[0.3em] text-[var(--c-1f1f1d)]">
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      }).format(offsetNow)}{' '}
+                      ·{' '}
+                      {new Intl.DateTimeFormat('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      }).format(offsetNow)}
+                    </span>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-[var(--c-9a9892)]/70">
+                      Fast clock
+                    </p>
+                  </div>
+                </div>
+                <HarmonyAssistant
+                  participantName={teacherName ?? 'Teacher'}
+                  identityPrefix={teacherName ?? 'teacher'}
+                  roomName="teachers-teaching-agent"
+                  dispatchMetadata={{ voice: 'female', mode: 'teaching' }}
+                  className="h-full lg:h-[108px]"
+                  cardClassName="h-full lg:h-[108px]"
+                  compactButtons
+                />
               </div>
             ) : null}
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            {hubMode !== 'teaching' ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
                   hubMode === 'training'
@@ -829,7 +1232,8 @@ export default function TeachersPage() {
               >
                 Teaching
               </button>
-            </div>
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -912,106 +1316,240 @@ export default function TeachersPage() {
         ) : null}
 
         {hubMode === 'teaching' ? (
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.6fr] lg:items-stretch">
-            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Teaching Flow
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-                {currentLesson ? 'Current Lesson' : 'Next Lesson'}
-              </h2>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                {currentLesson
-                  ? `In progress right now.`
-                  : `Up next for ${todayLabel}.`}
-              </p>
+          <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.4fr_0.6fr] 2xl:items-stretch">
+            <div className="space-y-4 2xl:col-start-1 2xl:row-start-1">
+              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5 shadow-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                  Teaching Flow
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+                  {currentLesson ? 'Current Lesson' : 'Next Lesson'}
+                </h2>
+                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                  {currentLesson
+                    ? `In progress right now.`
+                    : `Up next for ${todayLabel}.`}
+                </p>
 
-              <div className="mt-4 rounded-2xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] p-4">
-                {currentLesson || nextLesson ? (
-                  <>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div>
-                          <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
-                            {(currentLesson ?? nextLesson)?.name}
-                          </p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                            {(currentLesson ?? nextLesson)?.lessonTime ?? 'Time TBD'}
-                          </p>
-                        </div>
-                        {getPrepNotes(currentLesson ?? nextLesson) ? (
-                          <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[13px] text-[var(--c-6f6c65)]">
-                            <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
-                              Notes
-                            </span>
-                            <span className="text-[var(--c-1f1f1d)]">
-                              {getPrepNotes(currentLesson ?? nextLesson)}
-                            </span>
-                          </span>
-                        ) : null}
-                      </div>
-                      <span className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                        {currentLesson ? 'Now' : 'Next'}
-                      </span>
-                    </div>
-                    {!getPrepNotes(currentLesson ?? nextLesson) ? (
-                      <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
-                        No prep notes yet for this lesson.
-                      </p>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="text-sm text-[var(--c-6f6c65)]">
-                    No lessons scheduled for today.
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
-                    ({upcomingLessons.length}) Lessons Upcoming Today
-                  </p>
-                </div>
-                <div className="mt-2 space-y-2">
-                  {schedulePreview.length > 0 ? (
-                    schedulePreview.map(lesson => (
-                      <div
-                        key={lesson.id}
-                        className="rounded-xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] px-3 py-2 text-sm text-[var(--c-6f6c65)] shadow-[0_10px_24px_-20px_rgba(15,15,15,0.35)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="font-medium text-[var(--c-1f1f1d)]">
-                              {lesson.name}
-                            </span>
-                            {getPrepNotes(lesson) ? (
-                              <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[13px] text-[var(--c-6f6c65)]">
-                                <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
-                                  Notes
-                                </span>
-                                <span className="text-[var(--c-1f1f1d)]">
-                                  {getPrepNotes(lesson)}
-                                </span>
-                              </span>
-                            ) : null}
+                <div className="mt-4 rounded-2xl border border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)] p-4">
+                  {currentLesson || nextLesson ? (
+                    <>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div>
+                            <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
+                              {(currentLesson ?? nextLesson)?.name}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                              {(currentLesson ?? nextLesson)?.lessonTime ?? 'Time TBD'}
+                            </p>
                           </div>
-                          <span className="uppercase tracking-[0.2em] text-[10px] text-[var(--c-9a9892)]">
-                            {lesson.lessonTime ?? 'TBD'}
-                          </span>
+                          {getPrepNotes(currentLesson ?? nextLesson) ? (
+                            <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[13px] text-[var(--c-6f6c65)]">
+                              <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
+                                Notes
+                              </span>
+                              <span className="text-[var(--c-1f1f1d)]">
+                                {getPrepNotes(currentLesson ?? nextLesson)}
+                              </span>
+                            </span>
+                          ) : null}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = currentLesson ?? nextLesson;
+                            if (target) openPrepModal(target);
+                          }}
+                          className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                        >
+                          Prep
+                        </button>
                       </div>
-                    ))
+                      {!hasAnyPrepData(currentLesson ?? nextLesson) ? (
+                        <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
+                          No prep notes yet for this lesson.
+                        </p>
+                      ) : null}
+                      {getCurriculumProgress(currentLesson ?? nextLesson) ? (
+                        <div className="mt-3">
+                          <Link
+                            href={getCurriculumProgress(currentLesson ?? nextLesson)?.href ?? '#'}
+                            className="inline-flex items-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                          >
+                            {`Resume ${getCurriculumProgress(currentLesson ?? nextLesson)?.curriculumType} · ${getCurriculumProgress(currentLesson ?? nextLesson)?.section}`}
+                          </Link>
+                          {getCurriculumProgress(currentLesson ?? nextLesson)?.part ||
+                          getCurriculumProgress(currentLesson ?? nextLesson)?.material ? (
+                            <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                              {[
+                                getCurriculumProgress(currentLesson ?? nextLesson)?.material
+                                  ? `Material: ${getCurriculumProgress(currentLesson ?? nextLesson)?.material}`
+                                  : null,
+                                getCurriculumProgress(currentLesson ?? nextLesson)?.part
+                                  ? `Part ${getCurriculumProgress(currentLesson ?? nextLesson)?.part}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </>
                   ) : (
                     <p className="text-sm text-[var(--c-6f6c65)]">
-                      You&apos;re clear for the rest of today.
+                      No lessons scheduled for today.
                     </p>
                   )}
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                      ({upcomingLessons.length}) Lessons Upcoming Today
+                    </p>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {schedulePreview.length > 0 ? (
+                      schedulePreview.map(lesson => {
+                        const prepRecord = prepByStudent[lesson.id];
+                        const isPrepared = prepRecord?.dateKey === todayKey;
+                        const isExpanded = expandedUpcomingLessonId === lesson.id;
+                        const prepSummary = getPrepSummary(lesson);
+                        const curriculumProgress = getCurriculumProgress(lesson);
+                        const hasAnyPrep = hasAnyPrepData(lesson);
+                        return (
+                          <div
+                            key={lesson.id}
+                            onClick={() =>
+                              setExpandedUpcomingLessonId(current =>
+                                current === lesson.id ? null : lesson.id,
+                              )
+                            }
+                            className={`cursor-pointer rounded-2xl border px-4 py-3 shadow-[0_12px_24px_-18px_rgba(15,15,15,0.3)] ${
+                              isPrepared
+                                ? 'border-[var(--c-e5e3dd)] bg-[var(--c-e7eddc)]'
+                                : 'border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)]/75'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className={`inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm ${
+                                    isPrepared
+                                      ? 'border-[color:rgba(31,41,55,0.2)] bg-[var(--c-1f1f1d)] text-[var(--c-ffffff)]'
+                                      : 'border-[var(--c-e5e3dd)] bg-[var(--c-f7f7f5)] text-[var(--c-9a9892)]'
+                                  }`}
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                  >
+                                    <path
+                                      d="M20 6L9 17l-5-5"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </span>
+                                <span className="font-medium text-[var(--c-1f1f1d)]">
+                                  {lesson.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-9a9892)]">
+                                  {lesson.lessonTime ?? 'TBD'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={event => {
+                                    event.stopPropagation();
+                                    openPrepModal(lesson);
+                                  }}
+                                  className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                                >
+                                  Prep
+                                </button>
+                              </div>
+                            </div>
+                            {isExpanded ? (
+                              <div className="mt-3 border-t border-[var(--c-e5e3dd)] pt-3">
+                                {hasAnyPrep ? (
+                                  <>
+                                    {prepSummary.length > 0 ? (
+                                      <div className="grid gap-2 sm:grid-cols-2">
+                                        {prepSummary.map(item => (
+                                          <p
+                                            key={`${lesson.id}-${item.label}`}
+                                            className="text-sm text-[var(--c-6f6c65)]"
+                                          >
+                                            <span className="uppercase tracking-[0.18em] text-[11px] text-[var(--c-9a9892)]">
+                                              {item.label}
+                                            </span>{' '}
+                                            <span className="text-[var(--c-1f1f1d)]">
+                                              {item.value}
+                                            </span>
+                                          </p>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {curriculumProgress ? (
+                                      <div className="mt-3">
+                                        <Link
+                                          href={curriculumProgress.href}
+                                          onClick={event => event.stopPropagation()}
+                                          className="inline-flex items-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
+                                        >
+                                          {`Resume ${curriculumProgress.curriculumType} · ${curriculumProgress.section}`}
+                                        </Link>
+                                        {curriculumProgress.part ||
+                                        curriculumProgress.material ? (
+                                          <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
+                                            {[
+                                              curriculumProgress.material
+                                                ? `Material: ${curriculumProgress.material}`
+                                                : null,
+                                              curriculumProgress.part
+                                                ? `Part ${curriculumProgress.part}`
+                                                : null,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' · ')}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <p className="text-sm text-[var(--c-6f6c65)]">
+                                    No prep notes yet for this lesson.
+                                  </p>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-[var(--c-6f6c65)]">
+                        You&apos;re clear for the rest of today.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="2xl:col-start-1 2xl:row-start-2">
+              {curriculumSection}
+            </div>
+
+            <div className="space-y-4 2xl:col-start-2 2xl:row-span-2">
               <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
                   Next Student
@@ -1024,24 +1562,23 @@ export default function TeachersPage() {
                     ? `Lesson at ${nextLesson.lessonTime ?? 'TBD'}`
                     : 'No upcoming lessons scheduled for today.'}
                 </p>
-                {nextLesson ? (
-                  <div className="mt-3">
-                    {getPrepNotes(nextLesson) ? (
-                      <span className="inline-flex flex-col self-center rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1 text-left text-[14px] text-[var(--c-6f6c65)]">
-                        <span className="uppercase tracking-[0.2em] text-[12px] text-[var(--c-9a9892)]">
-                          Notes
-                        </span>
-                        <span className="text-[var(--c-1f1f1d)]">
-                          {getPrepNotes(nextLesson)}
-                        </span>
-                      </span>
-                    ) : (
-                      <p className="text-[15px] text-[var(--c-6f6c65)]">
-                        No prep notes yet for this student.
-                      </p>
-                    )}
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-3 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setTeachingMidiOpen(true)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-left transition hover:border-[color:var(--c-c8102e)]/35"
+                >
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                      Set Chords or Positions
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                      Save Chord References For Quick Visuals During Your Lesson
+                    </p>
                   </div>
-                ) : null}
+                </button>
               </div>
 
               <StudentPromoCard
@@ -1082,193 +1619,47 @@ export default function TeachersPage() {
             </div>
           </section>
         ) : null}
+        {hubMode === 'teaching' && teachingMidiOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <button
+              type="button"
+              className="absolute inset-0"
+              aria-label="Close MIDI keyboard"
+              onClick={() => setTeachingMidiOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-[1200px] rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                    Set Chords or Positions
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--c-6f6c65)]">
+                    Save Chord References For Quick Visuals During Your Lesson
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTeachingMidiOpen(false)}
+                  className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/35 hover:text-[var(--c-c8102e)]"
+                >
+                  Close
+                </button>
+              </div>
+              <MidiPlayground embedded autoEnableAudio />
+            </div>
+          </div>
+        ) : null}
+        <LessonPrepModal
+          isOpen={hubMode === 'teaching' && isPrepOpen}
+          studentName={prepStudent?.name ?? null}
+          prepForm={prepForm}
+          setPrepForm={setPrepForm}
+          onClose={closePrepModal}
+          onSubmit={handlePrepSubmit}
+          maxWidthClassName="max-w-3xl"
+        />
 
-        <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Curriculum
-              </p>
-              <h2 className="text-2xl font-semibold text-[var(--c-1f1f1d)] mt-2">
-                Program Library
-              </h2>
-              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-                Browse each program and open a section to see materials.
-              </p>
-            </div>
-            <div className="md:pt-4" />
-          </div>
-          <div className="mt-6 space-y-6">
-            {lessonTypes
-              .filter(
-                type =>
-                  type !== 'Learn-at-Home' && type !== 'Simply Music Gateway',
-              )
-              .map(type => {
-              const sectionData =
-                (lessonSections[type as keyof typeof lessonSections] as
-                  | string[]
-                  | Record<string, string[]>
-                  | undefined) ?? [];
-              const sections = Array.isArray(sectionData)
-                ? sectionData
-                : sectionData
-                  ? Object.values(sectionData).flat()
-                  : [];
-              return (
-              <div
-                key={type}
-                id={type === 'Development Program' ? 'development-program' : undefined}
-                className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] p-5"
-              >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="w-full">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                        {type}
-                      </p>
-                      <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                        {sections.length > 0
-                          ? 'Choose a section to view materials.'
-                          : 'No sections available yet.'}
-                      </p>
-                      {type === 'Extensions Program' ? (
-                        <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
-                          The Extensions Program is a further collection of
-                          pieces that provide additional source material for
-                          both beginning or more advanced students. It consists
-                          of new or re-purposed compositions and arrangements,
-                          many of which have two or three presentation versions
-                          provided, each pertaining to students who may be at
-                          different stages of their learning.
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="sm:pt-1">
-                      <Link
-                        href={`/teachers/programs/${toProgramSlug(type)}?mode=${hubMode}`}
-                        className="inline-flex items-center whitespace-nowrap rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-[12px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                      >
-                        View all
-                      </Link>
-                    </div>
-                  </div>
-                  {sections.length > 0 ? (
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
-                      {Array.isArray(sectionData) ? (
-                        <>
-                          <div className="min-w-0 space-y-4">
-                            {sections
-                              .slice(0, Math.ceil(sections.length / 2))
-                              .map(section => (
-                                <LockedSectionCard
-                                  key={section}
-                                  programName={type}
-                                  sectionName={section}
-                                  href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
-                                />
-                              ))}
-                          </div>
-                          <div className="min-w-0 space-y-4">
-                            {sections
-                              .slice(Math.ceil(sections.length / 2))
-                              .map(section => (
-                                <LockedSectionCard
-                                  key={section}
-                                  programName={type}
-                                  sectionName={section}
-                                  href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
-                                />
-                              ))}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="col-span-full space-y-10">
-                          {Object.entries(sectionData ?? {}).map(
-                            ([group, groupSections]) => (
-                              <div key={group} className="space-y-4">
-                                <p className="text-sm font-semibold tracking-[0.2em] text-white">
-                                  {group}
-                                </p>
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                  {groupSections.map(section => (
-                                    <LockedSectionCard
-                                      key={section}
-                                      programName={type}
-                                      sectionName={section}
-                                      href={`/teachers/programs/${toProgramSlug(type)}/${toProgramSlug(section)}?mode=${hubMode}`}
-                                    />
-                                  ))}
-                                </div>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                Special Needs Program
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--c-1f1f1d)]">
-                Simply Music Gateway
-              </p>
-              <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                The Simply Music Gateway Program is a playing-based piano
-                method designed for anybody with special needs and learning
-                differences, including those on the Autism spectrum, as well
-                as those with learning disabilities, neurological
-                dysfunction, developmental delays, and ADHD.
-              </p>
-              <div className="mt-4">
-                <LockedSectionCard
-                  programName="Simply Music Gateway"
-                  sectionName="Materials"
-                  href={`/teachers/programs/${toProgramSlug('Simply Music Gateway')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
-                />
-              </div>
-            </div>
-              <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                  Self-Study Programs
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]">
-                    Music &amp; Creativity
-                  </button>
-                  <Link
-                    href={`/teachers/programs/${toProgramSlug('Learn-at-Home')}/${toProgramSlug('Materials')}?mode=${hubMode}`}
-                    className="rounded-full border border-[var(--c-e5e3dd)] bg-[var(--c-ffffff)] px-3 py-1.5 text-xs font-semibold text-[var(--c-1f1f1d)] transition hover:border-[color:var(--c-c8102e)]/40 hover:text-[var(--c-c8102e)]"
-                  >
-                    Learn-at-Home
-                  </Link>
-                </div>
-                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                  Many students who complete our self-study programs continue
-                  into lessons with a Simply Music Teacher. So you are aware of
-                  the content provided, you may access these programs for
-                  reference in case you acquire a self-study student.
-                </p>
-                <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
-                  We highly recommend that you create your own free Music &amp;
-                  Creativity Program (MAC) account and familiarize yourself
-                  with the contents. MAC replaces a prior self-study course,
-                  the Learn-at-Home Program (LAH), that was produced and
-                  released in 1999.
-                </p>
-                <p className="mt-3 text-sm text-[var(--c-6f6c65)]">
-                  For more information on self-study programs please review the
-                  Extras portion of Module 10 of the Initial Teacher Training
-                  Program (ITTP).
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {hubMode !== 'teaching' ? curriculumSection : null}
       {showUsernameModal && pathname === '/ittp' ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
           <div className="w-full max-w-lg rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl">

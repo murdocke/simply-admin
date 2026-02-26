@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       createdAt: now,
     });
 
-    return NextResponse.json({ ok: true, expiresAt });
+    return NextResponse.json({ ok: true, expiresAt, demoCode: code });
   }
 
   if (body.action === 'verify-code') {

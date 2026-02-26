@@ -100,7 +100,9 @@ export async function POST() {
   db.prepare(`DELETE FROM registration_verification_codes`).run();
   db.prepare(`DELETE FROM lead_verification_codes`).run();
   db.prepare(
-    `DELETE FROM notification_events WHERE source IN ('Teacher Interest', 'Teacher Registration', 'Questionnaire', 'Lead Form', 'Registration')`,
+    `DELETE FROM notification_events
+      WHERE source IN ('Teacher Interest', 'Teacher Registration', 'Questionnaire', 'Lead Form', 'Registration')
+         OR (source = 'ITTP Training' AND title = 'Training Module Completed')`,
   ).run();
 
   const alertsPath = path.join(process.cwd(), 'data', 'company-alerts.json');

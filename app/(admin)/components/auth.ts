@@ -62,6 +62,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
     ],
     dev: [
       { label: 'Dashboard', href: '/dev/dashboard' },
+      { label: 'Rev Streams', href: '/rev-streams' },
       { label: 'Devel List', href: '/dev/devel-list' },
       { label: 'Messages', href: '/dev/messages' },
       { label: 'System Status', href: '/dev/system-status' },
@@ -74,6 +75,7 @@ export const navItems: Record<UserRole, Array<{ label: string; href: string }>> 
 export const allowedRoots: Record<UserRole, string[]> = {
   company: [
     '/dashboard',
+    '/qr-example',
     '/schedule',
     '/company',
     '/company/orders',
@@ -90,6 +92,7 @@ export const allowedRoots: Record<UserRole, string[]> = {
     '/studios',
     '/support',
     '/teacher-interest',
+    '/rev-streams',
   ],
     teacher: [
       '/teachers',
@@ -106,5 +109,6 @@ export const allowedRoots: Record<UserRole, string[]> = {
   dev: [
     '/dev',
     '/ecosystem-model',
+    '/rev-streams',
   ],
 };

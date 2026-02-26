@@ -55,11 +55,8 @@ export default function IttpPage() {
   const [trainingUsername, setTrainingUsername] = useState<string | null>(null);
   const sessionStartRef = useRef<number | null>(null);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
-  const moduleBodyRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [moduleBodyMaxHeights, setModuleBodyMaxHeights] = useState<
-    Array<number | null>
-  >(Array(10).fill(null));
   const moduleCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const NON_ACTIVE_MODULE_MAX_HEIGHT = 280;
   const isVideoVisible = showVideo && !slideAway;
   const pdfFrameClass =
     'overflow-hidden rounded-2xl border border-[var(--c-ecebe7)] bg-white w-full';
@@ -234,7 +231,9 @@ export default function IttpPage() {
       }).catch(() => {});
     };
     sendOpen();
+    const interval = window.setInterval(sendOpen, 15000);
     return () => {
+      window.clearInterval(interval);
       const start = sessionStartRef.current ?? Date.now();
       const durationSeconds = (Date.now() - start) / 1000;
       fetch('/api/teacher-training/activity', {
@@ -718,48 +717,6 @@ export default function IttpPage() {
   }, [showWelcome, introTriggered]);
 
   useEffect(() => {
-    const computeHeights = () => {
-      const nextHeights = Array(10).fill(null) as Array<number | null>;
-      for (let index = 0; index < 10; index += 2) {
-        const leftRef = moduleBodyRefs.current[index];
-        const rightRef = moduleBodyRefs.current[index + 1];
-        if (!leftRef || !rightRef) continue;
-        const leftHeight = leftRef.scrollHeight;
-        const rightHeight = rightRef.scrollHeight;
-        const leftModule = index + 1;
-        const rightModule = index + 2;
-        const activeInPair =
-          displayActiveModule === leftModule || displayActiveModule === rightModule;
-
-        if (activeInPair) {
-          const activeHeight =
-            displayActiveModule === leftModule ? leftHeight : rightHeight;
-          const otherIndex =
-            displayActiveModule === leftModule ? index + 1 : index;
-          const otherHeight = otherIndex === index ? leftHeight : rightHeight;
-          if (otherHeight > activeHeight) {
-            nextHeights[otherIndex] = activeHeight;
-          }
-        } else {
-          if (leftHeight > rightHeight) {
-            nextHeights[index] = rightHeight;
-          } else if (rightHeight > leftHeight) {
-            nextHeights[index + 1] = leftHeight;
-          }
-        }
-      }
-      setModuleBodyMaxHeights(nextHeights);
-    };
-
-    const raf = window.requestAnimationFrame(computeHeights);
-    window.addEventListener('resize', computeHeights);
-    return () => {
-      window.cancelAnimationFrame(raf);
-      window.removeEventListener('resize', computeHeights);
-    };
-  }, [displayActiveModule, module1OverviewRead, module1BreakdownRead, showWelcome]);
-
-  useEffect(() => {
     if (displayActiveModule === 1) return;
     const target = moduleCardRefs.current[displayActiveModule - 1];
     if (!target) return;
@@ -1110,18 +1067,18 @@ export default function IttpPage() {
             <h3 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
               Training Modules
             </h3>
-            <p className="mt-2 text-base text-[var(--c-6f6c65)]">
+            <p className="mt-2 whitespace-nowrap text-base text-[var(--c-6f6c65)]">
               Work through each module in order to unlock the next step.
             </p>
           </div>
           <div className="flex md:justify-end">
-            <div className="inline-flex items-center rounded-full border border-[var(--c-ecebe7)] bg-white px-4 py-2 text-xl font-semibold uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
+            <div className="inline-flex items-center rounded-full border border-[var(--c-ecebe7)] bg-white px-4 py-2 text-sm font-semibold uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
               You are working on Module {activeModule}
             </div>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-8">
           {Array.from({ length: 10 }).map((_, index) => {
             const moduleNumber = index + 1;
               const isActiveModule = moduleNumber === displayActiveModule;
@@ -1230,16 +1187,11 @@ export default function IttpPage() {
                   ) : null}
                   </div>
                   <div
-                    ref={el => {
-                      moduleBodyRefs.current[moduleNumber - 1] = el;
-                    }}
-                    className="space-y-6 overflow-hidden transition-opacity duration-500"
+                    className="space-y-6 overflow-hidden transition-[max-height,opacity] duration-500"
                     style={
-                      moduleBodyMaxHeights[moduleNumber - 1]
-                        ? {
-                            maxHeight: `${moduleBodyMaxHeights[moduleNumber - 1]}px`,
-                          }
-                        : undefined
+                      isActiveModule
+                        ? undefined
+                        : { maxHeight: `${NON_ACTIVE_MODULE_MAX_HEIGHT}px` }
                     }
                   >
                   {moduleNumber === 1 ? (
@@ -1249,8 +1201,8 @@ export default function IttpPage() {
                           {!isModalOpen ? (
                             <iframe
                               title="ITTP Module 1 Overview"
-                              src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                              className="h-72 w-full"
+                              src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                              className="h-150 w-full"
                             />
                           ) : null}
                         </div>
@@ -1270,7 +1222,7 @@ export default function IttpPage() {
                           >
                             Download Overview
                           </a>
-                          <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module1OverviewRead}
@@ -1297,8 +1249,8 @@ export default function IttpPage() {
                           {!isModalOpen ? (
                             <iframe
                               title="ITTP Module 1 Breakdown"
-                              src="/reference/ITTP/PDF/ITTP_MOD1_ITTP-Module-Breakdown.pdf"
-                              className="h-72 w-full"
+                              src="/reference/ITTP/PDF/ITTP_MOD1_ITTP-Module-Breakdown.pdf#toolbar=0&navpanes=0"
+                              className="h-150 w-full"
                             />
                           ) : null}
                         </div>
@@ -1318,7 +1270,7 @@ export default function IttpPage() {
                           >
                             Download Breakdown
                           </a>
-                          <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                          <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module1BreakdownRead}
@@ -1398,8 +1350,8 @@ export default function IttpPage() {
                           {!isModalOpen ? (
                             <iframe
                               title="ITTP Module 2 Overview"
-                              src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                              className="h-72 w-full"
+                              src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                              className="h-150 w-full"
                             />
                           ) : null}
                         </div>
@@ -1419,7 +1371,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module2OverviewRead}
@@ -1491,8 +1443,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 3 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -1511,7 +1463,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module3OverviewRead}
@@ -1976,8 +1928,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 5 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -1996,7 +1948,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module5OverviewRead}
@@ -2253,8 +2205,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 6 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -2273,7 +2225,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module6OverviewRead}
@@ -2511,8 +2463,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 7 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -2531,7 +2483,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module7OverviewRead}
@@ -2774,8 +2726,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 8 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -2794,7 +2746,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module8OverviewRead}
@@ -2994,8 +2946,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 9 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -3014,7 +2966,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module9OverviewRead}
@@ -3132,8 +3084,8 @@ export default function IttpPage() {
                         <div className={pdfFrameClass}>
                           <iframe
                             title="ITTP Module 10 Overview"
-                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf"
-                            className="h-72 w-full"
+                            src="/reference/ITTP/PDF/ITTP_MOD1_Overview.pdf#toolbar=0&navpanes=0"
+                            className="h-150 w-full"
                           />
                         </div>
                         <div className="space-y-4">
@@ -3152,7 +3104,7 @@ export default function IttpPage() {
                             >
                               Download Overview
                             </a>
-                            <label className="inline-flex items-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                            <label className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-f7f7f5)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                             <input
                               type="checkbox"
                               checked={module10OverviewRead}

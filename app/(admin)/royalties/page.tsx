@@ -95,8 +95,12 @@ export default function RoyaltiesPage() {
     () =>
       rows.map(row => ({
         ...row,
-        lastStudents: Math.max(0, Math.round(row.lastStudents * combinedScale)),
-        currentStudents: Math.max(0, Math.round(row.currentStudents * combinedScale)),
+        // Keep precision so small assumption changes (for example +1 teacher) update totals immediately.
+        lastStudents: Math.max(0, Number((row.lastStudents * combinedScale).toFixed(2))),
+        currentStudents: Math.max(
+          0,
+          Number((row.currentStudents * combinedScale).toFixed(2)),
+        ),
       })),
     [rows, combinedScale],
   );
@@ -207,7 +211,10 @@ export default function RoyaltiesPage() {
     const normalized = {
       teacherCount: Math.max(0, Math.round(next.teacherCount)),
       avgStudentsPerTeacher: Math.max(0, Number(next.avgStudentsPerTeacher)),
-      lessonsPerStudent: Math.max(0, Math.round(next.lessonsPerStudent)),
+      lessonsPerStudent: Math.max(
+        0,
+        Number(Number(next.lessonsPerStudent).toFixed(1))
+      ),
       teacherFee: Math.max(0, Number(next.teacherFee)),
       studentFee: Math.max(0, Number(next.studentFee)),
     };
@@ -327,7 +334,9 @@ export default function RoyaltiesPage() {
             Lessons
           </p>
           <p className="text-4xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-            {(totals.students * assumptions.lessonsPerStudent).toLocaleString('en-US')}
+            {Math.round(
+              totals.students * assumptions.lessonsPerStudent
+            ).toLocaleString('en-US')}
           </p>
           <p className="text-sm text-[var(--c-6f6c65)] mt-2">
             Total lessons per month modeled

@@ -1,7 +1,8 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
-import { Space_Grotesk } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { spaceGrotesk } from "@/app/fonts";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -359,15 +360,18 @@ const buildUsername = (email: string, firstName: string, lastName: string) => {
   return fromName || `teacher${Math.floor(Math.random() * 9000 + 1000)}`;
 };
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
 export default function LeadFormEmbedPage() {
   const [step, setStep] = useState<Step>(1);
-  const [state, setState] = useState<FormState>(() => getRandomPrefill());
-  const [targetSequence, setTargetSequence] = useState<PianoNote[]>([]);
+  const [state, setState] = useState<FormState>(() => {
+    const prefill = getRandomPrefill();
+    return {
+      ...prefill,
+      phone: formatPhone(prefill.phone),
+    };
+  });
+  const [targetSequence, setTargetSequence] = useState<PianoNote[]>(() =>
+    getRandomPianoSequence(3),
+  );
   const [pianoSequence, setPianoSequence] = useState<PianoNote[]>([]);
   const [pianoPassed, setPianoPassed] = useState(false);
   const [leadVerificationToken, setLeadVerificationToken] = useState(() =>
@@ -383,6 +387,7 @@ export default function LeadFormEmbedPage() {
   );
   const [emailResetKey, setEmailResetKey] = useState(0);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [demoVerificationCode, setDemoVerificationCode] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -496,10 +501,14 @@ export default function LeadFormEmbedPage() {
       setVerifyError("We couldn't send the code yet. Please try again.");
       return;
     }
-    const data = (await response.json()) as { expiresAt?: string | null };
+    const data = (await response.json()) as {
+      expiresAt?: string | null;
+      demoCode?: string | null;
+    };
     setEmailSentStatus(true);
     setEmailExpiresAt(data?.expiresAt ?? null);
-    setEmailResendAt(new Date(Date.now() + 60_000).toISOString());
+    setDemoVerificationCode(data?.demoCode ?? null);
+    setEmailResendAt(new Date(Date.now() + 10_000).toISOString());
     setEmailVerified(false);
     setEmailCode("");
     setEmailResetKey(current => current + 1);
@@ -528,6 +537,12 @@ export default function LeadFormEmbedPage() {
     setVerifyError(null);
     setEmailVerified(true);
     return true;
+  };
+
+  const useDemoCode = () => {
+    if (!demoVerificationCode) return;
+    setEmailCode(demoVerificationCode);
+    setVerifyError(null);
   };
 
   const handleNext = async () => {
@@ -564,17 +579,7 @@ export default function LeadFormEmbedPage() {
   };
 
   useEffect(() => {
-    setTargetSequence(getRandomPianoSequence(3));
-  }, []);
-
-  useEffect(() => {
-    setState(prev => ({
-      ...prev,
-      phone: prev.phone ? formatPhone(prev.phone) : prev.phone,
-    }));
-  }, []);
-
-  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEmailSentStatus(false);
     setEmailVerified(false);
     setEmailCode("");
@@ -583,12 +588,14 @@ export default function LeadFormEmbedPage() {
     setEmailResendAt(null);
     setEmailResendRemaining(null);
     setEmailResetKey(current => current + 1);
+    setDemoVerificationCode(null);
     setLeadVerificationToken(crypto.randomUUID());
     setVerifyError(null);
   }, [state.email]);
 
   useEffect(() => {
     if (!emailExpiresAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEmailRemaining(null);
       return;
     }
@@ -609,6 +616,7 @@ export default function LeadFormEmbedPage() {
 
   useEffect(() => {
     if (!emailResendAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEmailResendRemaining(null);
       return;
     }
@@ -1100,6 +1108,18 @@ export default function LeadFormEmbedPage() {
                       letterSpacing: emailCode.length > 0 ? "0.5em" : "normal",
                     }}
                   />
+                  {demoVerificationCode ? (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-700">
+                      <span>Demo code: {demoVerificationCode}</span>
+                      <button
+                        type="button"
+                        onClick={useDemoCode}
+                        className="rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-700 transition hover:border-red-300 hover:text-red-600"
+                      >
+                        USE
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 {emailSentStatus && emailRemaining !== 0 ? (
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700 shadow-sm">

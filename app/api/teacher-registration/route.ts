@@ -15,7 +15,14 @@ export async function GET(request: Request) {
   const alert = db
     .prepare(
       `
-      SELECT id, interest_name, interest_email, interest_phone, interest_city, interest_region
+      SELECT
+        id,
+        interest_name,
+        interest_email,
+        interest_phone,
+        interest_city,
+        interest_region,
+        interest_postal_code
       FROM company_alerts
       WHERE registration_token = ?
     `,
@@ -28,6 +35,7 @@ export async function GET(request: Request) {
         interest_phone?: string;
         interest_city?: string;
         interest_region?: string;
+        interest_postal_code?: string;
       }
     | undefined;
   const emailLower = alert?.interest_email?.trim().toLowerCase() ?? '';
@@ -98,11 +106,13 @@ export async function GET(request: Request) {
     teacherName: existingTeacher?.name ?? null,
     teacherEmail: existingTeacher?.email ?? null,
     name: firstName,
+    fullName: full,
     alertId: alert?.id ?? null,
     email: alert?.interest_email ?? null,
     phone: alert?.interest_phone ?? null,
     city: alert?.interest_city ?? null,
     region: alert?.interest_region ?? null,
+    postalCode: alert?.interest_postal_code ?? null,
     emailCodeExpiresAt: activeEmail?.expires_at ?? null,
     smsCodeExpiresAt: activeSms?.expires_at ?? null,
   });
@@ -243,7 +253,7 @@ export async function POST(request: Request) {
         )
       `,
     ).run(event);
-    return NextResponse.json({ ok: true, expiresAt });
+    return NextResponse.json({ ok: true, expiresAt, demoCode: code });
   }
 
   if (body.action === 'verify-code') {
@@ -493,10 +503,11 @@ export async function POST(request: Request) {
         UPDATE company_alerts
         SET
           registration_completed_at = ?,
-          registration_active_at = NULL
+          registration_active_at = NULL,
+          username = ?
         WHERE registration_token = ?
       `,
-    ).run(now, body.token);
+    ).run(now, username.toLowerCase(), body.token);
     const teacherSubject = 'Welcome to Simply Music Teacher Training';
     const teacherBody = `Hi ${name}, your Simply Music Teacher Training account is ready. You can log in to finish setting up your profile and start your training journey.`;
     const adminSubject = 'New Training Teacher Registration';

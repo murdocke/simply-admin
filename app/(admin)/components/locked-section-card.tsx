@@ -17,6 +17,7 @@ type LockedSectionCardProps = {
   sectionName: string;
   href: string;
   className?: string;
+  hideWhenLocked?: boolean;
 };
 
 export default function LockedSectionCard({
@@ -24,6 +25,7 @@ export default function LockedSectionCard({
   sectionName,
   href,
   className = '',
+  hideWhenLocked = false,
 }: LockedSectionCardProps) {
   const { scope } = useLessonCartScope();
   const { isPurchased, isInCart, toggleItem, hasDevelopmentUnlock } =
@@ -72,6 +74,10 @@ export default function LockedSectionCard({
     );
   }
 
+  if (hideWhenLocked) {
+    return null;
+  }
+
   if (isExtensionsProgram && !purchased) {
     return (
       <div
@@ -108,7 +114,7 @@ export default function LockedSectionCard({
               <rect x="4" y="11" width="16" height="9" rx="2" />
               <path d="M8 11V8a4 4 0 1 1 8 0v3" />
             </svg>
-            Unlock this section with 4 Development purchases
+            Unlock this section with any Development purchase
           </button>
         </div>
       </div>

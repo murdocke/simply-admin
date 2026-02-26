@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TimeBadge from '../components/time-badge';
+import HarmonyAssistant from '../components/harmony/harmony-assistant';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -91,6 +92,9 @@ export default function DashboardPage() {
       registrationOpenedAt?: string;
       registrationActiveAt?: string;
       registrationCompletedAt?: string;
+      trainingLastOpenedAt?: string;
+      trainingUpdatedAt?: string;
+      username?: string;
     }[]
   >([]);
   const [companyAlertsLoading, setCompanyAlertsLoading] = useState(false);
@@ -171,12 +175,7 @@ export default function DashboardPage() {
       const normalized = Array.isArray(rawAlerts) ? rawAlerts : [rawAlerts];
       setCompanyAlerts(
         normalized
-          .filter(
-            alert =>
-              alert?.title &&
-              alert?.body &&
-              !alert?.registrationCompletedAt,
-          )
+          .filter(alert => alert?.title && alert?.body)
           .sort((a, b) => {
             const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -214,6 +213,15 @@ export default function DashboardPage() {
         {location ? ` · ${location}` : null}
       </p>
     );
+  };
+
+  const getInterestDisplayName = (alert: (typeof companyAlerts)[number]) => {
+    const direct = alert.interestName?.trim();
+    if (direct) return direct;
+    const divider = ' requested info about teaching Simply Music.';
+    const fromBody = alert.body.split(divider)[0]?.trim();
+    if (fromBody) return fromBody;
+    return 'This teacher';
   };
 
   const writePromoPayload = () => {
@@ -398,36 +406,32 @@ export default function DashboardPage() {
     : null;
   const quickRoutes = [
     { label: 'Teachers', href: '/simplymusic/teachers/', logoutOnClick: true },
-    { label: 'Students', href: '/simplymusic/students/', logoutOnClick: true },
     { label: 'Lead Form', href: '/embed/lead-form/' },
-    { label: 'Locator', href: '/simplymusic/locator', logoutOnClick: true },
-    {
-      label: 'Student Registration',
-      href: '/student-registration',
-      logoutOnClick: true,
-    },
     questionnaireHref
       ? { label: 'Questionnaire', href: questionnaireHref }
       : null,
     registrationHref
-      ? { label: 'Teacher Registration', href: registrationHref }
+      ? { label: 'Teacher Reg', href: registrationHref }
       : null,
+    { label: 'Students', href: '/simplymusic/students/', logoutOnClick: true },
+    {
+      label: 'Student Reg',
+      href: '/student-registration',
+      logoutOnClick: true,
+    },
+    { label: 'QR Example', href: '/qr-example', directLink: true },
+    { label: 'Locator', href: '/simplymusic/locator', logoutOnClick: true },
+    { label: 'Video Process', href: '/students/vid-example', directLink: true },
   ].filter(Boolean) as Array<{
     label: string;
     href: string;
     logoutOnClick?: boolean;
+    directLink?: boolean;
   }>;
-  const handleCopyRoute = useCallback(async (route: (typeof quickRoutes)[number]) => {
-    if (route.logoutOnClick) {
-      window.localStorage.removeItem('sm_user');
-      window.localStorage.removeItem('sm_view_role');
-      window.localStorage.removeItem('sm_view_teacher');
-      window.localStorage.removeItem('sm_view_student');
-    }
-    const url = `${window.location.origin}${route.href}`;
+  const copyToClipboard = useCallback(async (text: string) => {
     const fallbackCopy = () => {
       const textarea = document.createElement('textarea');
-      textarea.value = url;
+      textarea.value = text;
       textarea.setAttribute('readonly', '');
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
@@ -442,7 +446,7 @@ export default function DashboardPage() {
     };
     if (navigator.clipboard?.writeText) {
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(text);
         return;
       } catch {
         fallbackCopy();
@@ -452,8 +456,13 @@ export default function DashboardPage() {
     fallbackCopy();
   }, []);
 
+  const handleCopyRoute = useCallback(async (route: (typeof quickRoutes)[number]) => {
+    const url = `${window.location.origin}${route.href}`;
+    await copyToClipboard(url);
+  }, [copyToClipboard]);
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
       <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
@@ -466,13 +475,23 @@ export default function DashboardPage() {
             Choose a workspace to jump into a focused view.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-stretch">
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-end">
           <div className="h-full rounded-3xl border border-[var(--c-ecebe7)] bg-[linear-gradient(135deg,var(--c-ffffff),var(--c-f7f7f5))] p-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <TimeBadge label="Melbourne" timeZone="Australia/Melbourne" />
               <TimeBadge label="Sacramento" timeZone="America/Los_Angeles" />
             </div>
           </div>
+          <HarmonyAssistant
+            participantName="Company"
+            identityPrefix="company"
+            roomName="company-voice-agent"
+            dispatchMetadata={{ voice: 'female', mode: 'company' }}
+            className="h-full"
+            cardClassName="h-full"
+            cardStyle={{ height: 'calc(100% - 3px)' }}
+            tallButtons
+          />
         </div>
       </div>
 
@@ -515,6 +534,26 @@ export default function DashboardPage() {
               const registrationCompletedAt = alert.registrationCompletedAt
                 ? new Date(alert.registrationCompletedAt)
                 : null;
+              const isRegistrationComplete = Boolean(registrationCompletedAt);
+              const alertFormHref = isRegistrationComplete
+                ? null
+                : alert.interestStage === 'qualified' && alert.registrationToken
+                  ? `/teacher-registration?token=${encodeURIComponent(
+                      alert.registrationToken,
+                    )}`
+                  : alert.questionnaireToken
+                    ? `/questionnaire?token=${encodeURIComponent(
+                        alert.questionnaireToken,
+                      )}`
+                    : alert.registrationToken
+                      ? `/teacher-registration?token=${encodeURIComponent(
+                          alert.registrationToken,
+                        )}`
+                      : null;
+              const alertFormLabel =
+                alert.interestStage === 'qualified' || !alert.questionnaireToken
+                  ? 'Registration Form'
+                  : 'Questionnaire';
               const isRegistrationActive = registrationActiveAt
                 ? Date.now() - registrationActiveAt.getTime() < 30 * 1000
                 : false;
@@ -549,95 +588,130 @@ export default function DashboardPage() {
                     : alert.interestStage === 'questionnaire_sent'
                       ? 'Questionnaire Sent'
                       : null;
-              const showRegistration = alert.interestStage === 'qualified';
-              const liveStatus = showRegistration ? registrationStatus : questionnaireStatus;
-              const liveOpenedAt = showRegistration
-                ? registrationOpenedAt
-                : questionnaireOpenedAt;
-              const liveCompletedAt = showRegistration
-                ? registrationCompletedAt
-                : questionnaireCompletedAt;
-              const liveActive = showRegistration ? isRegistrationActive : isQuestionnaireActive;
+              const trainingLastOpenedAt = alert.trainingLastOpenedAt
+                ? new Date(alert.trainingLastOpenedAt)
+                : null;
+              const trainingUpdatedAt = alert.trainingUpdatedAt
+                ? new Date(alert.trainingUpdatedAt)
+                : null;
+              const isTrainingActive = trainingUpdatedAt
+                ? Date.now() - trainingUpdatedAt.getTime() < 35 * 1000
+                : false;
+              const showRegistration =
+                alert.interestStage === 'qualified' && !isRegistrationComplete;
+              const liveStatus = isRegistrationComplete
+                ? null
+                : showRegistration
+                  ? registrationStatus
+                  : questionnaireStatus;
+              const liveOpenedAt = isRegistrationComplete
+                ? trainingLastOpenedAt
+                : showRegistration
+                  ? registrationOpenedAt
+                  : questionnaireOpenedAt;
+              const liveCompletedAt = isRegistrationComplete
+                ? null
+                : showRegistration
+                  ? registrationCompletedAt
+                  : questionnaireCompletedAt;
+              const liveActive = isRegistrationComplete
+                ? isTrainingActive
+                : showRegistration
+                  ? isRegistrationActive
+                  : isQuestionnaireActive;
               const isQuestionnaireComplete =
                 alert.interestStage === 'questionnaire_completed' ||
                 Boolean(questionnaireCompletedAt);
               return (
-                <div
-                  key={alertKey}
-                  className={`relative rounded-2xl border px-5 py-4 text-sm text-white shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${
-                    isQuestionnaireStage
-                      ? 'border-[#1f7a3f] bg-[#1f7a3f]'
-                      : isScheduled
-                        ? 'border-[#d97706] bg-[#d97706]'
-                        : 'border-[var(--c-c8102e)] bg-[var(--c-c8102e)]'
-                  }`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (!alert.id) return;
-                    router.push(`/teacher-interest?alertId=${alert.id}`);
-                  }}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
+                <div key={alertKey}>
+                  <div
+                    className={`relative rounded-2xl border px-5 py-4 text-sm text-white shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] ${
+                      isQuestionnaireStage
+                        ? 'border-[#1f7a3f] bg-[#1f7a3f]'
+                        : isScheduled
+                          ? 'border-[#d97706] bg-[#d97706]'
+                          : 'border-[var(--c-c8102e)] bg-[var(--c-c8102e)]'
+                    }`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
                       if (!alert.id) return;
                       router.push(`/teacher-interest?alertId=${alert.id}`);
-                    }
-                  }}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/80">
-                      {alert.title}
-                    </p>
-                    <span className="text-xs uppercase tracking-[0.2em] opacity-70">
-                      {alert.createdAt
-                        ? new Date(alert.createdAt).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })
-                        : 'Just now'}
-                    </span>
-                  </div>
-                  <div className="text-lg">
-                    {renderInterestBody(alert.body)}
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={event => {
-                        event.stopPropagation();
-                        alert.id
-                          ? fetch('/api/company-alerts', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                id: alert.id,
-                                interestStage: 'call_scheduled',
-                              }),
-                            }).then(() => loadCompanyAlerts())
-                          : setCallScheduledMap(current => ({
-                              ...current,
-                              [alertKey]: true,
-                            }));
-                      }}
-                      disabled={isScheduled}
-                      className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
-                        isScheduled
-                          ? 'border-white/40 bg-white/15 text-white/70'
-                          : 'border-white bg-white text-[var(--c-c8102e)] hover:bg-white/90'
-                      }`}
-                    >
-                      {isScheduled ? '✓ Call Scheduled' : 'Call Scheduled'}
-                    </button>
-                    {alert.interestStage === 'call_scheduled' ||
-                    alert.interestStage === 'questionnaire_sent' ||
-                    alert.interestStage === 'questionnaire_opened' ||
-                    alert.interestStage === 'questionnaire_completed' ||
-                    alert.interestStage === 'qualified' ||
-                    alert.interestStage === 'not_qualified' ? (
-                      <>
+                    }}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        if (!alert.id) return;
+                        router.push(`/teacher-interest?alertId=${alert.id}`);
+                      }
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/80">
+                        {alert.title}
+                      </p>
+                      <span className="text-xs uppercase tracking-[0.2em] opacity-70">
+                        {alert.createdAt
+                          ? new Date(alert.createdAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })
+                          : 'Just now'}
+                      </span>
+                    </div>
+                    <div className="text-lg">
+                      {isRegistrationComplete ? (
+                        <p className="mt-2 text-lg">
+                          <span className="font-semibold">
+                            {getInterestDisplayName(alert)}
+                          </span>{' '}
+                          has completed registration and is now a{' '}
+                          <span className="font-semibold">
+                            Simply Music Teacher in Training!
+                          </span>
+                        </p>
+                      ) : (
+                        renderInterestBody(alert.body)
+                      )}
+                    </div>
+                    {!isRegistrationComplete ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.stopPropagation();
+                            alert.id
+                              ? fetch('/api/company-alerts', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    id: alert.id,
+                                    interestStage: 'call_scheduled',
+                                  }),
+                                }).then(() => loadCompanyAlerts())
+                              : setCallScheduledMap(current => ({
+                                  ...current,
+                                  [alertKey]: true,
+                                }));
+                          }}
+                          disabled={isScheduled}
+                          className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                            isScheduled
+                              ? 'border-white/40 bg-white/15 text-white/70'
+                              : 'border-white bg-white text-[var(--c-c8102e)] hover:bg-white/90'
+                          }`}
+                        >
+                          {isScheduled ? '✓ Call Scheduled' : 'Call Scheduled'}
+                        </button>
+                        {alert.interestStage === 'call_scheduled' ||
+                        alert.interestStage === 'questionnaire_sent' ||
+                        alert.interestStage === 'questionnaire_opened' ||
+                        alert.interestStage === 'questionnaire_completed' ||
+                        alert.interestStage === 'qualified' ||
+                        alert.interestStage === 'not_qualified' ? (
+                          <>
                         <button
                           type="button"
                           onClick={event => {
@@ -663,22 +737,27 @@ export default function DashboardPage() {
                               (alert.interestStage === 'qualified' ||
                                 alert.interestStage === 'not_qualified'))
                           }
-                          className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
-                            alert.interestStage === 'questionnaire_sent' ||
-                            alert.interestStage === 'questionnaire_opened' ||
-                            alert.interestStage === 'questionnaire_completed' ||
-                            alert.interestStage === 'qualified' ||
-                            alert.interestStage === 'not_qualified'
-                              ? 'border-white/40 bg-white/15 text-white/70'
-                              : 'border-white/60 bg-white/10 text-white hover:bg-white/20'
+                          className={`rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.2em] transition ${
+                            alert.interestStage === 'questionnaire_completed'
+                              ? 'border-white bg-white font-bold text-[#1f7a3f] hover:bg-white/90'
+                              : alert.interestStage === 'questionnaire_sent' ||
+                                  alert.interestStage === 'questionnaire_opened' ||
+                                  alert.interestStage === 'qualified' ||
+                                  alert.interestStage === 'not_qualified'
+                                ? 'border-white/40 bg-white/15 font-semibold text-white/70'
+                                : 'border-white/60 bg-white/10 font-semibold text-white hover:bg-white/20'
                           }`}
                         >
-                          {isQuestionnaireComplete
-                            ? `✓ Questionnaire Complete ${
-                                expandedQuestionnaires[alert.id ?? '']
-                                  ? '▴'
-                                  : '▾'
+                          {alert.interestStage === 'questionnaire_completed'
+                            ? `VIEW THE QUESTIONNAIRE ${
+                                expandedQuestionnaires[alert.id ?? ''] ? '▴' : '▾'
                               }`
+                            : isQuestionnaireComplete
+                              ? `✓ Questionnaire Complete ${
+                                  expandedQuestionnaires[alert.id ?? '']
+                                    ? '▴'
+                                    : '▾'
+                                }`
                             : alert.interestStage === 'questionnaire_sent' ||
                                 alert.interestStage === 'questionnaire_opened' ||
                                 alert.interestStage === 'qualified' ||
@@ -746,10 +825,26 @@ export default function DashboardPage() {
                             Not Qualified
                           </button>
                         ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                  {liveStatus || liveActive ? (
+                          </>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-4 flex">
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.stopPropagation();
+                            if (!alert.id) return;
+                            void handleRemoveAlert(alert.id);
+                            void loadCompanyAlerts();
+                          }}
+                          className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/20"
+                        >
+                          DISMISS
+                        </button>
+                      </div>
+                    )}
+                  {liveStatus || liveActive || (isRegistrationComplete && liveOpenedAt) ? (
                     <div
                       ref={node => {
                         if (!node) return;
@@ -866,50 +961,70 @@ export default function DashboardPage() {
                                 <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-white/60" />
                                 <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
                               </span>
-                              Currently Active
+                              {isRegistrationComplete ? 'CURRENTLY ACTIVE' : 'Currently Active'}
                             </div>
                           ) : null}
                         </div>
                       )}
                     </div>
                   ) : null}
-                  {alert.id &&
-                  isQuestionnaireComplete &&
-                  expandedQuestionnaires[alert.id] ? (
-                    <div className="mt-4 rounded-2xl border border-white/25 bg-white/15 p-4 text-sm text-white/85">
-                      {questionnaireDetails[alert.id]?.loading ? (
-                        <p className="text-white/60">Loading questionnaire answers…</p>
-                      ) : questionnaireDetails[alert.id]?.payload ? (
-                        <div className="space-y-3">
-                          {questionnaireDetails[alert.id]?.submittedAt ? (
-                            <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                              Submitted{' '}
-                              {new Date(
-                                questionnaireDetails[alert.id]?.submittedAt ?? '',
-                              ).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </p>
-                          ) : null}
-                          {Object.entries(
-                            questionnaireDetails[alert.id]?.payload ?? {},
-                          ).map(([key, value]) => (
-                            <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    {!isRegistrationComplete &&
+                    alert.id &&
+                    isQuestionnaireComplete &&
+                    expandedQuestionnaires[alert.id] ? (
+                      <div className="mt-4 rounded-2xl border border-white/25 bg-white/15 p-4 text-sm text-white/85">
+                        {questionnaireDetails[alert.id]?.loading ? (
+                          <p className="text-white/60">Loading questionnaire answers…</p>
+                        ) : questionnaireDetails[alert.id]?.payload ? (
+                          <div className="space-y-3">
+                            {questionnaireDetails[alert.id]?.submittedAt ? (
                               <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                                Submitted{' '}
+                                {new Date(
+                                  questionnaireDetails[alert.id]?.submittedAt ?? '',
+                                ).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
                               </p>
-                              <p className="mt-1 text-white/85">
-                                {String(value || '—')}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-white/60">No questionnaire answers yet.</p>
-                      )}
+                            ) : null}
+                            {Object.entries(
+                              questionnaireDetails[alert.id]?.payload ?? {},
+                            ).map(([key, value]) => (
+                              <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                                </p>
+                                <p className="mt-1 text-white/85">
+                                  {String(value || '—')}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-white/60">No questionnaire answers yet.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  {alertFormHref ? (
+                    <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-1 text-[11px] text-[var(--c-6f6c65)]">
+                      <span className="truncate">
+                        {alertFormLabel}: {alertFormHref}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void copyToClipboard(
+                            `${window.location.origin}${alertFormHref}`,
+                          )
+                        }
+                        className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+                      >
+                        COPY
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -921,122 +1036,30 @@ export default function DashboardPage() {
 
       <div className="rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
         <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--c-9a9892)]">
-          Onboarding Development
+          DEVELOPMENT QUICK LINKS
         </p>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-          {quickRoutes.map(route => (
-            <button
-              key={route.href}
-              type="button"
-              onClick={() => void handleCopyRoute(route)}
-              className="flex items-center justify-center rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold text-[var(--c-1f1f1d)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
-            >
-              {route.label}
-            </button>
-          ))}
+          {quickRoutes.map(route =>
+            route.directLink ? (
+              <Link
+                key={route.href}
+                href={route.href}
+                className="flex items-center justify-center rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold text-[var(--c-1f1f1d)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+              >
+                {route.label}
+              </Link>
+            ) : (
+              <button
+                key={route.href}
+                type="button"
+                onClick={() => void handleCopyRoute(route)}
+                className="flex items-center justify-center rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 py-2 text-xs font-semibold text-[var(--c-1f1f1d)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--c-c8102e)] hover:text-[var(--c-c8102e)]"
+              >
+                {route.label}
+              </button>
+            ),
+          )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {[
-          {
-            label: 'Total Active Students',
-            value: activeStudents.toLocaleString('en-US'),
-            note: 'Currently enrolled and billing.',
-          },
-          {
-            label: 'New Students This Month',
-            value: newStudentsThisMonth.toLocaleString('en-US'),
-            note: 'First-time activations in the last 30 days.',
-          },
-          {
-            label: 'Active Teachers',
-            value: activeTeachers.toLocaleString('en-US'),
-            note: 'Teaching in the network right now.',
-          },
-          {
-            label: 'Monthly Revenue',
-            value: `$${monthlyRoyaltiesDue.toLocaleString('en-US')}`,
-            note: 'Projected subscriptions for this month.',
-          },
-          {
-            label: 'Curriculum Income (Teachers)',
-            value: `$${curriculumIncomeTeachers.toLocaleString('en-US')}`,
-            note: 'Teacher purchases this month.',
-            href: '/company/orders',
-          },
-          {
-            label: 'Curriculum Income (Students)',
-            value: `$${curriculumIncomeStudents.toLocaleString('en-US')}`,
-            note: 'Student purchases this month.',
-            href: '/company/orders',
-          },
-          {
-            label: 'Outstanding Payments',
-            value: `$${outstandingPayments.toLocaleString('en-US')}`,
-            note: 'Open invoices and unpaid balances.',
-          },
-          {
-            label: 'Upcoming Lessons (Global View)',
-            value: upcomingLessons.toLocaleString('en-US'),
-            note: 'Next 7 days, all studios combined.',
-          },
-          {
-            label: 'Geographic Distribution',
-            value: `${regionsCovered} regions`,
-            note: 'Active locations with learners.',
-          },
-          {
-            label: 'Student Churn Rate',
-            value: `${churnRate.toFixed(1)}%`,
-            note: 'Rolling 30-day cancellations.',
-          },
-          {
-            label: 'Avg Lesson Per Student',
-            value: avgLessonsPerStudent.toFixed(1),
-            note: 'Average lessons per learner this month.',
-          },
-          {
-            label: 'Revenue Trend',
-            value: '+6.2%',
-            note: '$128,430 over the last 6 months.',
-            href: '/company/financial-layer',
-          },
-        ].map(metric =>
-          metric.href ? (
-            <Link
-              key={metric.label}
-              href={metric.href}
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                {metric.label}
-              </p>
-              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-                {metric.value}
-              </p>
-              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-                {metric.note}
-              </p>
-            </Link>
-          ) : (
-            <button
-              key={metric.label}
-              type="button"
-              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
-                {metric.label}
-              </p>
-              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
-                {metric.value}
-              </p>
-              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
-                {metric.note}
-              </p>
-            </button>
-          ),
-        )}
       </div>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1054,7 +1077,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setIsPromoOpen(true)}
-              className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              className="rounded-full border border-[#4b5563] bg-[#4b5563] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#f3f4f6] transition hover:brightness-110 [[data-theme=dark]_&]:border-[#334151] [[data-theme=dark]_&]:bg-[#334151] [[data-theme=dark]_&]:text-[#eef2f7]"
             >
               Create Promo
             </button>
@@ -1085,7 +1108,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setIsAlertOpen(true)}
-              className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+              className="rounded-full border border-[#4b5563] bg-[#4b5563] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#f3f4f6] transition hover:brightness-110 [[data-theme=dark]_&]:border-[#334151] [[data-theme=dark]_&]:bg-[#334151] [[data-theme=dark]_&]:text-[#eef2f7]"
             >
               Create Alert
             </button>
@@ -1120,7 +1143,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => setIsLeadFormOpen(true)}
-            className="rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+            className="rounded-full border border-[#4b5563] bg-[#4b5563] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#f3f4f6] transition hover:brightness-110 [[data-theme=dark]_&]:border-[#334151] [[data-theme=dark]_&]:bg-[#334151] [[data-theme=dark]_&]:text-[#eef2f7]"
           >
             Open Lead Form
           </button>
@@ -1655,7 +1678,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={writePromoPayload}
-                className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                className="w-full rounded-full border border-[#4b5563] bg-[#4b5563] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#f3f4f6] transition hover:brightness-110 [[data-theme=dark]_&]:border-[#334151] [[data-theme=dark]_&]:bg-[#334151] [[data-theme=dark]_&]:text-[#eef2f7]"
               >
                 Send Promo
               </button>
@@ -1744,7 +1767,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={writeAlertPayload}
-                className="w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+                className="w-full rounded-full border border-[#4b5563] bg-[#4b5563] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#f3f4f6] transition hover:brightness-110 [[data-theme=dark]_&]:border-[#334151] [[data-theme=dark]_&]:bg-[#334151] [[data-theme=dark]_&]:text-[#eef2f7]"
               >
                 Add Alert
               </button>
@@ -2001,6 +2024,108 @@ export default function DashboardPage() {
             </span>
           </div>
         </section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          {
+            label: 'Total Active Students',
+            value: activeStudents.toLocaleString('en-US'),
+            note: 'Currently enrolled and billing.',
+          },
+          {
+            label: 'New Students This Month',
+            value: newStudentsThisMonth.toLocaleString('en-US'),
+            note: 'First-time activations in the last 30 days.',
+          },
+          {
+            label: 'Active Teachers',
+            value: activeTeachers.toLocaleString('en-US'),
+            note: 'Teaching in the network right now.',
+          },
+          {
+            label: 'Monthly Revenue',
+            value: `$${monthlyRoyaltiesDue.toLocaleString('en-US')}`,
+            note: 'Projected subscriptions for this month.',
+          },
+          {
+            label: 'Curriculum Income (Teachers)',
+            value: `$${curriculumIncomeTeachers.toLocaleString('en-US')}`,
+            note: 'Teacher purchases this month.',
+            href: '/company/orders',
+          },
+          {
+            label: 'Curriculum Income (Students)',
+            value: `$${curriculumIncomeStudents.toLocaleString('en-US')}`,
+            note: 'Student purchases this month.',
+            href: '/company/orders',
+          },
+          {
+            label: 'Outstanding Payments',
+            value: `$${outstandingPayments.toLocaleString('en-US')}`,
+            note: 'Open invoices and unpaid balances.',
+          },
+          {
+            label: 'Upcoming Lessons (Global View)',
+            value: upcomingLessons.toLocaleString('en-US'),
+            note: 'Next 7 days, all studios combined.',
+          },
+          {
+            label: 'Geographic Distribution',
+            value: `${regionsCovered} regions`,
+            note: 'Active locations with learners.',
+          },
+          {
+            label: 'Student Churn Rate',
+            value: `${churnRate.toFixed(1)}%`,
+            note: 'Rolling 30-day cancellations.',
+          },
+          {
+            label: 'Avg Lesson Per Student',
+            value: avgLessonsPerStudent.toFixed(1),
+            note: 'Average lessons per learner this month.',
+          },
+          {
+            label: 'Revenue Trend',
+            value: '+6.2%',
+            note: '$128,430 over the last 6 months.',
+            href: '/company/financial-layer',
+          },
+        ].map(metric =>
+          metric.href ? (
+            <Link
+              key={metric.label}
+              href={metric.href}
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {metric.label}
+              </p>
+              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+                {metric.value}
+              </p>
+              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+                {metric.note}
+              </p>
+            </Link>
+          ) : (
+            <button
+              key={metric.label}
+              type="button"
+              className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 text-left shadow-sm transition hover:border-[color:var(--c-c8102e)]/40 hover:shadow-md"
+            >
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+                {metric.label}
+              </p>
+              <p className="text-3xl font-semibold mt-3 text-[var(--c-1f1f1d)]">
+                {metric.value}
+              </p>
+              <p className="text-sm text-[var(--c-6f6c65)] mt-2">
+                {metric.note}
+              </p>
+            </button>
+          ),
+        )}
       </div>
     </div>
   );

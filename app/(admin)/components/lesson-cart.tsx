@@ -227,7 +227,7 @@ export const useLessonCart = (scope?: string | null) => {
     const count = purchasedItems.filter(
       item => slugifyLessonValue(item.program) === developmentSlug,
     ).length;
-    return count >= 4;
+    return count >= 1;
   }, [purchasedItems]);
 
   const addItem = useCallback((item: LessonCartItem) => {

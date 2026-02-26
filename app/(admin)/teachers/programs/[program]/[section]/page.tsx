@@ -17,7 +17,11 @@ export default async function TeacherProgramSectionPage({
   searchParams,
 }: {
   params: Promise<{ program: string; section: string }>;
-  searchParams?: Promise<{ mode?: string }>;
+  searchParams?: Promise<{
+    mode?: string;
+    material?: string | string[];
+    part?: string | string[];
+  }>;
 }) {
   const lessonTypes = getLessonTypes();
   const lessonSections = getLessonSections();
@@ -26,6 +30,18 @@ export default async function TeacherProgramSectionPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const teacherMode =
     resolvedSearchParams?.mode === 'teaching' ? 'teaching' : 'training';
+  const initialMaterial =
+    typeof resolvedSearchParams?.material === 'string'
+      ? resolvedSearchParams.material
+      : Array.isArray(resolvedSearchParams?.material)
+        ? resolvedSearchParams?.material[0]
+        : undefined;
+  const initialPart =
+    typeof resolvedSearchParams?.part === 'string'
+      ? resolvedSearchParams.part
+      : Array.isArray(resolvedSearchParams?.part)
+        ? resolvedSearchParams?.part[0]
+        : undefined;
   const programName =
     lessonTypes.find(type => toProgramSlug(type) === program) ?? null;
   const sectionData =
@@ -79,7 +95,12 @@ export default async function TeacherProgramSectionPage({
       {programName && sectionName ? (
         <LessonSectionGate programName={programName} sectionName={sectionName}>
           {materials.length > 0 ? (
-            <MaterialsGrid materials={materials} mode={teacherMode} />
+            <MaterialsGrid
+              materials={materials}
+              mode={teacherMode}
+              initialMaterial={initialMaterial}
+              initialPart={initialPart}
+            />
           ) : (
             <section className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-sm">
               <p className="text-sm text-[var(--c-6f6c65)]">

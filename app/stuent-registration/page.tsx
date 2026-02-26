@@ -1,13 +1,8 @@
 "use client";
 
-import { Space_Grotesk } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
+import { spaceGrotesk } from "@/app/fonts";
 
 const whiteKeys = ["C", "D", "E", "F", "G", "A", "B"] as const;
 const blackKeys = ["C#", "D#", "F#", "G#", "A#"] as const;
@@ -56,10 +51,14 @@ const formatCountdown = (seconds: number) => {
   return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 };
 
+const CODE_TTL_SECONDS = 600;
+const RESEND_AFTER_SECONDS = 10;
 const canResend = (remaining: number | null, sent: boolean) => {
   if (!sent) return true;
   if (remaining === null) return true;
-  return remaining <= 0;
+  if (remaining <= 0) return true;
+  const elapsed = Math.max(0, CODE_TTL_SECONDS - remaining);
+  return elapsed >= RESEND_AFTER_SECONDS;
 };
 
 type FormState = {
@@ -105,6 +104,7 @@ export default function StudentRegistrationPage() {
   const [emailRemaining, setEmailRemaining] = useState<number | null>(null);
   const [emailResetKey, setEmailResetKey] = useState(0);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [demoVerificationCode, setDemoVerificationCode] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -114,7 +114,8 @@ export default function StudentRegistrationPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const totalSteps = 5;
   const stepLabels = ["Details", "Verify Email", "Set Password", "Terms", "Captcha"];
-  const progress = Math.round(((step - 1) / (totalSteps - 1)) * 100);
+  const completedSteps = step - 1 + (step === totalSteps && pianoPassed ? 1 : 0);
+  const progress = Math.round((completedSteps / totalSteps) * 100);
 
   useEffect(() => {
     document.title = 'Student Registration | Simply Music';
@@ -230,9 +231,13 @@ export default function StudentRegistrationPage() {
       setVerifyError("We couldn't send the code yet. Please try again.");
       return;
     }
-    const data = (await response.json()) as { expiresAt?: string | null };
+    const data = (await response.json()) as {
+      expiresAt?: string | null;
+      demoCode?: string | null;
+    };
     setEmailSentStatus(true);
     setEmailExpiresAt(data?.expiresAt ?? null);
+    setDemoVerificationCode(data?.demoCode ?? null);
     setEmailVerified(false);
     setEmailCode("");
     setEmailResetKey(current => current + 1);
@@ -265,6 +270,12 @@ export default function StudentRegistrationPage() {
     setVerifyError(null);
     setEmailVerified(true);
     return true;
+  };
+
+  const useDemoCode = () => {
+    if (!demoVerificationCode) return;
+    setEmailCode(demoVerificationCode);
+    setVerifyError(null);
   };
 
   const handlePianoClick = (note: PianoNote) => {
@@ -309,6 +320,7 @@ export default function StudentRegistrationPage() {
     setEmailExpiresAt(null);
     setEmailRemaining(null);
     setEmailResetKey(current => current + 1);
+    setDemoVerificationCode(null);
     setVerificationToken(crypto.randomUUID());
     setVerifyError(null);
   }, [state.email, state.confirmEmail]);
@@ -498,14 +510,14 @@ export default function StudentRegistrationPage() {
                       return (
                         <div
                           key={label}
-                          className={`rounded-full border px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.22em] transition ${
+                          className={`flex min-h-[40px] items-center justify-center rounded-full border px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.22em] transition ${
                             isCaptchaComplete
-                              ? "border-emerald-200 bg-emerald-100 text-emerald-900 shadow-sm"
+                              ? "border-neutral-200 bg-emerald-100 text-emerald-900 shadow-sm"
                               : isComplete
-                              ? "border-emerald-200 bg-emerald-100 text-emerald-900 shadow-sm"
+                              ? "border-neutral-200 bg-emerald-100 text-emerald-900 shadow-sm"
                               : isActive
                                 ? "border-red-200 bg-white text-red-700 shadow-[0_6px_18px_-12px_rgba(200,16,46,0.6)]"
-                                : "border-white/70 bg-white/40 text-neutral-500"
+                                : "border-neutral-200 bg-white/40 text-neutral-500"
                             }`}
                           >
                             {label}
@@ -666,6 +678,18 @@ export default function StudentRegistrationPage() {
                         letterSpacing: emailCode.length > 0 ? "0.5em" : "normal",
                       }}
                     />
+                    {demoVerificationCode ? (
+                      <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-700">
+                        <span>Demo code: {demoVerificationCode}</span>
+                        <button
+                          type="button"
+                          onClick={useDemoCode}
+                          className="rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-700 transition hover:border-red-300 hover:text-red-600"
+                        >
+                          USE
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                     {emailSentStatus && emailRemaining !== 0 ? (
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700 shadow-sm">

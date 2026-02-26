@@ -427,6 +427,18 @@ function initSchema(db: Database.Database) {
       activity_updated_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS lesson_recordings (
+      id TEXT PRIMARY KEY,
+      room_name TEXT NOT NULL,
+      egress_id TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      filepath TEXT NOT NULL,
+      file_url TEXT,
+      error TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS pricing_overrides (
       scope TEXT PRIMARY KEY,
       student_price REAL,
@@ -622,6 +634,8 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_parents_username ON parents(username);
     CREATE INDEX IF NOT EXISTS idx_studios_company ON studios(company);
     CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_lesson_recordings_room ON lesson_recordings(room_name);
+    CREATE INDEX IF NOT EXISTS idx_lesson_recordings_started_at ON lesson_recordings(started_at);
     CREATE INDEX IF NOT EXISTS idx_lesson_plans_student ON lesson_plans(student_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_type ON notification_events(type);
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notification_events(created_at);

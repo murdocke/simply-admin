@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Room, RoomEvent, Track } from 'livekit-client';
 import {
   VIEW_ROLE_STORAGE_KEY,
   VIEW_TEACHER_STORAGE_KEY,
@@ -13,6 +14,8 @@ import {
   type CommunicationEntry,
 } from '../../components/communications-store';
 import { useApiData } from '../../components/use-api-data';
+import HarmonyAssistant from '../../components/harmony/harmony-assistant';
+import LessonPrepModal from '../../components/lesson-prep-modal';
 
 type StudentRecord = {
   id: string;
@@ -72,6 +75,53 @@ type LastViewedVideo = {
   viewedAt?: string;
 };
 
+type HarmonyInteraction = {
+  id: string;
+  speaker: 'Harmony' | 'You' | 'System';
+  text: string;
+  at: string;
+};
+
+type HarmonyReplyAction = 'task' | 'note' | 'followup';
+
+type HarmonyDebugState = {
+  livekitEvents: number;
+  livekitSegments: number;
+  livekitUnseenSegments: number;
+  livekitCandidateTexts: number;
+  livekitEmptyCandidates: number;
+  localFinalResults: number;
+  appendAttempts: number;
+  appendedHarmony: number;
+  droppedNonHarmony: number;
+  droppedEmptyMessages: number;
+  livekitTranscriptActive: boolean;
+  lastLivekitParticipant: string;
+  lastLivekitText: string;
+  lastLocalText: string;
+  lastAppendSpeaker: string;
+  lastAppendText: string;
+};
+
+const createHarmonyDebugState = (): HarmonyDebugState => ({
+  livekitEvents: 0,
+  livekitSegments: 0,
+  livekitUnseenSegments: 0,
+  livekitCandidateTexts: 0,
+  livekitEmptyCandidates: 0,
+  localFinalResults: 0,
+  appendAttempts: 0,
+  appendedHarmony: 0,
+  droppedNonHarmony: 0,
+  droppedEmptyMessages: 0,
+  livekitTranscriptActive: false,
+  lastLivekitParticipant: '-',
+  lastLivekitText: '-',
+  lastLocalText: '-',
+  lastAppendSpeaker: '-',
+  lastAppendText: '-',
+});
+
 const parseTimeToMinutes = (value?: string) => {
   if (!value) return null;
   const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -113,6 +163,10 @@ export default function TeacherDashboardPage() {
   const [isPrepOpen, setIsPrepOpen] = useState(false);
   const [prepStudent, setPrepStudent] = useState<StudentRecord | null>(null);
   const [prepForm, setPrepForm] = useState({
+    curriculumType: '',
+    section: '',
+    part: '',
+    material: '',
     focus: '',
     materials: '',
     goal: '',
@@ -124,6 +178,10 @@ export default function TeacherDashboardPage() {
       string,
       {
         dateKey: string;
+        curriculumType: string;
+        section: string;
+        part: string;
+        material: string;
         focus: string;
         materials: string;
         goal: string;
@@ -163,6 +221,72 @@ export default function TeacherDashboardPage() {
     (StudentRecord & { activity?: StudentPresenceActivity | null })[]
   >([]);
   const [communicationsViewerOpen, setCommunicationsViewerOpen] = useState(false);
+  const [voiceSessionState, setVoiceSessionState] = useState<
+    'idle' | 'connecting' | 'connected'
+  >('idle');
+  const [voiceSessionError, setVoiceSessionError] = useState<string | null>(null);
+  const [voiceAgentName, setVoiceAgentName] = useState<string | null>(null);
+  const [voiceRemoteCount, setVoiceRemoteCount] = useState(0);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceAgentSpeaking, setVoiceAgentSpeaking] = useState(false);
+  const [voiceWaveStep, setVoiceWaveStep] = useState(0);
+  const [voiceWaveEnergy, setVoiceWaveEnergy] = useState(0.08);
+  const [harmonyTranscript, setHarmonyTranscript] = useState<
+    HarmonyInteraction[]
+  >([]);
+  const [harmonyPanelPosition, setHarmonyPanelPosition] = useState({
+    x: 0,
+    y: 0,
+  });
+  const [harmonyPanelReady, setHarmonyPanelReady] = useState(false);
+  const [harmonyPanelDragging, setHarmonyPanelDragging] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [wakeWordStatus, setWakeWordStatus] = useState<
+    'off' | 'listening' | 'unsupported'
+  >('off');
+  const [wakeWordError, setWakeWordError] = useState<string | null>(null);
+  const [wakeWordLastHeard, setWakeWordLastHeard] = useState<string | null>(null);
+  const [harmonyDebug, setHarmonyDebug] = useState<HarmonyDebugState>(
+    createHarmonyDebugState,
+  );
+  const [harmonyDebugVisible, setHarmonyDebugVisible] = useState(false);
+  const maybeSetHarmonyDebug = useCallback(
+    (updater: (previous: HarmonyDebugState) => HarmonyDebugState) => {
+      if (!harmonyDebugVisible) return;
+      setHarmonyDebug(updater);
+    },
+    [harmonyDebugVisible],
+  );
+  const [topCardPulse, setTopCardPulse] = useState(true);
+  const roomRef = useRef<Room | null>(null);
+  const harmonyCardRef = useRef<HTMLDivElement | null>(null);
+  const startVoiceSessionRef = useRef<(() => Promise<void>) | null>(null);
+  const stopVoiceSessionRef = useRef<
+    ((reason?: 'manual' | 'idle' | 'disconnect') => void) | null
+  >(null);
+  const voiceLastActivityAtRef = useRef<number | null>(null);
+  const voiceSegmentIdsRef = useRef<Set<string>>(new Set());
+  const harmonySegmentTextRef = useRef<Map<string, string>>(new Map());
+  const harmonyLastLivekitTextRef = useRef('');
+  const harmonyLastReplyAtRef = useRef<number | null>(null);
+  const harmonyTranscriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const wakeWordRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const localTranscriptRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const livekitTranscriptActiveRef = useRef(false);
+  const voiceAgentSpeakingRef = useRef(false);
+  const voiceAgentLastActiveAtRef = useRef<number | null>(null);
+  const voiceNoticeTimeoutRef = useRef<number | null>(null);
+  const voiceAgentJoinTimeoutRef = useRef<number | null>(null);
+  const harmonyDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const WAKE_WORD_PHRASE = 'hey harmony';
+  const VOICE_IDLE_TIMEOUT_MS = 60_000;
 
   const currentTeacher = useMemo(() => {
     const teachers = (teachersData.teachers as TeacherRecord[]) ?? [];
@@ -182,9 +306,12 @@ export default function TeacherDashboardPage() {
   }, [currentTeacher, studiosData]);
 
   const studioTeachers = useMemo(() => {
-    if (!studio?.teacherIds?.length) return [] as TeacherRecord[];
+    const studioTeacherIds = Array.isArray(studio?.teacherIds)
+      ? studio.teacherIds
+      : [];
+    if (studioTeacherIds.length === 0) return [] as TeacherRecord[];
     const teachers = (teachersData.teachers as TeacherRecord[]) ?? [];
-    return teachers.filter(teacher => studio.teacherIds?.includes(teacher.id));
+    return teachers.filter(teacher => studioTeacherIds.includes(teacher.id));
   }, [studio, teachersData]);
 
   const communicationsViewedBy = useMemo(
@@ -216,12 +343,248 @@ export default function TeacherDashboardPage() {
     [now],
   );
 
+  const harmonyWaveBars = useMemo(() => {
+    const barCount = 28;
+    const isConnected = voiceSessionState === 'connected' && !voiceMuted;
+    const baseEnergy = isConnected
+      ? voiceAgentSpeaking
+        ? Math.max(0.42, voiceWaveEnergy * 3.4)
+        : 0.22
+      : 0.06;
+    return Array.from({ length: barCount }, (_, index) => {
+      const centerDistance = Math.abs(index - (barCount - 1) / 2);
+      const envelope = Math.max(0.2, 1 - centerDistance / (barCount / 1.65));
+      const pulse = Math.sin(voiceWaveStep * 0.58 + index * 0.86);
+      const shimmer = Math.cos(voiceWaveStep * 0.31 + index * 0.47);
+      const blend = Math.max(0.15, (pulse * 0.6 + shimmer * 0.4 + 1) / 2);
+      const height = 4 + blend * baseEnergy * envelope * 34;
+      return Math.min(34, Math.max(3, height));
+    });
+  }, [
+    voiceAgentSpeaking,
+    voiceMuted,
+    voiceSessionState,
+    voiceWaveEnergy,
+    voiceWaveStep,
+  ]);
+
+  const normalizeTranscriptForDedupe = useCallback((text: string) => {
+    if (typeof text !== 'string') return '';
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const isNearDuplicateTranscript = useCallback((a: string, b: string) => {
+    const left = normalizeTranscriptForDedupe(a);
+    const right = normalizeTranscriptForDedupe(b);
+    if (!left || !right) return false;
+    if (left === right) return true;
+    const minLen = Math.min(left.length, right.length);
+    const maxLen = Math.max(left.length, right.length);
+    const overlapRatio = minLen / Math.max(1, maxLen);
+    if (minLen >= 16 && overlapRatio >= 0.78 && (left.includes(right) || right.includes(left))) {
+      return true;
+    }
+    return false;
+  }, [normalizeTranscriptForDedupe]);
+
+  const appendHarmonyInteraction = useCallback((
+    speaker: HarmonyInteraction['speaker'],
+    text: string,
+  ) => {
+    maybeSetHarmonyDebug(previous => ({
+      ...previous,
+      appendAttempts: previous.appendAttempts + 1,
+      lastAppendSpeaker: speaker,
+      lastAppendText: text.trim().slice(0, 120) || '-',
+    }));
+    if (speaker !== 'Harmony') {
+      maybeSetHarmonyDebug(previous => ({
+        ...previous,
+        droppedNonHarmony: previous.droppedNonHarmony + 1,
+      }));
+      return;
+    }
+    const message = text.trim().replace(/\s+/g, ' ');
+    if (!message) {
+      maybeSetHarmonyDebug(previous => ({
+        ...previous,
+        droppedEmptyMessages: previous.droppedEmptyMessages + 1,
+      }));
+      return;
+    }
+    setHarmonyTranscript(previous => {
+      const now = new Date();
+      const nowMs = now.getTime();
+      const nowTime = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(now);
+      const lastEntry = previous[previous.length - 1];
+      const recentWindowMs = 14_000;
+      const inRecentWindow =
+        harmonyLastReplyAtRef.current !== null &&
+        nowMs - harmonyLastReplyAtRef.current <= recentWindowMs;
+      if (
+        lastEntry &&
+        lastEntry.speaker === speaker &&
+        inRecentWindow &&
+        (
+          message.startsWith(lastEntry.text) ||
+          lastEntry.text.startsWith(message) ||
+          isNearDuplicateTranscript(lastEntry.text, message)
+        )
+      ) {
+        const nextText =
+          message.length >= lastEntry.text.length ? message : lastEntry.text;
+        harmonyLastReplyAtRef.current = nowMs;
+        if (nextText === lastEntry.text) {
+          return previous;
+        }
+        return [
+          ...previous.slice(0, -1),
+          {
+            ...lastEntry,
+            text: nextText,
+            at: nowTime,
+          },
+        ];
+      }
+      const recentHarmonyTexts = previous
+        .filter(entry => entry.speaker === 'Harmony')
+        .slice(-4)
+        .map(entry => entry.text);
+      const isDuplicate = recentHarmonyTexts.some(recent =>
+        isNearDuplicateTranscript(recent, message),
+      );
+      if (isDuplicate) {
+        return previous;
+      }
+      harmonyLastReplyAtRef.current = nowMs;
+      const nextEntries = [{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        speaker,
+        text: message,
+        at: nowTime,
+      }];
+      maybeSetHarmonyDebug(current => ({
+        ...current,
+        appendedHarmony: current.appendedHarmony + nextEntries.length,
+      }));
+      return [...previous, ...nextEntries].slice(-5);
+    });
+  }, [isNearDuplicateTranscript, maybeSetHarmonyDebug]);
+
+  const handleHarmonyReplyAction = useCallback(
+    (action: HarmonyReplyAction, entry: HarmonyInteraction) => {
+      const actionLabel =
+        action === 'task'
+          ? 'Create Task'
+          : action === 'note'
+            ? 'Add Lesson Note'
+            : 'Follow Up';
+      const preview = entry.text.length > 64 ? `${entry.text.slice(0, 64)}…` : entry.text;
+      setVoiceNotice(`${actionLabel} queued from: "${preview}"`);
+      if (voiceNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(voiceNoticeTimeoutRef.current);
+      }
+      voiceNoticeTimeoutRef.current = window.setTimeout(() => {
+        setVoiceNotice(null);
+        voiceNoticeTimeoutRef.current = null;
+      }, 4000);
+    },
+    [],
+  );
+
   useEffect(() => {
     const interval = window.setInterval(() => {
       setNow(new Date());
     }, 1_000);
     return () => window.clearInterval(interval);
   }, [teachersData]);
+
+  useEffect(() => {
+    return () => {
+      if (voiceNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(voiceNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (voiceSessionState !== 'connected' || voiceMuted || !voiceAgentSpeaking) {
+      setVoiceWaveEnergy(0.08);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setVoiceWaveStep(step => step + 1);
+      setVoiceWaveEnergy(level => Math.max(0.08, level * 0.9));
+    }, 140);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [voiceAgentSpeaking, voiceSessionState, voiceMuted]);
+
+  useEffect(() => {
+    voiceAgentSpeakingRef.current = voiceAgentSpeaking;
+  }, [voiceAgentSpeaking]);
+
+  useEffect(() => {
+    if (voiceSessionState !== 'connected') {
+      setHarmonyPanelReady(false);
+      return;
+    }
+    if (harmonyPanelReady) return;
+    const card = harmonyCardRef.current;
+    const width = 360;
+    const margin = 16;
+    const nextX = (() => {
+      if (!card) return Math.max(margin, window.innerWidth - width - margin);
+      const rect = card.getBoundingClientRect();
+      return Math.max(
+        margin,
+        Math.min(window.innerWidth - width - margin, rect.right - width),
+      );
+    })();
+    const nextY = (() => {
+      if (!card) return 128;
+      const rect = card.getBoundingClientRect();
+      return Math.max(96, rect.bottom + 12);
+    })();
+    setHarmonyPanelPosition({ x: nextX, y: nextY });
+    setHarmonyPanelReady(true);
+  }, [harmonyPanelReady, voiceSessionState]);
+
+  useEffect(() => {
+    if (voiceSessionState !== 'connected') return;
+    const handleResize = () => {
+      setHarmonyPanelPosition(current => {
+        const panelWidth = 360;
+        const panelHeight = 330;
+        const minX = 8;
+        const minY = 72;
+        const maxX = Math.max(minX, window.innerWidth - panelWidth - 8);
+        const maxY = Math.max(minY, window.innerHeight - panelHeight - 8);
+        return {
+          x: Math.min(maxX, Math.max(minX, current.x)),
+          y: Math.min(maxY, Math.max(minY, current.y)),
+        };
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [voiceSessionState]);
+
+  useEffect(() => {
+    const node = harmonyTranscriptScrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [harmonyTranscript]);
 
   useEffect(() => {
     let channel: BroadcastChannel | null = null;
@@ -307,7 +670,9 @@ export default function TeacherDashboardPage() {
             }[];
         const dismissedIds = readDismissedIds('sm_company_alert_teacher_dismissed');
         const nextAlerts = (Array.isArray(parsed) ? parsed : [parsed]).filter(
-          alert => !alert.id || !dismissedIds.includes(alert.id),
+          alert =>
+            !alert.id ||
+            !(Array.isArray(dismissedIds) && dismissedIds.includes(alert.id)),
         );
         if (nextAlerts.length > 0) {
           setAlertPayloads(nextAlerts);
@@ -428,7 +793,9 @@ export default function TeacherDashboardPage() {
             }
           }
           const visibleAlerts = normalizedAlerts.filter(
-            alert => !alert.id || !dismissedIds.includes(alert.id),
+            alert =>
+              !alert.id ||
+              !(Array.isArray(dismissedIds) && dismissedIds.includes(alert.id)),
           );
           setAlertPayloads(visibleAlerts);
           const nonPersistent = normalizedAlerts.filter(
@@ -468,7 +835,7 @@ export default function TeacherDashboardPage() {
             dismissed = [raw];
           }
         }
-        if (!dismissed.includes(alertId)) {
+        if (!(Array.isArray(dismissed) && dismissed.includes(alertId))) {
           dismissed = [alertId, ...dismissed];
         }
         window.localStorage.setItem(
@@ -924,6 +1291,573 @@ export default function TeacherDashboardPage() {
     };
   }, [teacherId, studentsData]);
 
+  const clearVoiceAudioElements = () => {
+    const nodes = document.querySelectorAll('[data-livekit-voice-audio="true"]');
+    nodes.forEach(node => {
+      node.remove();
+    });
+  };
+
+  const stopVoiceSession = (reason: 'manual' | 'idle' | 'disconnect' = 'manual') => {
+    const room = roomRef.current;
+    if (room) {
+      room.disconnect();
+      roomRef.current = null;
+    }
+    clearVoiceAudioElements();
+    voiceLastActivityAtRef.current = null;
+    setVoiceSessionState('idle');
+    setVoiceSessionError(null);
+    setVoiceAgentName(null);
+    setVoiceRemoteCount(0);
+    setVoiceMuted(false);
+    setVoiceAgentSpeaking(false);
+    setVoiceWaveEnergy(0.08);
+    setHarmonyPanelDragging(false);
+    setHarmonyPanelReady(false);
+    livekitTranscriptActiveRef.current = false;
+    voiceSegmentIdsRef.current.clear();
+    harmonySegmentTextRef.current.clear();
+    harmonyLastLivekitTextRef.current = '';
+    harmonyLastReplyAtRef.current = null;
+    setHarmonyDebug(previous => ({
+      ...previous,
+      livekitTranscriptActive: false,
+    }));
+    if (reason === 'manual') {
+      appendHarmonyInteraction('System', 'Voice session ended.');
+    } else if (reason === 'disconnect') {
+      appendHarmonyInteraction('System', 'Voice session disconnected.');
+    }
+    setVoiceNotice(null);
+    if (voiceAgentJoinTimeoutRef.current !== null) {
+      window.clearTimeout(voiceAgentJoinTimeoutRef.current);
+      voiceAgentJoinTimeoutRef.current = null;
+    }
+  };
+
+  const startVoiceSession = async () => {
+    if (voiceSessionState === 'connecting' || voiceSessionState === 'connected') {
+      return;
+    }
+
+    const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+    if (!livekitUrl) {
+      setVoiceSessionError('Missing NEXT_PUBLIC_LIVEKIT_URL.');
+      return;
+    }
+
+    setVoiceSessionState('connecting');
+    setVoiceSessionError(null);
+    setVoiceNotice(null);
+    setVoiceAgentName(null);
+    setVoiceAgentSpeaking(false);
+    setVoiceWaveEnergy(0.08);
+    setHarmonyPanelDragging(false);
+    livekitTranscriptActiveRef.current = false;
+    voiceSegmentIdsRef.current.clear();
+    harmonySegmentTextRef.current.clear();
+    harmonyLastLivekitTextRef.current = '';
+    harmonyLastReplyAtRef.current = null;
+    setHarmonyTranscript([]);
+    setHarmonyDebug(createHarmonyDebugState());
+    if (voiceAgentJoinTimeoutRef.current !== null) {
+      window.clearTimeout(voiceAgentJoinTimeoutRef.current);
+      voiceAgentJoinTimeoutRef.current = null;
+    }
+
+    try {
+      const roomName = 'teachers-voice-agent';
+      const identitySeed = teacherName ?? teacherId ?? 'teacher';
+      const identity = `${identitySeed}-voice-${Math.random().toString(36).slice(2, 8)}`;
+
+      try {
+        const dispatchResponse = await fetch('/api/livekit/dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room: roomName,
+            metadata: JSON.stringify({ voice: 'female', mode: 'conversation' }),
+          }),
+        });
+        if (!dispatchResponse.ok) {
+          const dispatchPayload = (await dispatchResponse.json()) as { error?: string };
+          throw new Error(
+            dispatchPayload.error ??
+              'No agent dispatched. Set LIVEKIT_AGENT_NAME or dispatch from your agent service.',
+          );
+        }
+      } catch (error) {
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : 'Dispatch request failed. Ensure your agent service is available.',
+        );
+      }
+
+      const response = await fetch('/api/livekit/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: roomName,
+          identity,
+          name: teacherName ?? 'Teacher',
+        }),
+      });
+      const tokenPayload = (await response.json()) as {
+        token?: string;
+        error?: string;
+      };
+      if (!response.ok || !tokenPayload.token) {
+        throw new Error(tokenPayload.error ?? 'Unable to create LiveKit token.');
+      }
+
+      const room = new Room();
+      roomRef.current = room;
+
+      room.on(RoomEvent.ParticipantConnected, participant => {
+        if (voiceAgentJoinTimeoutRef.current !== null) {
+          window.clearTimeout(voiceAgentJoinTimeoutRef.current);
+          voiceAgentJoinTimeoutRef.current = null;
+        }
+        setVoiceSessionError(null);
+        setVoiceAgentName(participant.name || participant.identity);
+        setVoiceRemoteCount(room.remoteParticipants.size);
+        voiceLastActivityAtRef.current = Date.now();
+      });
+      room.on(RoomEvent.ParticipantDisconnected, () => {
+        const remoteCount = room.remoteParticipants.size;
+        const firstRemote = room.remoteParticipants.values().next().value as
+          | { name?: string; identity: string }
+          | undefined;
+        setVoiceAgentName(firstRemote ? firstRemote.name || firstRemote.identity : null);
+        setVoiceRemoteCount(remoteCount);
+        voiceLastActivityAtRef.current = Date.now();
+        if (remoteCount === 0) {
+          stopVoiceSessionRef.current?.('disconnect');
+        }
+      });
+      room.on(RoomEvent.ActiveSpeakersChanged, speakers => {
+        const remoteSpeakers = speakers.filter(
+          speaker => speaker.identity !== room.localParticipant.identity,
+        );
+        const maxRemoteLevel = remoteSpeakers.reduce((maxLevel, speaker) => {
+          const level =
+            typeof speaker.audioLevel === 'number' ? speaker.audioLevel : 0;
+          return Math.max(maxLevel, level);
+        }, 0);
+        setVoiceAgentSpeaking(remoteSpeakers.length > 0);
+        if (remoteSpeakers.length > 0) {
+          voiceAgentLastActiveAtRef.current = Date.now();
+          setVoiceWaveEnergy(level => Math.max(level, maxRemoteLevel + 0.18));
+          voiceLastActivityAtRef.current = Date.now();
+        }
+      });
+      room.on(RoomEvent.TranscriptionReceived, (segments, participant) => {
+        livekitTranscriptActiveRef.current = true;
+        maybeSetHarmonyDebug(previous => ({
+          ...previous,
+          livekitEvents: previous.livekitEvents + 1,
+          livekitSegments: previous.livekitSegments + segments.length,
+          livekitTranscriptActive: true,
+          lastLivekitParticipant: participant?.identity ?? '(unknown)',
+        }));
+        const isRemoteParticipant =
+          Boolean(participant?.identity) &&
+          participant?.identity !== room.localParticipant.identity;
+        if (!isRemoteParticipant) {
+          maybeSetHarmonyDebug(previous => ({
+            ...previous,
+            droppedNonHarmony: previous.droppedNonHarmony + 1,
+          }));
+          return;
+        }
+        if (localTranscriptRecognitionRef.current) {
+          localTranscriptRecognitionRef.current.onend = null;
+          localTranscriptRecognitionRef.current.stop();
+          localTranscriptRecognitionRef.current = null;
+        }
+        const changedSegments: string[] = [];
+        const finalSegments: string[] = [];
+        segments.forEach(segment => {
+          const segmentId =
+            typeof segment.id === 'string' ? segment.id : undefined;
+          const segmentText =
+            typeof segment.text === 'string' ? segment.text.trim() : '';
+          if (!segmentText) {
+            return;
+          }
+          if (!segmentId) {
+            changedSegments.push(segmentText);
+            if (segment.final) {
+              finalSegments.push(segmentText);
+            }
+            return;
+          }
+          const previousText = harmonySegmentTextRef.current.get(segmentId) ?? '';
+          if (segmentText.length >= previousText.length) {
+            harmonySegmentTextRef.current.set(segmentId, segmentText);
+            if (segmentText !== previousText) {
+              changedSegments.push(segmentText);
+            }
+          }
+          if (segment.final) {
+            finalSegments.push(segmentText);
+          }
+          if (!voiceSegmentIdsRef.current.has(segmentId)) {
+            voiceSegmentIdsRef.current.add(segmentId);
+          }
+        });
+        maybeSetHarmonyDebug(previous => ({
+          ...previous,
+          livekitUnseenSegments: previous.livekitUnseenSegments + changedSegments.length,
+        }));
+        const candidateText = (
+          finalSegments.length > 0
+            ? finalSegments[finalSegments.length - 1]
+            : changedSegments.sort((a, b) => b.length - a.length)[0]
+        )?.trim() ?? '';
+        if (!candidateText) {
+          maybeSetHarmonyDebug(previous => ({
+            ...previous,
+            livekitEmptyCandidates: previous.livekitEmptyCandidates + 1,
+          }));
+          return;
+        }
+        if (candidateText === harmonyLastLivekitTextRef.current) {
+          return;
+        }
+        harmonyLastLivekitTextRef.current = candidateText;
+        maybeSetHarmonyDebug(previous => ({
+          ...previous,
+          livekitCandidateTexts: previous.livekitCandidateTexts + 1,
+          lastLivekitText: candidateText.slice(0, 120),
+        }));
+        appendHarmonyInteraction('Harmony', candidateText);
+      });
+      room.on(RoomEvent.TrackSubscribed, track => {
+        if (track.kind !== Track.Kind.Audio) return;
+        const audioElement = track.attach();
+        audioElement.autoplay = true;
+        audioElement.dataset.livekitVoiceAudio = 'true';
+        audioElement.style.display = 'none';
+        document.body.appendChild(audioElement);
+        voiceLastActivityAtRef.current = Date.now();
+      });
+      room.on(RoomEvent.TrackUnsubscribed, track => {
+        if (track.kind !== Track.Kind.Audio) return;
+        track.detach().forEach(element => {
+          element.remove();
+        });
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        clearVoiceAudioElements();
+        voiceLastActivityAtRef.current = null;
+        setVoiceSessionState('idle');
+        setVoiceAgentName(null);
+        setVoiceRemoteCount(0);
+        setVoiceMuted(false);
+        setVoiceAgentSpeaking(false);
+        setVoiceWaveEnergy(0.08);
+      });
+
+      await room.connect(livekitUrl, tokenPayload.token);
+      await room.localParticipant.setMicrophoneEnabled(true);
+      await room.startAudio();
+      voiceLastActivityAtRef.current = Date.now();
+
+      const firstRemote = room.remoteParticipants.values().next().value as
+        | { name?: string; identity: string }
+        | undefined;
+      setVoiceAgentName(firstRemote ? firstRemote.name || firstRemote.identity : null);
+      setVoiceRemoteCount(room.remoteParticipants.size);
+      setVoiceMuted(false);
+      setVoiceSessionState('connected');
+      voiceAgentJoinTimeoutRef.current = window.setTimeout(() => {
+        const activeRoom = roomRef.current;
+        if (activeRoom !== room) return;
+        if (activeRoom.remoteParticipants.size > 0) return;
+        setVoiceSessionError(
+          'Connected to LiveKit, but Harmony did not join. Check agent worker status and LIVEKIT_AGENT_NAME.',
+        );
+      }, 8000);
+      appendHarmonyInteraction('System', 'Harmony connected and ready.');
+    } catch (error) {
+      roomRef.current?.disconnect();
+      roomRef.current = null;
+      clearVoiceAudioElements();
+      voiceLastActivityAtRef.current = null;
+      setVoiceSessionState('idle');
+      setVoiceAgentName(null);
+      setVoiceRemoteCount(0);
+      setVoiceMuted(false);
+      setVoiceAgentSpeaking(false);
+      setVoiceWaveEnergy(0.08);
+      livekitTranscriptActiveRef.current = false;
+      voiceSegmentIdsRef.current.clear();
+      if (voiceAgentJoinTimeoutRef.current !== null) {
+        window.clearTimeout(voiceAgentJoinTimeoutRef.current);
+        voiceAgentJoinTimeoutRef.current = null;
+      }
+      setVoiceSessionError(error instanceof Error ? error.message : 'Voice session failed.');
+    }
+  };
+
+  const toggleVoiceMute = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room || voiceSessionState !== 'connected') return;
+    try {
+      const nextMuted = !voiceMuted;
+      await room.localParticipant.setMicrophoneEnabled(!nextMuted);
+      setVoiceMuted(nextMuted);
+      if (nextMuted) {
+        setVoiceAgentSpeaking(false);
+      }
+      appendHarmonyInteraction(
+        'System',
+        nextMuted ? 'Microphone muted.' : 'Microphone unmuted.',
+      );
+      voiceLastActivityAtRef.current = Date.now();
+    } catch {
+      setVoiceSessionError('Unable to update microphone state.');
+    }
+  }, [appendHarmonyInteraction, voiceMuted, voiceSessionState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || voiceSessionState !== 'connected') {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key.toLowerCase() !== 'm') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      void toggleVoiceMute();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [toggleVoiceMute, voiceSessionState]);
+
+  startVoiceSessionRef.current = startVoiceSession;
+  stopVoiceSessionRef.current = stopVoiceSession;
+
+  useEffect(() => {
+    return () => {
+      roomRef.current?.disconnect();
+      roomRef.current = null;
+      clearVoiceAudioElements();
+      voiceLastActivityAtRef.current = null;
+      if (voiceAgentJoinTimeoutRef.current !== null) {
+        window.clearTimeout(voiceAgentJoinTimeoutRef.current);
+        voiceAgentJoinTimeoutRef.current = null;
+      }
+      if (localTranscriptRecognitionRef.current) {
+        localTranscriptRecognitionRef.current.onend = null;
+        localTranscriptRecognitionRef.current.stop();
+        localTranscriptRecognitionRef.current = null;
+      }
+      setVoiceAgentSpeaking(false);
+      setVoiceWaveEnergy(0.08);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTopCardPulse(false);
+    }, 8_000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (voiceSessionState !== 'connected') return;
+    const interval = window.setInterval(() => {
+      const lastActivity = voiceLastActivityAtRef.current;
+      if (!lastActivity) return;
+      const idleMs = Date.now() - lastActivity;
+      if (idleMs >= VOICE_IDLE_TIMEOUT_MS) {
+        stopVoiceSessionRef.current?.('idle');
+      }
+    }, 5_000);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [voiceSessionState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!wakeWordEnabled) {
+      if (wakeWordRecognitionRef.current) {
+        wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.stop();
+        wakeWordRecognitionRef.current = null;
+      }
+      setWakeWordStatus('off');
+      setWakeWordError(null);
+      return;
+    }
+
+    const SpeechRecognitionCtor = (
+      window as unknown as {
+        SpeechRecognition?: typeof SpeechRecognition;
+        webkitSpeechRecognition?: typeof SpeechRecognition;
+      }
+    ).SpeechRecognition ??
+      (
+        window as unknown as {
+          webkitSpeechRecognition?: typeof SpeechRecognition;
+        }
+      ).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setWakeWordStatus('unsupported');
+      setWakeWordError('Wake word needs Chrome/Safari speech recognition support.');
+      return;
+    }
+
+    let active = true;
+    const recognition = new SpeechRecognitionCtor();
+    wakeWordRecognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onstart = () => {
+      if (!active) return;
+      setWakeWordStatus('listening');
+      setWakeWordError(null);
+    };
+    recognition.onerror = event => {
+      if (!active) return;
+      setWakeWordError(event.error || 'Wake word listener error.');
+    };
+    recognition.onresult = event => {
+      if (!active) return;
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        if (!event.results[i].isFinal) continue;
+        const rawTranscript = event.results[i][0]?.transcript;
+        if (typeof rawTranscript !== 'string') continue;
+        const transcript = rawTranscript.toLowerCase().trim();
+        if (!transcript) continue;
+        if (typeof transcript === 'string' && transcript.includes(WAKE_WORD_PHRASE)) {
+          setWakeWordLastHeard(new Date().toLocaleTimeString());
+          appendHarmonyInteraction('You', 'Hey Harmony');
+          if (voiceSessionState === 'idle') {
+            void startVoiceSessionRef.current?.();
+          }
+        }
+      }
+    };
+    recognition.onend = () => {
+      if (!active || !wakeWordEnabled) return;
+      try {
+        recognition.start();
+      } catch {
+        // no-op
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      setWakeWordError('Could not start wake word listener. Check microphone permission.');
+    }
+
+    return () => {
+      active = false;
+      if (wakeWordRecognitionRef.current) {
+        wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.stop();
+        wakeWordRecognitionRef.current = null;
+      }
+      setWakeWordStatus('off');
+    };
+  }, [appendHarmonyInteraction, wakeWordEnabled, voiceSessionState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (voiceSessionState !== 'connected' || voiceMuted) {
+      if (localTranscriptRecognitionRef.current) {
+        localTranscriptRecognitionRef.current.onend = null;
+        localTranscriptRecognitionRef.current.stop();
+        localTranscriptRecognitionRef.current = null;
+      }
+      return;
+    }
+
+    const SpeechRecognitionCtor = (
+      window as unknown as {
+        SpeechRecognition?: typeof SpeechRecognition;
+        webkitSpeechRecognition?: typeof SpeechRecognition;
+      }
+    ).SpeechRecognition ??
+      (
+        window as unknown as {
+          webkitSpeechRecognition?: typeof SpeechRecognition;
+        }
+      ).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) return;
+
+    let active = true;
+    const recognition = new SpeechRecognitionCtor();
+    localTranscriptRecognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.onresult = event => {
+      if (!active) return;
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (!result) continue;
+        const transcript = result[0]?.transcript?.trim();
+        if (!transcript) continue;
+        if (!result.isFinal) continue;
+        maybeSetHarmonyDebug(previous => ({
+          ...previous,
+          localFinalResults: previous.localFinalResults + 1,
+          lastLocalText: transcript.slice(0, 120),
+        }));
+      }
+    };
+    recognition.onend = () => {
+      if (!active || voiceSessionState !== 'connected' || voiceMuted) return;
+      try {
+        recognition.start();
+      } catch {
+        // no-op
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      // no-op
+    }
+
+    return () => {
+      active = false;
+      if (localTranscriptRecognitionRef.current) {
+        localTranscriptRecognitionRef.current.onend = null;
+        localTranscriptRecognitionRef.current.stop();
+        localTranscriptRecognitionRef.current = null;
+      }
+    };
+  }, [maybeSetHarmonyDebug, voiceMuted, voiceSessionState]);
+
   const savePrepStore = (next: typeof prepByStudent) => {
     setPrepByStudent(next);
     if (typeof window === 'undefined') return;
@@ -935,6 +1869,10 @@ export default function TeacherDashboardPage() {
     const existing = prepByStudent[student.id];
     if (existing && existing.dateKey === selectedDayKey) {
       setPrepForm({
+        curriculumType: existing.curriculumType ?? '',
+        section: existing.section ?? '',
+        part: existing.part ?? '',
+        material: existing.material ?? '',
         focus: existing.focus,
         materials: existing.materials,
         goal: existing.goal,
@@ -943,6 +1881,10 @@ export default function TeacherDashboardPage() {
       });
     } else {
       setPrepForm({
+        curriculumType: '',
+        section: '',
+        part: '',
+        material: '',
         focus: '',
         materials: '',
         goal: '',
@@ -965,6 +1907,10 @@ export default function TeacherDashboardPage() {
       ...prepByStudent,
       [prepStudent.id]: {
         dateKey: selectedDayKey,
+        curriculumType: prepForm.curriculumType.trim(),
+        section: prepForm.section.trim(),
+        part: prepForm.part.trim(),
+        material: prepForm.material.trim(),
         focus: prepForm.focus.trim(),
         materials: prepForm.materials.trim(),
         goal: prepForm.goal.trim(),
@@ -976,9 +1922,63 @@ export default function TeacherDashboardPage() {
     closePrepModal();
   };
 
+  const clampHarmonyPanel = (x: number, y: number) => {
+    if (typeof window === 'undefined') return { x, y };
+    const panelWidth = 360;
+    const panelHeight = 330;
+    const minX = 8;
+    const minY = 72;
+    const maxX = Math.max(minX, window.innerWidth - panelWidth - 8);
+    const maxY = Math.max(minY, window.innerHeight - panelHeight - 8);
+    return {
+      x: Math.min(maxX, Math.max(minX, x)),
+      y: Math.min(maxY, Math.max(minY, y)),
+    };
+  };
+
+  const handleHarmonyPanelPointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (voiceSessionState !== 'connected') return;
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    harmonyDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: harmonyPanelPosition.x,
+      originY: harmonyPanelPosition.y,
+    };
+    setHarmonyPanelDragging(true);
+  };
+
+  const handleHarmonyPanelPointerMove = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    const dragState = harmonyDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+    const next = clampHarmonyPanel(
+      dragState.originX + deltaX,
+      dragState.originY + deltaY,
+    );
+    setHarmonyPanelPosition(next);
+  };
+
+  const handleHarmonyPanelPointerUp = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (harmonyDragRef.current?.pointerId === event.pointerId) {
+      harmonyDragRef.current = null;
+      setHarmonyPanelDragging(false);
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-6">
+      <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <header>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
             Teachers
@@ -990,14 +1990,31 @@ export default function TeacherDashboardPage() {
             Your studio snapshot, schedule, and fees in one place.
           </p>
         </header>
-        <div className="rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-4 py-3 shadow-sm select-none">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
-            Local Time
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-            {localTime}
-          </p>
-          <p className="mt-1 text-xs text-[var(--c-6f6c65)]">{localDate}</p>
+        <div className="ml-auto flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-stretch lg:justify-end lg:self-start">
+          <div
+            className={`h-full rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-3 pt-2 pb-0.5 shadow-sm select-none lg:h-[108px] ${
+              topCardPulse ? 'sidebar-card-pulse' : ''
+            }`}
+          >
+            <p className="text-[11px] uppercase tracking-[0.3em] text-[var(--c-9a9892)]">
+              Local Time
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
+              {localTime}
+            </p>
+            <p className="mt-1 text-xs text-[var(--c-6f6c65)]">{localDate}</p>
+          </div>
+          <HarmonyAssistant
+            participantName={teacherName ?? 'Teacher'}
+            identityPrefix={teacherName ?? teacherId ?? 'teacher'}
+            className="h-full lg:h-[108px]"
+            cardClassName={
+              topCardPulse
+                ? 'sidebar-card-pulse h-full lg:h-[108px]'
+                : 'h-full lg:h-[108px]'
+            }
+            compactButtons
+          />
         </div>
       </div>
       {alertPayloads.length > 0 ? (
@@ -1047,13 +2064,25 @@ export default function TeacherDashboardPage() {
                 sortedSelectedLessons.map(student => {
                   const prepRecord = prepByStudent[student.id];
                   const isPrepared = prepRecord?.dateKey === selectedDayKey;
+                  const hasPrepData = Boolean(
+                    prepRecord &&
+                      (prepRecord.curriculumType?.trim() ||
+                        prepRecord.section?.trim() ||
+                        prepRecord.part?.trim() ||
+                        prepRecord.material?.trim() ||
+                        prepRecord.focus?.trim() ||
+                        prepRecord.materials?.trim() ||
+                        prepRecord.goal?.trim() ||
+                        prepRecord.warmup?.trim() ||
+                        prepRecord.notes?.trim()),
+                  );
                   const isUnpaidForMonth = !paymentStatus[student.id];
                   return (
                     <div
                       key={student.id}
                       className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-[0_12px_24px_-18px_rgba(15,15,15,0.3)] ${
-                        isPrepared
-                          ? 'border-[color:var(--sidebar-accent-border)] bg-[var(--c-e7eddc)] ring-1 ring-[color:rgba(47,57,68,0.15)]'
+                        hasPrepData
+                          ? 'border-[var(--c-e5e3dd)] bg-[var(--c-e7eddc)]'
                           : 'border-[var(--c-dfe6d2)] bg-[var(--c-e7eddc)]/75'
                       }`}
                     >
@@ -1084,8 +2113,38 @@ export default function TeacherDashboardPage() {
                           <span className="font-medium text-[var(--c-1f1f1d)]">
                             {student.name}
                           </span>
-                          {isPrepared && prepRecord ? (
+                          {hasPrepData && prepRecord ? (
                             <div className="mt-2 space-y-2">
+                              {prepRecord.curriculumType?.trim() &&
+                              prepRecord.section?.trim() ? (
+                                <p className="text-[13px] text-[var(--c-6f6c65)]">
+                                  <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
+                                    Curriculum
+                                  </span>{' '}
+                                  <span className="text-[var(--c-1f1f1d)]">
+                                    {prepRecord.curriculumType} · {prepRecord.section}
+                                  </span>
+                                </p>
+                              ) : null}
+                              {prepRecord.part?.trim() || prepRecord.material?.trim() ? (
+                                <p className="text-[13px] text-[var(--c-6f6c65)]">
+                                  <span className="uppercase tracking-[0.2em] text-[11px] text-[var(--c-9a9892)]">
+                                    Progress
+                                  </span>{' '}
+                                  <span className="text-[var(--c-1f1f1d)]">
+                                    {[
+                                      prepRecord.part?.trim()
+                                        ? `Part ${prepRecord.part.trim()}`
+                                        : null,
+                                      prepRecord.material?.trim()
+                                        ? `Material: ${prepRecord.material.trim()}`
+                                        : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </span>
+                                </p>
+                              ) : null}
                               <div className="flex flex-wrap gap-2">
                                 {[
                                   prepRecord.focus
@@ -1529,137 +2588,14 @@ export default function TeacherDashboardPage() {
         </div>
       </section>
 
-      {isPrepOpen && prepStudent ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={closePrepModal}
-          />
-          <form
-            className="relative w-full max-w-xl rounded-3xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-6 shadow-xl"
-            onSubmit={handlePrepSubmit}
-            onKeyDown={event => {
-              if (
-                event.key === 'Enter' &&
-                event.target instanceof HTMLTextAreaElement
-              ) {
-                return;
-              }
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                handlePrepSubmit(event as unknown as React.FormEvent<HTMLFormElement>);
-              }
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-                  Lesson Prep
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--c-1f1f1d)]">
-                  <span className="block">Preparing for Today&apos;s Lesson</span>
-                  <span className="block">
-                    with {prepStudent.name.split(' ')[0] ?? prepStudent.name}
-                  </span>
-                </h2>
-                <p className="mt-2 text-sm text-[var(--c-6f6c65)]">
-                  Capture quick notes and plan the focus for this session.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closePrepModal}
-                className="rounded-full border border-[var(--c-ecebe7)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Lesson Focus
-                <input
-                  type="text"
-                  value={prepForm.focus}
-                  onChange={event =>
-                    setPrepForm(current => ({
-                      ...current,
-                      focus: event.target.value,
-                    }))
-                  }
-                  className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="Technique, repertoire, theory"
-                />
-              </label>
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Materials
-                <input
-                  type="text"
-                  value={prepForm.materials}
-                  onChange={event =>
-                    setPrepForm(current => ({
-                      ...current,
-                      materials: event.target.value,
-                    }))
-                  }
-                  className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="Song, book, PDF"
-                />
-              </label>
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Goal for Today
-                <input
-                  type="text"
-                  value={prepForm.goal}
-                  onChange={event =>
-                    setPrepForm(current => ({
-                      ...current,
-                      goal: event.target.value,
-                    }))
-                  }
-                  className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="What success looks like"
-                />
-              </label>
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-                Warm-up Plan
-                <input
-                  type="text"
-                  value={prepForm.warmup}
-                  onChange={event =>
-                    setPrepForm(current => ({
-                      ...current,
-                      warmup: event.target.value,
-                    }))
-                  }
-                  className="mt-2 w-full rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                  placeholder="Scales, chords, drills"
-                />
-              </label>
-            </div>
-            <label className="mt-4 block text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-              Notes
-              <textarea
-                value={prepForm.notes}
-                onChange={event =>
-                  setPrepForm(current => ({
-                    ...current,
-                    notes: event.target.value,
-                  }))
-                }
-                className="mt-2 min-h-[120px] w-full resize-none rounded-2xl border border-[var(--c-ecebe7)] px-3 py-2 text-sm text-[var(--c-1f1f1d)]"
-                placeholder="Anything else to remember for today..."
-              />
-            </label>
-            <button
-              type="submit"
-              className="mt-6 w-full rounded-2xl border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
-            >
-              Submit Prep
-            </button>
-          </form>
-        </div>
-      ) : null}
+      <LessonPrepModal
+        isOpen={isPrepOpen}
+        studentName={prepStudent?.name ?? null}
+        prepForm={prepForm}
+        setPrepForm={setPrepForm}
+        onClose={closePrepModal}
+        onSubmit={handlePrepSubmit}
+      />
 
       {communicationsViewerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">

@@ -31,11 +31,11 @@ export default function AssumptionsBar({
     <div
       className={`rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] px-5 py-3 shadow-sm ${className ?? ''}`}
     >
-      <div className="flex flex-wrap items-center gap-5 text-sm uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
-        <span className="text-xs font-semibold text-[var(--c-c8102e)]">
-          Assumptions
-        </span>
-        <label className="flex items-center gap-2">
+      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--c-c8102e)]">
+        Assumptions
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-5 text-sm uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+        <label className="flex items-center gap-2 whitespace-nowrap">
           Teachers
           <input
             type="number"
@@ -52,7 +52,7 @@ export default function AssumptionsBar({
             }}
           />
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 whitespace-nowrap">
           Avg Students
           <input
             type="number"
@@ -70,10 +70,11 @@ export default function AssumptionsBar({
             }}
           />
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 whitespace-nowrap">
           Lessons/Student
           <input
             type="number"
+            step="0.1"
             min={0}
             className="w-24 rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] px-3 py-2 text-center text-sm uppercase tracking-[0.2em] text-[var(--c-1f1f1d)]"
             value={draft.lessonsPerStudent}
@@ -87,7 +88,7 @@ export default function AssumptionsBar({
             }}
           />
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 whitespace-nowrap">
           Teacher Fee
           <input
             type="number"
@@ -104,7 +105,7 @@ export default function AssumptionsBar({
             }}
           />
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex items-center gap-2 whitespace-nowrap">
           Student Fee
           <input
             type="number"

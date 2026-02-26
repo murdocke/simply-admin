@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   AUTH_STORAGE_KEY,
@@ -102,6 +102,7 @@ const RECENT_STUDENTS_KEY = 'sm_recent_students';
 const MESSAGE_NOTIFICATIONS_KEY = 'sm_message_notifications';
 const COMMUNICATIONS_NOTIFICATIONS_KEY = 'sm_communications_notifications';
 const ADMIN_PUSH_NOTIFICATIONS_KEY = 'sm_admin_push_notifications';
+const ENABLE_ADMIN_PUSH_TOASTS = false;
 const FEATURES_OVERVIEW_KEY = 'sm_features_overview_active';
 const SIDEBAR_HIDDEN_KEY = 'sm_sidebar_hidden';
 const PRACTICE_TIMER_SETTINGS_KEY = 'sm_practice_timer_settings';
@@ -396,7 +397,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     (effectiveRole === 'company' && 'Admin') ||
     (effectiveRole === 'studio' && 'Studio') ||
     (effectiveRole === 'teacher' && 'Teacher') ||
-    (effectiveRole === 'parent' && 'Parent') ||
+    (effectiveRole === 'parent' && 'Family') ||
     (effectiveRole === 'student' && 'Student') ||
     (effectiveRole === 'dev' && 'Developer') ||
     'Admin';
@@ -1751,13 +1752,16 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, [recentStudentsKey, role, selectedStudentKey, viewStudentKey]);
 
   useEffect(() => {
-    if (!effectiveRole || !pathname) return;
-    const allowed = allowedRoots[effectiveRole];
+    if (!pathname) return;
+    const accessRole: UserRole | null =
+      role === 'company' ? 'company' : effectiveRole;
+    if (!accessRole) return;
+    const allowed = allowedRoots[accessRole];
     const isAllowed = allowed.some(root => pathname.startsWith(root));
     if (!isAllowed) {
-      router.replace(roleHome[effectiveRole]);
+      router.replace(roleHome[accessRole]);
     }
-  }, [pathname, effectiveRole, router]);
+  }, [pathname, role, effectiveRole, router]);
 
   useEffect(() => {
     if (!pathname || !user) return;
@@ -1908,6 +1912,7 @@ export default function AdminShell({ children }: AdminShellProps) {
     if (typeof window === 'undefined') return;
     if (role !== 'company') return;
     if (!user?.username) return;
+    if (!ENABLE_ADMIN_PUSH_TOASTS) return;
 
     const notificationKey = `${ADMIN_PUSH_NOTIFICATIONS_KEY}:${user.username}`;
     let lastNotified = window.localStorage.getItem(notificationKey);
@@ -2067,21 +2072,59 @@ export default function AdminShell({ children }: AdminShellProps) {
   const sidebarStyles = useMemo(() => {
     if (effectiveRole === 'teacher') {
       return {
-        bg: 'bg-[var(--c-e7eddc)]',
-        border: 'border-[var(--c-dfe6d2)]',
+        bg: 'bg-[var(--sidebar-teacher-bg)]',
+        border: 'border-[var(--sidebar-teacher-border)]',
+        vars: {
+          '--sidebar-accent-bg': theme === 'dark' ? '#54684f' : '#4f5f49',
+          '--sidebar-accent-border': theme === 'dark' ? '#54684f' : '#4f5f49',
+          '--sidebar-accent-text': theme === 'dark' ? '#f1f5ec' : '#f1f5ec',
+          '--sidebar-selected-bg': theme === 'dark' ? '#687b62' : '#60705a',
+          '--sidebar-selected-border': theme === 'dark' ? '#687b62' : '#60705a',
+          '--sidebar-selected-text': theme === 'dark' ? '#f5f8f1' : '#f4f7ef',
+        } as CSSProperties,
       };
     }
     if (effectiveRole === 'student' || effectiveRole === 'parent') {
       return {
-        bg: 'bg-[var(--c-e6f4ff)]',
-        border: 'border-[var(--c-d9e2ef)]',
+        bg: 'bg-[var(--sidebar-student-bg)]',
+        border: 'border-[var(--sidebar-student-border)]',
+        vars: {
+          '--sidebar-accent-bg': theme === 'dark' ? '#365a7a' : '#385876',
+          '--sidebar-accent-border': theme === 'dark' ? '#365a7a' : '#385876',
+          '--sidebar-accent-text': theme === 'dark' ? '#edf4fb' : '#edf4fb',
+          '--sidebar-selected-bg': theme === 'dark' ? '#4a6f91' : '#4b6f92',
+          '--sidebar-selected-border': theme === 'dark' ? '#4a6f91' : '#4b6f92',
+          '--sidebar-selected-text': theme === 'dark' ? '#f3f8fd' : '#f3f8fd',
+        } as CSSProperties,
+      };
+    }
+    if (effectiveRole === 'company') {
+      return {
+        bg: 'bg-[var(--sidebar-default-bg)]',
+        border: 'border-[var(--sidebar-default-border)]',
+        vars: {
+          '--sidebar-accent-bg': theme === 'dark' ? '#334151' : '#4b5563',
+          '--sidebar-accent-border': theme === 'dark' ? '#334151' : '#4b5563',
+          '--sidebar-accent-text': theme === 'dark' ? '#eef2f7' : '#f3f4f6',
+          '--sidebar-selected-bg': theme === 'dark' ? '#475569' : '#5f6b7b',
+          '--sidebar-selected-border': theme === 'dark' ? '#475569' : '#5f6b7b',
+          '--sidebar-selected-text': theme === 'dark' ? '#f3f6fb' : '#f6f8fb',
+        } as CSSProperties,
       };
     }
     return {
-      bg: 'bg-[var(--c-ffffff)]',
-      border: 'border-[var(--c-ecebe7)]',
+      bg: 'bg-[var(--sidebar-default-bg)]',
+      border: 'border-[var(--sidebar-default-border)]',
+      vars: {
+        '--sidebar-accent-bg': theme === 'dark' ? '#323c31' : '#4f5f49',
+        '--sidebar-accent-border': theme === 'dark' ? '#323c31' : '#4f5f49',
+        '--sidebar-accent-text': theme === 'dark' ? '#eef3e8' : '#f1f5ec',
+        '--sidebar-selected-bg': theme === 'dark' ? '#475444' : '#60705a',
+        '--sidebar-selected-border': theme === 'dark' ? '#475444' : '#60705a',
+        '--sidebar-selected-text': theme === 'dark' ? '#f1f5ec' : '#f4f7ef',
+      } as CSSProperties,
     };
-  }, [effectiveRole]);
+  }, [effectiveRole, theme]);
 
   useEffect(() => {
     if (role !== 'company') return;
@@ -2354,6 +2397,9 @@ export default function AdminShell({ children }: AdminShellProps) {
 
   const handleViewRoleChange = (nextRole: UserRole) => {
     if (role === 'company') {
+      if (nextRole === 'dev') {
+        return;
+      }
       if (nextRole === 'student') {
         setPendingViewRole('student');
         if (!selectedTeacher) {
@@ -3124,6 +3170,7 @@ export default function AdminShell({ children }: AdminShellProps) {
           className={`${
             isSidebarHidden ? 'hidden' : 'hidden lg:block'
           } relative w-72 border-r px-6 py-8 ${sidebarStyles.bg} ${sidebarStyles.border}`}
+          style={sidebarStyles.vars}
         >
           <button
             type="button"
@@ -3191,6 +3238,14 @@ export default function AdminShell({ children }: AdminShellProps) {
                 </a>
             </div>
           ) : null}
+          {effectiveRole === 'dev' ? (
+            <a
+              href="/rev-streams"
+              className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] shadow-sm transition hover:brightness-110"
+            >
+              Rev Streams
+            </a>
+          ) : null}
           <nav className="space-y-2 text-sm">
             {items.map(item => {
               if (effectiveRole === 'teacher' && item.label === 'Dashboard') {
@@ -3238,7 +3293,7 @@ export default function AdminShell({ children }: AdminShellProps) {
           {effectiveRole === 'parent' ? (
             <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-                Family Quick Actions
+                Family Actions
               </p>
               <div className="mt-3 grid gap-2">
                 <a
@@ -3509,7 +3564,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {isParentSidebar ? (
           <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-              My Kids Practiced
+              My Kids Practice
             </p>
             {parentStudents.length === 0 ? (
               <div className="mt-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-3 text-xs text-[var(--c-6f6c65)]">
@@ -3608,6 +3663,14 @@ export default function AdminShell({ children }: AdminShellProps) {
                 >
                   Account Details
                 </button>
+                {role === 'teacher' ? (
+                  <a
+                    href="/teachers/settings"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-fafafa)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+                  >
+                    Settings
+                  </a>
+                ) : null}
               </div>
               <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
                 Account
@@ -3644,10 +3707,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                           : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[var(--sidebar-accent-border)]'
                         }`}
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <div>
+                        <div className="flex h-full w-full min-w-0 flex-col justify-between gap-2">
+                          <div className="min-w-0">
                             <p
-                              className={`text-sm font-semibold ${
+                              className={`text-sm font-semibold leading-tight break-words ${
                                 isSelected
                                   ? 'text-[var(--sidebar-selected-text)]'
                                   : 'text-[var(--c-1f1f1d)]'
@@ -3656,7 +3719,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                               {teacher.name}
                             </p>
                             <p
-                              className={`text-[10px] uppercase tracking-[0.2em] ${
+                              className={`mt-1 whitespace-nowrap text-[10px] uppercase tracking-[0.18em] ${
                                 isSelected
                                   ? 'text-[var(--sidebar-selected-text)]/80'
                                   : 'text-[var(--c-6f6c65)]'
@@ -3666,7 +3729,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                             </p>
                           </div>
                           <span
-                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                            className={`block w-full whitespace-nowrap rounded-full px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] ${
                               isSelected
                                 ? 'border border-white/25 bg-white/10 text-[var(--sidebar-selected-text)]'
                                 : 'border border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'
@@ -3715,10 +3778,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                             : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[var(--sidebar-accent-border)]'
                         }`}
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <div>
+                        <div className="flex h-full w-full min-w-0 flex-col justify-between gap-2">
+                          <div className="min-w-0">
                             <p
-                              className={`text-sm font-semibold ${
+                              className={`text-sm font-semibold leading-tight break-words ${
                                 isSelected
                                   ? 'text-[var(--sidebar-selected-text)]'
                                   : 'text-[var(--c-1f1f1d)]'
@@ -3727,7 +3790,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                               {student.name}
                             </p>
                             <p
-                              className={`text-[10px] uppercase tracking-[0.2em] ${
+                              className={`mt-1 whitespace-nowrap text-[10px] uppercase tracking-[0.18em] ${
                                 isSelected
                                   ? 'text-[var(--sidebar-selected-text)]/80'
                                   : 'text-[var(--c-6f6c65)]'
@@ -3737,7 +3800,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                             </p>
                           </div>
                           <span
-                            className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                            className={`block w-full whitespace-nowrap rounded-full px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] ${
                               isSelected
                                 ? 'border border-white/25 bg-white/10 text-[var(--sidebar-selected-text)]'
                                 : 'border border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'
@@ -3760,7 +3823,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student', 'parent', 'dev'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}
@@ -3770,7 +3833,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                       : 'border border-[var(--sidebar-accent-border)] text-[var(--c-6f6c65)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]'
                   }`}
                 >
-                  {option}
+                  {option === 'parent' ? 'family' : option}
                 </button>
               ))}
             </div>
@@ -3792,7 +3855,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                       : 'border border-[var(--sidebar-accent-border)] text-[var(--c-6f6c65)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]'
                   }`}
                 >
-                  {option}
+                  {option === 'parent' ? 'family' : option}
                 </button>
               ))}
             </div>
@@ -3828,6 +3891,14 @@ export default function AdminShell({ children }: AdminShellProps) {
             Theme
           </div>
         </div>
+        {role === 'company' ? (
+          <a
+            href="/rev-streams"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+          >
+            Rev Streams
+          </a>
+        ) : null}
         <button
           onClick={handleLogout}
           className="mt-6 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
@@ -3889,7 +3960,11 @@ export default function AdminShell({ children }: AdminShellProps) {
             type="button"
             onClick={handleBackToTop}
             aria-label="Back to top"
-            className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-lg border border-white/60 bg-white/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--c-6f6c65)] backdrop-blur-[1px] transition hover:border-white/80 hover:bg-white/50"
+            className={`fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] backdrop-blur-md transition ${
+              theme === 'dark'
+                ? 'border border-white/15 bg-[color:var(--c-1f1f1d)]/55 text-white/85 shadow-lg shadow-black/35 hover:border-white/25 hover:bg-[color:var(--c-1f1f1d)]/70'
+                : 'border border-white/60 bg-white/35 text-[var(--c-6f6c65)] shadow-sm hover:border-white/80 hover:bg-white/50'
+            }`}
             style={{
               opacity: backToTopOpacity,
               pointerEvents: backToTopOpacity < 0.1 ? 'none' : 'auto',
@@ -4150,6 +4225,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         } ${sidebarStyles.border} ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        style={sidebarStyles.vars}
       >
         <div className="mb-10 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -4197,6 +4273,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             What We Offer
           </a>
         ) : null}
+        {effectiveRole === 'dev' ? (
+          <a
+            href="/rev-streams"
+            className="mb-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] shadow-sm transition hover:brightness-110"
+            onClick={() => setIsOpen(false)}
+          >
+            Rev Streams
+          </a>
+        ) : null}
         <nav className="space-y-2 text-sm">
           {items.map(item => {
             if (effectiveRole === 'teacher' && item.label === 'Dashboard') {
@@ -4241,7 +4326,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {effectiveRole === 'parent' ? (
           <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-              Family Quick Actions
+              Family Actions
             </p>
             <div className="mt-3 grid gap-2">
               <a
@@ -4528,7 +4613,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {isParentSidebar ? (
           <section className="mt-4 rounded-2xl border border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] p-4 shadow-sm">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--c-c8102e)]">
-              My Kids Practiced
+              My Kids Practice
             </p>
             {parentStudents.length === 0 ? (
               <div className="mt-3 rounded-xl border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] p-3 text-xs text-[var(--c-6f6c65)]">
@@ -4604,6 +4689,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             >
               Account Details
             </button>
+            {role === 'teacher' ? (
+              <a
+                href="/teachers/settings"
+                onClick={() => setIsOpen(false)}
+                className="mt-2 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2.5 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+              >
+                Settings
+              </a>
+            ) : null}
             <div className="mt-4 border-t border-[var(--c-ecebe7)] pt-3 text-[10px] uppercase tracking-[0.2em] text-[var(--c-7a776f)]">
               Account
             </div>
@@ -4639,10 +4733,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                           : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[var(--sidebar-accent-border)]'
                       }`}
                     >
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <div>
+                      <div className="flex h-full w-full min-w-0 flex-col justify-between gap-2">
+                        <div className="min-w-0">
                           <p
-                            className={`text-sm font-semibold ${
+                            className={`text-sm font-semibold leading-tight break-words ${
                               isSelected
                                 ? 'text-[var(--sidebar-selected-text)]'
                                 : 'text-[var(--c-1f1f1d)]'
@@ -4651,7 +4745,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                             {teacher.name}
                           </p>
                           <p
-                            className={`text-[10px] uppercase tracking-[0.2em] ${
+                            className={`mt-1 whitespace-nowrap text-[10px] uppercase tracking-[0.18em] ${
                               isSelected
                                 ? 'text-[var(--sidebar-selected-text)]/80'
                                 : 'text-[var(--c-6f6c65)]'
@@ -4661,7 +4755,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                           </p>
                         </div>
                         <span
-                          className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                          className={`block w-full whitespace-nowrap rounded-full px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] ${
                             isSelected
                               ? 'bg-[var(--sidebar-selected-bg)] text-[var(--sidebar-selected-text)] border-[var(--sidebar-selected-border)]'
                               : 'border border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'
@@ -4684,7 +4778,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {role === 'company' ? (
           <div className="mt-4 rounded-xl border border-[var(--c-ecebe7)] bg-[color:var(--c-ffffff)]/80 p-4 text-xs text-[var(--c-7a776f)]">
             <div className="mt-3 flex flex-col gap-2">
-              {(['company', 'teacher', 'student', 'parent', 'dev'] as UserRole[]).map(option => (
+              {(['company', 'teacher', 'student', 'parent'] as UserRole[]).map(option => (
                 <button
                   key={option}
                   onClick={() => handleViewRoleChange(option)}
@@ -4694,7 +4788,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                       : 'border border-[var(--sidebar-accent-border)] text-[var(--c-6f6c65)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]'
                   }`}
                 >
-                  {option}
+                  {option === 'parent' ? 'family' : option}
                 </button>
               ))}
             </div>
@@ -4716,7 +4810,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                       : 'border border-[var(--sidebar-accent-border)] text-[var(--c-6f6c65)] hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]'
                   }`}
                 >
-                  {option}
+                  {option === 'parent' ? 'family' : option}
                 </button>
               ))}
             </div>
@@ -4752,6 +4846,15 @@ export default function AdminShell({ children }: AdminShellProps) {
             Theme
           </div>
         </div>
+        {role === 'company' ? (
+          <a
+            href="/rev-streams"
+            onClick={() => setIsOpen(false)}
+            className="mt-6 inline-flex w-full items-center justify-center rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--sidebar-accent-bg)] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sidebar-accent-text)] transition hover:brightness-110"
+          >
+            Rev Streams
+          </a>
+        ) : null}
         <button
           onClick={handleLogout}
           className="mt-6 w-full rounded-full border border-[var(--sidebar-accent-border)] bg-[var(--c-ffffff)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
@@ -4828,14 +4931,14 @@ export default function AdminShell({ children }: AdminShellProps) {
                           username: teacher.username,
                         })
                       }
-                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                      className={`flex min-h-[116px] flex-col justify-between rounded-2xl border px-4 py-4 text-left transition ${
                         isSelected
                           ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)] shadow-sm'
                           : 'border-[var(--c-ecebe7)] bg-[var(--c-fcfcfb)] hover:border-[var(--c-c8102e)]/40'
                       }`}
                     >
                       <p
-                        className={`text-sm font-semibold ${
+                        className={`text-sm font-semibold break-words ${
                           isSelected
                             ? 'text-[var(--sidebar-selected-text)]'
                             : 'text-[var(--c-1f1f1d)]'
@@ -4844,7 +4947,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                         {teacher.name}
                       </p>
                       <p
-                        className={`mt-2 text-[10px] uppercase tracking-[0.2em] ${
+                        className={`mt-2 whitespace-nowrap text-[10px] uppercase tracking-[0.18em] ${
                           isSelected
                             ? 'text-[var(--sidebar-selected-text)]/80'
                             : 'text-[var(--c-6f6c65)]'
@@ -4854,7 +4957,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                       </p>
                       <div className="mt-3">
                         <span
-                          className={`rounded-full px-4 py-2 text-xs uppercase tracking-[0.2em] ${
+                          className={`block w-full whitespace-nowrap rounded-full px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.18em] ${
                             isSelected
                               ? 'border border-white/25 bg-white/10 text-[var(--sidebar-selected-text)]'
                               : 'border border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'
@@ -4940,15 +5043,15 @@ export default function AdminShell({ children }: AdminShellProps) {
                           email: student.email,
                         })
                       }
-                      className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
+                      className={`flex min-h-[110px] w-full min-w-0 flex-col justify-between rounded-2xl border px-4 py-3 text-left transition ${
                         isSelected
                           ? 'border-[var(--sidebar-selected-border)] bg-[var(--sidebar-selected-bg)]'
                           : 'border-[var(--c-ecebe7)] bg-[var(--c-ffffff)] hover:border-[var(--sidebar-accent-border)]'
                       }`}
                     >
-                      <div>
+                      <div className="min-w-0">
                         <p
-                          className={`text-sm font-semibold ${
+                          className={`text-sm font-semibold leading-tight break-words ${
                             isSelected
                               ? 'text-[var(--sidebar-selected-text)]'
                               : 'text-[var(--c-1f1f1d)]'
@@ -4957,7 +5060,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                           {student.name}
                         </p>
                         <p
-                          className={`text-[10px] uppercase tracking-[0.2em] ${
+                          className={`mt-1 whitespace-nowrap text-[10px] uppercase tracking-[0.18em] ${
                             isSelected
                               ? 'text-[var(--sidebar-selected-text)]/80'
                               : 'text-[var(--c-6f6c65)]'
@@ -4967,7 +5070,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                         </p>
                       </div>
                       <span
-                        className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                        className={`block w-full whitespace-nowrap rounded-full px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] ${
                           isSelected
                             ? 'border border-white/25 bg-white/10 text-[var(--sidebar-selected-text)]'
                             : 'border border-[var(--c-e5e3dd)] text-[var(--c-6f6c65)]'

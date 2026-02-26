@@ -1,13 +1,8 @@
 "use client";
 
-import { Space_Grotesk } from "next/font/google";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
+import { spaceGrotesk } from "@/app/fonts";
 
 type FormState = {
   educator: string;
@@ -220,10 +215,10 @@ export default function QuestionnairePage() {
       ),
       background: pick(
         [
-          `Teaching piano for 6+ years with a focus on adult beginners.`,
-          `Classical background with a passion for creative improvisation.`,
-          `Studio owner with a mix of in-person and online students.`,
-          `Former performer transitioning into teaching full-time.`,
+          'Teaching piano for 6+ years with a focus on adult beginners.',
+          'Classical background with a passion for creative improvisation.',
+          'Studio owner with a mix of in-person and online students.',
+          'Former performer transitioning into teaching full-time.',
         ],
         seed,
         3,
@@ -258,35 +253,19 @@ export default function QuestionnairePage() {
         seed,
         6,
       ),
-      disclosures: pick(
-        ['No disclosures at this time.', 'None to disclose.'],
-        seed,
-        7,
-      ),
+      disclosures: pick(['No disclosures at this time.', 'None to disclose.'], seed, 7),
       referralTeacher: pick(
         [
-          'Yes — referred by a Simply Music teacher in my city.',
+          'Yes - referred by a Simply Music teacher in my city.',
           'No, this was my own discovery.',
-          `Yes — ${firstName} recommended the program.`,
+          `Yes - ${firstName} recommended the program.`,
         ],
         seed,
         8,
       ),
-      bookWorld: pick(
-        ['Not yet, but on my list.', 'Started it and loved the stories.'],
-        seed,
-        9,
-      ),
-      bookKeys: pick(
-        ['Enjoyed the teaching insights.', 'Planning to read it soon.'],
-        seed,
-        10,
-      ),
-      bookMars: pick(
-        ['Skimmed chapters on creativity.', 'Not yet, but intrigued.'],
-        seed,
-        11,
-      ),
+      bookWorld: pick(['Not yet, but on my list.', 'Started it and loved the stories.'], seed, 9),
+      bookKeys: pick(['Enjoyed the teaching insights.', 'Planning to read it soon.'], seed, 10),
+      bookMars: pick(['Skimmed chapters on creativity.', 'Not yet, but intrigued.'], seed, 11),
     });
     setPrefillApplied(true);
   }, [token, prefillApplied, state, interestName]);
@@ -392,9 +371,13 @@ export default function QuestionnairePage() {
     optionalFields.length * optionalWeight;
   const earnedWeight =
     completedRequired * requiredWeight + completedOptional * optionalWeight;
-  const progress = isSubmitted
+  const wizardProgress = wizardSubmitted
+    ? 100
+    : Math.round((Math.max(0, step - 1) / Math.max(1, totalSteps - 1)) * 100);
+  const scrollProgress = isSubmitted
     ? 100
     : Math.round((earnedWeight / totalWeight) * 100);
+  const progress = viewMode === "wizard" ? wizardProgress : scrollProgress;
 
   const validateFields = (fields: (keyof FormState)[]) => {
     const nextErrors: Partial<Record<keyof FormState, string>> = { ...errors };
@@ -546,21 +529,9 @@ export default function QuestionnairePage() {
                     <div className="mt-4 grid gap-3 sm:grid-cols-4">
                       {steps.map(stepItem => {
                         const isActive = stepItem.id === step;
-                        const stepRequired = stepItem.fields.filter(field =>
-                          requiredFields.includes(field),
-                        );
-                        const hasRequired = stepRequired.length > 0;
-                        const requiredComplete = stepRequired.every(
-                          field => state[field]?.trim(),
-                        );
-                        const optionalComplete =
-                          stepItem.label === "Books"
-                            ? stepItem.fields.every(field => state[field]?.trim())
-                            : false;
                         const isComplete =
-                          (hasRequired && requiredComplete) ||
-                          optionalComplete ||
-                          (stepItem.id === totalSteps && isSubmitted);
+                          stepItem.id < step ||
+                          (stepItem.id === totalSteps && wizardSubmitted);
                         return (
                           <div
                             key={stepItem.id}

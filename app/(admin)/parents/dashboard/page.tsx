@@ -280,7 +280,7 @@ export default function ParentDashboardPage() {
             </div>
             <a
               href="/parents/schedule"
-              className="rounded-full border border-[var(--c-ecebe7)] px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:bg-[var(--sidebar-accent-bg)] hover:text-[var(--sidebar-accent-text)]"
+              className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)] transition hover:border-[var(--c-d6d3cd)] hover:bg-[var(--c-f1f1ef)]"
             >
               View schedule
             </a>
@@ -303,7 +303,7 @@ export default function ParentDashboardPage() {
                     Teacher: {getTeacherDisplay(student, teachers)}
                   </p>
                 </div>
-                <div className="rounded-full border border-[var(--c-ecebe7)] bg-white px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                <div className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                   {student.level ?? `Level ${index + 1}`}
                 </div>
               </div>
@@ -365,7 +365,7 @@ export default function ParentDashboardPage() {
                     <p className="text-lg font-semibold text-[var(--c-1f1f1d)]">
                       {student.name}
                     </p>
-                    <span className="rounded-full border border-[var(--c-ecebe7)] bg-white px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
+                    <span className="rounded-full border border-[var(--c-ecebe7)] bg-[var(--c-fafafa)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[var(--c-6f6c65)]">
                       {snapshot.streak} day streak
                     </span>
                   </div>
